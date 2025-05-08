@@ -1,5 +1,11 @@
 // == Content Script =========================================================
 
+var data;
+
+chrome.storage.local.get("userId", (result) => {
+  data = result.userId;
+});
+
 // 1) Simple heuristic: look for forms/buttons with payment keywords
 function looksLikePaymentPage() {
     var pattern = ['checkout', 'billing', 'purchase'];
@@ -104,7 +110,8 @@ function injectButton(totalCheckoutAmount) {
       // });
       tick.addEventListener("click", async () => {
         // donation logic...
-        console.log("Click twice")
+        console.log(data);
+        // data = chrome.storage.local.get({userId: null});
         btn.remove();
         injectButton(totalCheckoutAmount);
       });

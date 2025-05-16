@@ -110,7 +110,7 @@ function injectButton(totalCheckoutAmount) {
       // });
       tick.addEventListener("click", async () => {
         // donation logic...
-        console.log(data);
+        updateResource(totalCheckoutAmount);
         // data = chrome.storage.local.get({userId: null});
         btn.remove();
         injectButton(totalCheckoutAmount);
@@ -213,18 +213,43 @@ function revertToCircle(btn) {
 }
 
   // 5) Kick off
-  if (looksLikePaymentPage()) {
-    var checkoutTotal = findCheckoutTotal();
-    if (checkoutTotal !== -1) {
-      var donation = Math.ceil(checkoutTotal) - checkoutTotal;
-      console.log(checkoutTotal);
-      console.log(Math.ceil(checkoutTotal));
-      console.log(Math.ceil(checkoutTotal) - checkoutTotal);
-      console.log(roundToTwo(donation));
-      injectButton(roundToTwo(donation));
-    } else {
-      console.log(checkoutTotal);
-      injectButton();
-    }
+if (looksLikePaymentPage()) {
+  var checkoutTotal = findCheckoutTotal();
+  if (checkoutTotal !== -1) {
+    var donation = Math.ceil(checkoutTotal) - checkoutTotal;
+    // console.log(checkoutTotal);
+    // console.log(Math.ceil(checkoutTotal));
+    // console.log(Math.ceil(checkoutTotal) - checkoutTotal);
+    // console.log(roundToTwo(donation));
+    injectButton(roundToTwo(donation));
+  } else {
+    // console.log(checkoutTotal);
+    injectButton();
   }
+}
   
+
+async function updateResource(totalCheckoutAmount) {
+  try {
+    var user = "";
+    chrome.storage.local.get("userId", (result) => {
+      user = result.userId;
+    });
+    const bodyJson = { "user": "adwivedi", "purchaseAmount": checkoutTotal, "roundUpAmount": totalCheckoutAmount };
+    console.log(bodyJson);
+    const res = await fetch(`http://localhost:3001/api/roundup/create-roundup`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(bodyJson)
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    console.log('Server replied:', data);
+    return data;
+  } catch (err) {
+    console.error('PUT failed:', err);
+    throw err;
+  }
+}

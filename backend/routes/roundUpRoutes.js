@@ -5,6 +5,7 @@ const RoundUp = require('../models/RoundUp');
 
 // API to create a new RoundUp entry
 router.post('/create-roundup', async (req, res) => {
+  console.log(req.body);
   try {
     const { user, purchaseAmount, roundUpAmount } = req.body;
     

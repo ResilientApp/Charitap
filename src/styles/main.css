@@ -1,0 +1,66 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Brand gradient backdrop: dark olive → moss green */
+body {
+  @apply min-h-screen bg-gradient-to-br from-[#626F47] to-[#A4B465];
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  font-family: Arial, sans-serif;
+}
+
+/* Vertical padding under navbar & above bottom on all pages */
+.page-content {
+  @apply pt-4 pb-4;
+}
+
+/* Tile images: cover & rounded corners */
+.tile-img {
+  @apply w-full h-full object-cover rounded-lg;
+}
+
+/* Card/charts hover: lift + scale */
+.tile-hover {
+  @apply transition transform hover:-translate-y-2 hover:scale-105;
+}
+
+/* Card background: semi-transparent sand with blur */
+.bg-card {
+  background-color: rgba(245,236,213,0.5); /* #F5ECD5/50 */
+  backdrop-filter: blur(8px);
+}
+
+/* Primary buttons */
+.btn-primary {
+  @apply px-3 py-2 rounded-md font-medium;
+  background-color: #F5ECD5; /* sand */
+  color: #626F47;            /* dark olive */
+  transition: background-color 0.2s;
+}
+.btn-primary:hover {
+  background-color: #F0BB78; /* warm gold */
+}
+
+/* Accent text (gold) */
+.text-accent {
+  color: #F0BB78;
+}
+
+/* Fade-in animation */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-in {
+  animation: fadeIn 0.8s ease-out forwards;
+}
+
+/* Slide-in from left */
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-50px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.slide-in-left {
+  animation: slideInLeft 0.6s ease-out forwards;
+}

@@ -11,11 +11,42 @@ import Activity     from './components/Activity';
 import Dashboard    from './components/Dashboard';
 import Settings     from './components/Settings';
 import ProtectedRoute from './components/ProtectedRoute';
+import { useEffect } from 'react';
+
 
 function App() {
-  const { isAuthenticated, isLoading } = useAuth0();
+  const { isAuthenticated, isLoading, user } = useAuth0();
 
-  // while loading, you could show a spinner instead
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      const email = user.email;
+      const userId = user.sub;
+
+    if (chrome && chrome.runtime && chrome.runtime.sendMessage) {
+      chrome.runtime.sendMessage(
+        "hmadgdapmiiiimdhebjchcocnjennahi",
+        { type: "SAVE_USER_ID", userId: userId },
+        (response) => {
+          if (chrome.runtime.lastError) {
+            console.error(`Website: Error sending message to extension hmadgdapmiiiimdhebjchcocnjennahi: ${chrome.runtime.lastError.message}`);
+            // Consider UI feedback for the user if critical
+          } else if (response && response.status === "success") {
+            console.log(`Website: User ID successfully sent to extension. Response: ${response.message}`);
+          } else {
+            console.warn(`Website: Extension response indicates an issue or no acknowledgment:`, response);
+          }
+        }
+      );
+    } else {
+      console.warn("Website: Chrome runtime not available. Cannot send message to extension. Is it installed and enabled?");
+    }
+
+      console.log("Stored Email:", email);
+      console.log("Stored UserID:", userId);
+    }
+  }, [isAuthenticated, user]);
+
+  // ✅ Move this AFTER the hook
   if (isLoading) return null;
 
   return (
@@ -25,12 +56,10 @@ function App() {
         <ToastContainer position="top-right" />
 
         <Routes>
-          {/* Choose which home to show */}
           <Route
             path="/"
             element={isAuthenticated ? <Home /> : <HomePublic />}
           />
-
           <Route
             path="/activity"
             element={<ProtectedRoute element={Activity} />}
@@ -48,5 +77,6 @@ function App() {
     </Router>
   );
 }
+
 
 export default App;

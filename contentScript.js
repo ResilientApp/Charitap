@@ -1,10 +1,16 @@
 // == Content Script =========================================================
 
-var data;
+var userId = null;
 
-chrome.storage.local.get("userId", (result) => {
-  data = result.userId;
-});
+function onGot(item) {
+  console.log(item.userId);
+  userId = item.userId;
+}
+
+function onError(error) {
+  console.log(`Error: ${error}`);
+  userId = null;
+}
 
 // 1) Simple heuristic: look for forms/buttons with payment keywords
 function looksLikePaymentPage() {
@@ -214,13 +220,14 @@ function revertToCircle(btn) {
 
   // 5) Kick off
 if (looksLikePaymentPage()) {
+  let gettingItem = chrome.storage.local.get("userId");
+  gettingItem.then(onGot, onError);
   var checkoutTotal = findCheckoutTotal();
   if (checkoutTotal !== -1) {
     var donation = Math.ceil(checkoutTotal) - checkoutTotal;
-    // console.log(checkoutTotal);
-    // console.log(Math.ceil(checkoutTotal));
-    // console.log(Math.ceil(checkoutTotal) - checkoutTotal);
-    // console.log(roundToTwo(donation));
+    if (donation == 0) {
+      donation = 1.00;
+    }
     injectButton(roundToTwo(donation));
   } else {
     // console.log(checkoutTotal);
@@ -231,11 +238,8 @@ if (looksLikePaymentPage()) {
 
 async function updateResource(totalCheckoutAmount) {
   try {
-    var user = "";
-    chrome.storage.local.get("userId", (result) => {
-      user = result.userId;
-    });
-    const bodyJson = { "user": "adwivedi", "purchaseAmount": checkoutTotal, "roundUpAmount": totalCheckoutAmount };
+    var user = userId;
+    const bodyJson = { "user": user, "purchaseAmount": checkoutTotal, "roundUpAmount": totalCheckoutAmount };
     console.log(bodyJson);
     const res = await fetch(`http://localhost:3001/api/roundup/create-roundup`, {
       method: 'POST',

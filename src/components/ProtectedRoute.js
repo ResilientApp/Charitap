@@ -20,11 +20,8 @@ export default function ProtectedRoute({ element: Component }) {
   // 1) Loading spinner
   if (isLoading) {
     return (
-      <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50">
-        <div
-          className="w-16 h-16 border-4 rounded-full animate-spin"
-          style={{ borderColor: 'rgba(245,236,213,0.8)', borderTopColor: 'transparent' }}
-        />
+      <div className="fixed inset-0 flex items-center justify-center bg-black/40 z-50">
+        <div className="w-14 h-14 border-4 border-yellow-200 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -35,17 +32,11 @@ export default function ProtectedRoute({ element: Component }) {
       return <Navigate to="/" replace />;
     }
     return (
-      <div className="fixed inset-0 flex items-center justify-center bg-black/60 z-50">
-        <div className="bg-card p-8 rounded-2xl fade-in max-w-sm text-center">
-          <p className="text-2xl font-semibold text-[#626F47] mb-4">
-            Whoops!
-          </p>
-          <p className="text-gray-700 mb-2">
-            You need to be logged in to access that page.
-          </p>
-          <p className="text-gray-500 italic">
-            Redirecting you back...
-          </p>
+      <div className="fixed inset-0 flex items-center justify-center bg-black/40 z-50">
+        <div className="bg-white bg-opacity-90 p-8 rounded-2xl shadow-xl max-w-sm text-center border border-yellow-100 animate-fade-in">
+          <p className="text-xl font-bold text-yellow-700 mb-2">Login Required</p>
+          <p className="text-gray-700 mb-2 text-base">Please log in to access this page.</p>
+          <p className="text-gray-500 italic text-sm">Redirecting...</p>
         </div>
       </div>
     );

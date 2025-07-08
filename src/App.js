@@ -1,66 +1,57 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { ToastContainer } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
 import { useAuth0 } from '@auth0/auth0-react';
-
 import Navigation from './components/Navigation';
-import Home         from './components/Home';
-import HomePublic   from './components/HomePublic';
-import Activity     from './components/Activity';
-import Dashboard    from './components/Dashboard';
-import Settings     from './components/Settings';
+import Footer from './components/Footer';
 import ProtectedRoute from './components/ProtectedRoute';
-import { useEffect } from 'react';
+import ErrorBoundary from './components/ErrorBoundary';
+import './styles/main.css';
 
+// Lazy load components for better performance
+const Home = lazy(() => import('./components/Home'));
+const HomePublic = lazy(() => import('./components/HomePublic'));
+const Dashboard = lazy(() => import('./components/Dashboard'));
+const Activity = lazy(() => import('./components/Activity'));
+const Settings = lazy(() => import('./components/Settings'));
+
+// Loading component
+const LoadingSpinner = () => (
+  <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-yellow-50 to-orange-50">
+    <div className="text-center">
+      <div className="spinner mx-auto mb-4"></div>
+      <p className="text-gray-600 animate-pulse">Loading Charitap...</p>
+    </div>
+  </div>
+);
 
 function App() {
-  const { isAuthenticated, isLoading, user } = useAuth0();
+  const { isLoading } = useAuth0();
 
-  useEffect(() => {
-    if (isAuthenticated && user) {
-      const email = user.email;
-      const userId = user.sub;
-
-      localStorage.setItem('userEmail', email);
-      localStorage.setItem('userId', userId);
-
-      console.log("Stored Email:", email);
-      console.log("Stored UserID:", userId);
-    }
-  }, [isAuthenticated, user]);
-
-  // ✅ Move this AFTER the hook
-  if (isLoading) return null;
+  if (isLoading) {
+    return <LoadingSpinner />;
+  }
 
   return (
-    <Router>
-      <div className="App max-w-6xl mx-auto">
-        <Navigation />
-        <ToastContainer position="top-right" />
-
-        <Routes>
-          <Route
-            path="/"
-            element={isAuthenticated ? <Home /> : <HomePublic />}
-          />
-          <Route
-            path="/activity"
-            element={<ProtectedRoute element={Activity} />}
-          />
-          <Route
-            path="/dashboard"
-            element={<ProtectedRoute element={Dashboard} />}
-          />
-          <Route
-            path="/settings"
-            element={<ProtectedRoute element={Settings} />}
-          />
-        </Routes>
-      </div>
-    </Router>
+    <ErrorBoundary>
+      <Router>
+        <div className="min-h-screen bg-gray-50">
+          <Navigation />
+          <main className="flex-1">
+            <Suspense fallback={<LoadingSpinner />}>
+              <Routes>
+                <Route path="/" element={<Home />} />
+                <Route path="/public" element={<HomePublic />} />
+                <Route path="/dashboard" element={<ProtectedRoute element={Dashboard} />} />
+                <Route path="/activity" element={<ProtectedRoute element={Activity} />} />
+                <Route path="/settings" element={<ProtectedRoute element={Settings} />} />
+              </Routes>
+            </Suspense>
+          </main>
+          <Footer />
+        </div>
+      </Router>
+    </ErrorBoundary>
   );
 }
-
 
 export default App;

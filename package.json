@@ -6,11 +6,18 @@
     "@auth0/auth0-react": "^2.3.0",
     "@react-three/drei": "^10.0.7",
     "@react-three/fiber": "^9.1.2",
+    "@stripe/react-stripe-js": "^2.9.0",
+    "@stripe/stripe-js": "^3.5.0",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^13.5.0",
+    "body-parser": "^2.2.0",
     "chart.js": "^4.4.9",
+    "concurrently": "^9.2.0",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "firebase": "^10.14.1",
     "framer-motion": "^12.23.0",
     "lottie-react": "^2.4.1",
     "material-ripple-effects": "^2.0.1",
@@ -26,15 +33,19 @@
     "react-swipeable": "^7.0.2",
     "react-toastify": "^11.0.5",
     "react-tooltip": "^5.29.1",
+    "stripe": "^18.4.0",
     "three": "^0.176.0",
     "web-vitals": "^2.1.4"
   },
   "scripts": {
     "start": "PORT=3000 react-scripts start",
+    "start:server": "node server/index.js",
+    "dev": "concurrently \"npm run start\" \"npm run start:server\"",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },
+  "resolutions": {},
   "eslintConfig": {
     "extends": [
       "react-app",

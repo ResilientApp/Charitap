@@ -1,17 +1,26 @@
 import React, { useState } from 'react';
-import { useAuth0 } from '@auth0/auth0-react';
+import { useAuth } from '../auth/AuthContext';
 import Breadcrumb from './Breadcrumb';
 import CollapsibleSection from './CollapsibleSection';
 import RippleButton from './RippleButton';
 import useScrollAnimation from '../hooks/useScrollAnimation';
+import {loadStripe} from '@stripe/stripe-js';
+import {Elements, CardElement, useStripe, useElements} from '@stripe/react-stripe-js';
+
+const stripePromise = loadStripe(process.env.REACT_APP_STRIPE_PUBLIC_KEY || '***REMOVED***');
 
 export default function Settings() {
-  const { user, logout } = useAuth0();
+  const { user, profile, email, saveName, changePassword, logout } = useAuth();
   const [displayName, setDisplayName] = useState(() => {
-    // Get name from localStorage or use user's name as fallback
-    const savedName = localStorage.getItem('userDisplayName');
-    return savedName || user?.name || 'User';
+    const saved = localStorage.getItem('userDisplayName');
+    const initial = saved || (profile ? `${profile.firstName || ''} ${profile.lastName || ''}`.trim() : (user?.displayName || 'User'));
+    return initial || 'User';
   });
+  const [firstName, setFirstName] = useState(profile?.firstName || '');
+  const [lastName, setLastName] = useState(profile?.lastName || '');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [isEditingName, setIsEditingName] = useState(false);
   const [charities, setCharities] = useState([
     { id: 1, name: 'Save the Children', active: true, category: 'Education' },
@@ -41,23 +50,24 @@ export default function Settings() {
   };
 
   const handleLogout = () => {
-    logout({ returnTo: window.location.origin });
+    logout();
   };
 
   const handleNameEdit = () => {
     setIsEditingName(true);
   };
 
-  const handleNameSave = () => {
+  const handleNameSave = async () => {
     setIsEditingName(false);
-    // Save the name to localStorage for persistence
     localStorage.setItem('userDisplayName', displayName);
-    console.log('Saving name:', displayName);
+    const [fn, ...rest] = displayName.split(' ');
+    const ln = rest.join(' ');
+    await saveName(fn, ln);
   };
 
   const handleNameCancel = () => {
     const savedName = localStorage.getItem('userDisplayName');
-    setDisplayName(savedName || user?.name || 'User');
+    setDisplayName(savedName || (profile ? `${profile.firstName || ''} ${profile.lastName || ''}`.trim() : (user?.displayName || 'User')) || 'User');
     setIsEditingName(false);
   };
 
@@ -136,7 +146,7 @@ export default function Settings() {
                 ) : (
                   <div>
                     <h3 className="text-title text-gray-900">{displayName}</h3>
-                    <p className="text-body text-gray-600">{user?.email}</p>
+                    <p className="text-body text-gray-600">{email}</p>
                   </div>
                 )}
               </div>
@@ -148,6 +158,62 @@ export default function Settings() {
                   Edit Name
                 </RippleButton>
               )}
+            </div>
+          </CollapsibleSection>
+
+          {/* Password Change Section */}
+          <CollapsibleSection 
+            title="Password"
+            defaultOpen={false}
+            icon={
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+            }
+          >
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <input
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  placeholder="Current Password"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
+                />
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="New Password"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
+                />
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Confirm New Password"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
+                />
+              </div>
+              <div className="flex justify-end">
+                <RippleButton
+                  onClick={async () => {
+                    if (!newPassword || newPassword !== confirmPassword) return;
+                    try {
+                      await changePassword(currentPassword, newPassword);
+                      setCurrentPassword('');
+                      setNewPassword('');
+                      setConfirmPassword('');
+                      alert('Password updated successfully');
+                    } catch (e) {
+                      alert(e.message);
+                    }
+                  }}
+                  className="bg-yellow-400 hover:bg-yellow-500 text-black px-4 py-2 rounded-lg text-sm font-medium"
+                >
+                  Change Password
+                </RippleButton>
+              </div>
             </div>
           </CollapsibleSection>
 
@@ -353,6 +419,21 @@ export default function Settings() {
             </div>
           </CollapsibleSection>
 
+          {/* Payment Methods (Stripe) */}
+          <CollapsibleSection 
+            title="Payment Methods"
+            defaultOpen={true}
+            icon={
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+              </svg>
+            }
+          >
+            <Elements stripe={stripePromise}>
+              <StripePaymentSection userEmail={email} displayName={displayName} />
+            </Elements>
+          </CollapsibleSection>
+
           {/* Account Actions */}
           <CollapsibleSection 
             title="Account Actions" 
@@ -382,3 +463,83 @@ export default function Settings() {
     </div>
   );
 };
+
+function StripePaymentSection({ userEmail, displayName }) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [status, setStatus] = React.useState('');
+  const [savedMethods, setSavedMethods] = React.useState([]);
+
+  const fetchSavedMethods = async () => {
+    const res = await fetch('http://localhost:4242/api/list-payment-methods', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: userEmail })
+    });
+    const data = await res.json();
+    if (data.paymentMethods) setSavedMethods(data.paymentMethods);
+  };
+
+  React.useEffect(() => {
+    if (userEmail) fetchSavedMethods();
+  }, [userEmail]);
+
+  const handleAttachCard = async () => {
+    if (!stripe || !elements) return;
+    setStatus('');
+    try {
+      const res = await fetch('http://localhost:4242/api/create-setup-intent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: userEmail, name: displayName })
+      });
+      const data = await res.json();
+      if (!data.clientSecret) throw new Error(data.error || 'Failed to create setup intent');
+
+      const result = await stripe.confirmCardSetup(data.clientSecret, {
+        payment_method: {
+          card: elements.getElement(CardElement),
+          billing_details: { email: userEmail, name: displayName }
+        }
+      });
+      if (result.error) throw result.error;
+      setStatus('Card saved successfully');
+      await fetchSavedMethods();
+    } catch (e) {
+      setStatus(e.message);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="p-4 rounded-xl border border-gray-200 bg-gray-50">
+        <label className="block text-sm font-medium text-gray-700 mb-2">Add a new card</label>
+        <div className="p-3 rounded-lg bg-white border border-gray-200">
+          <CardElement options={{ hidePostalCode: true }} />
+        </div>
+        <div className="flex justify-end mt-3">
+          <RippleButton onClick={handleAttachCard} className="bg-yellow-400 hover:bg-yellow-500 text-black px-4 py-2 rounded-lg text-sm font-medium">Save Card</RippleButton>
+        </div>
+        {status && <p className="text-sm mt-2 text-gray-600">{status}</p>}
+      </div>
+
+      <div className="p-4 rounded-xl border border-gray-200 bg-gray-50">
+        <h4 className="text-lg font-semibold mb-3">Saved Payment Methods</h4>
+        <div className="space-y-2">
+          {savedMethods.length === 0 && (
+            <p className="text-sm text-gray-600">No saved cards yet.</p>
+          )}
+          {savedMethods.map((pm) => (
+            <div key={pm.id} className="flex items-center justify-between p-3 rounded-lg bg-white border border-gray-200">
+              <div className="flex items-center gap-3">
+                <img src={`/card-brands/${pm.card.brand}.svg`} alt={pm.card.brand} className="w-6 h-6" onError={(e)=>{e.currentTarget.style.display='none'}} />
+                <span className="text-sm text-gray-700">{pm.card.brand.toUpperCase()} •••• {pm.card.last4}</span>
+              </div>
+              <span className="text-xs text-gray-500">exp {pm.card.exp_month}/{pm.card.exp_year}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}

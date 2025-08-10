@@ -1,11 +1,11 @@
 import React from 'react';
-import { useAuth0 } from '@auth0/auth0-react';
+import { useAuth } from '../auth/AuthContext';
 import HeroGrid from './HeroGrid';
 import RippleButton from './RippleButton';
 import useScrollAnimation from '../hooks/useScrollAnimation';
 
 const Home = () => {
-  const { isAuthenticated, loginWithRedirect, user } = useAuth0();
+  const { isAuthenticated, displayName } = useAuth();
   
   // Scroll animation refs
   const heroRef = useScrollAnimation(0.3);
@@ -14,10 +14,7 @@ const Home = () => {
   const ctaRef = useScrollAnimation(0.3);
 
   const handleLogin = () => {
-    loginWithRedirect({
-      screen_hint: 'signup',
-      appState: { returnTo: '/dashboard' }
-    });
+    window.location.href = '/signin';
   };
 
   return (
@@ -228,10 +225,10 @@ const Home = () => {
         className="scroll-animate py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-r from-yellow-400 to-orange-500"
       >
         <div className="max-w-4xl mx-auto text-center">
-          {isAuthenticated ? (
+              {isAuthenticated ? (
             <>
               <h2 className="text-headline text-white mb-6 transition-all duration-300 hover:scale-105">
-                Welcome back, {user?.name || 'User'}! 👋
+                Welcome back, {displayName || 'User'}! 👋
               </h2>
               <p className="text-body text-yellow-100 mb-8 transition-colors duration-300 hover:text-white">
                 Ready to continue making a difference? Check your dashboard to see your impact.
@@ -251,12 +248,12 @@ const Home = () => {
               <p className="text-body text-yellow-100 mb-8 transition-colors duration-300 hover:text-white">
                 Join thousands of people who are already making micro-donations and creating real change.
               </p>
-              <RippleButton
-                onClick={handleLogin}
-                className="bg-white text-yellow-600 px-8 py-4 rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl transition-all duration-500 transform hover:scale-110"
-              >
-                Add to Chrome
-              </RippleButton>
+               <RippleButton
+                  onClick={() => window.location.href = '/signup'}
+                  className="bg-white text-yellow-600 px-8 py-4 rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl transition-all duration-500 transform hover:scale-110"
+                >
+                  Join Now
+                </RippleButton>
             </>
           )}
         </div>

@@ -1,12 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import HeroGrid from './HeroGrid';
 import Footer from './Footer';
-import { useAuth0 } from '@auth0/auth0-react';
 import Skeleton from 'react-loading-skeleton';
 import 'react-loading-skeleton/dist/skeleton.css';
 
 export default function HomePublic() {
-  const { loginWithRedirect } = useAuth0();
   const [loading, setLoading] = useState(true);
   useEffect(() => {
     const t = setTimeout(() => setLoading(false), 1500);
@@ -53,7 +51,7 @@ export default function HomePublic() {
                 </a>
                 <div className="mt-4 text-xs text-gray-600">
                   Already have an account?{' '}
-                  <button onClick={() => loginWithRedirect()} className="text-blue-700 underline hover:text-blue-900">Log in</button>
+                  <a href="/signin" className="text-blue-700 underline hover:text-blue-900">Log in</a>
                 </div>
               </div>
             </div>

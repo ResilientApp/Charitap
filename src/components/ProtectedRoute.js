@@ -1,11 +1,11 @@
 // src/components/ProtectedRoute.js
 import React, { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { useAuth0 } from '@auth0/auth0-react';
+import { useAuth } from '../auth/AuthContext';
 import { toast } from 'react-toastify';
 
 export default function ProtectedRoute({ element: Component }) {
-  const { isAuthenticated, isLoading } = useAuth0();
+  const { isAuthenticated, isLoading } = useAuth();
   const [redirect, setRedirect] = useState(false);
 
   // when we know auth status and it's false, kick off toast + delayed redirect

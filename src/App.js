@@ -1,6 +1,6 @@
 import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { useAuth0 } from '@auth0/auth0-react';
+import { useAuth } from './auth/AuthContext';
 import Navigation from './components/Navigation';
 import Footer from './components/Footer';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -13,6 +13,8 @@ const HomePublic = lazy(() => import('./components/HomePublic'));
 const Dashboard = lazy(() => import('./components/Dashboard'));
 const Activity = lazy(() => import('./components/Activity'));
 const Settings = lazy(() => import('./components/Settings'));
+const SignIn = lazy(() => import('./components/auth/SignIn'));
+const SignUp = lazy(() => import('./components/auth/SignUp'));
 
 // Loading component
 const LoadingSpinner = () => (
@@ -25,7 +27,7 @@ const LoadingSpinner = () => (
 );
 
 function App() {
-  const { isLoading } = useAuth0();
+  const { isLoading } = useAuth();
 
   if (isLoading) {
     return <LoadingSpinner />;
@@ -41,6 +43,8 @@ function App() {
               <Routes>
                 <Route path="/" element={<Home />} />
                 <Route path="/public" element={<HomePublic />} />
+                <Route path="/signin" element={<SignIn />} />
+                <Route path="/signup" element={<SignUp />} />
                 <Route path="/dashboard" element={<ProtectedRoute element={Dashboard} />} />
                 <Route path="/activity" element={<ProtectedRoute element={Activity} />} />
                 <Route path="/settings" element={<ProtectedRoute element={Settings} />} />

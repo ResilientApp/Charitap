@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { useAuth0 } from '@auth0/auth0-react';
+import { useAuth } from '../auth/AuthContext';
 import { toast } from 'react-toastify';
 import { useSwipeable } from 'react-swipeable';
 import CountUp from 'react-countup';
@@ -13,7 +13,7 @@ const pages = [
 ];
 
 export default function Navigation() {
-  const { isAuthenticated, isLoading, logout, loginWithRedirect } = useAuth0();
+  const { isAuthenticated, isLoading, logout } = useAuth();
   const nav = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -138,7 +138,7 @@ export default function Navigation() {
             )}
             {isAuthenticated ? (
               <button
-                onClick={() => logout({ logoutParams: { returnTo: window.location.origin } })}
+                onClick={logout}
                 className="hidden lg:inline-flex items-center justify-center px-5 py-2.5 text-base transition-all duration-200 hover:bg-yellow-300 hover:text-black focus:text-black focus:bg-yellow-300 font-semibold text-white bg-black rounded-full hover:scale-105 active:scale-95 transform"
                 title="Sign out of your account"
               >
@@ -146,7 +146,7 @@ export default function Navigation() {
               </button>
             ) : (
               <button
-                onClick={() => loginWithRedirect({ screen_hint: 'signup' })}
+                onClick={() => nav('/signup')}
                 className="hidden lg:inline-flex items-center justify-center px-5 py-2.5 text-base transition-all duration-200 hover:bg-yellow-300 hover:text-black focus:text-black focus:bg-yellow-300 font-semibold text-white bg-black rounded-full hover:scale-105 active:scale-95 transform"
                 title="Create an account or sign in"
               >
@@ -173,14 +173,14 @@ export default function Navigation() {
             <div className="w-full border-t border-gray-200 pt-4 mt-2">
               {isAuthenticated ? (
                 <button
-                  onClick={() => { logout({ logoutParams: { returnTo: window.location.origin } }); setMenuOpen(false); }}
+                  onClick={() => { logout(); setMenuOpen(false); }}
                   className="w-full items-center justify-center px-5 py-3 text-base transition-all duration-200 hover:bg-yellow-300 hover:text-black focus:text-black focus:bg-yellow-300 font-semibold text-white bg-black rounded-full hover:scale-105 active:scale-95 transform"
                 >
                   Logout
                 </button>
               ) : (
                 <button
-                  onClick={() => { loginWithRedirect({ screen_hint: 'signup' }); setMenuOpen(false); }}
+                  onClick={() => { nav('/signup'); setMenuOpen(false); }}
                   className="w-full items-center justify-center px-5 py-3 text-base transition-all duration-200 hover:bg-yellow-300 hover:text-black focus:text-black focus:bg-yellow-300 font-semibold text-white bg-black rounded-full hover:scale-105 active:scale-95 transform"
                 >
                   Join Now

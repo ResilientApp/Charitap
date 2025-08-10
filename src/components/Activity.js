@@ -1,5 +1,5 @@
 import React from 'react';
-import { useAuth0 } from '@auth0/auth0-react';
+// Auth not required directly in this component
 import Breadcrumb from './Breadcrumb';
 import RippleButton from './RippleButton';
 import useScrollAnimation from '../hooks/useScrollAnimation';

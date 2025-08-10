@@ -4,7 +4,7 @@ import { useAuth } from '../../auth/AuthContext';
 import RippleButton from '../RippleButton';
 
 export default function CompleteProfile() {
-  const { user, profile, saveName, authProvider } = useAuth();
+  const { saveName, authProvider, finalizeEmailSignup } = useAuth();
   const [first, setFirst] = useState('');
   const [last, setLast] = useState('');
   const nav = useNavigate();
@@ -20,8 +20,8 @@ export default function CompleteProfile() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-yellow-50 to-orange-50 flex items-center justify-center px-4">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 border border-yellow-100">
-        <div className="text-center mb-6">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 md:p-10 border border-yellow-100 space-y-6 animate-fade-in">
+        <div className="text-center">
           <img className="w-12 h-12 mx-auto" src="/logo.png" alt="Charitap" />
           <h1 className="text-2xl font-bold text-gray-900 mt-2">Complete your profile</h1>
           <p className="text-gray-600">Add your name to continue</p>
@@ -33,7 +33,7 @@ export default function CompleteProfile() {
               type="text"
               value={first}
               onChange={(e) => setFirst(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
+              className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
             />
           </div>
           <div>
@@ -42,13 +42,17 @@ export default function CompleteProfile() {
               type="text"
               value={last}
               onChange={(e) => setLast(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
+              className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
             />
           </div>
           <RippleButton
             onClick={async () => {
               if (!first.trim() || !last.trim()) return;
               await saveName(first.trim(), last.trim());
+              // finalize signup after email verified code screen
+              if (sessionStorage.getItem('charitap_email_verified') === '1') {
+                await finalizeEmailSignup();
+              }
               nav('/settings', { replace: true });
             }}
             className={`w-full bg-black text-white hover:bg-yellow-300 hover:text-black px-5 py-2.5 rounded-full text-sm font-semibold ${!first.trim() || !last.trim() ? 'opacity-60 cursor-not-allowed' : ''}`}

@@ -105,7 +105,12 @@ export default function Activity() {
 
   const [tab, setTab] = useState('donated'); // 'donated' | 'collected'
   const donated = activities.filter(a => a.type === 'donation');
-  const collected = activities.filter(a => a.type === 'donation'); // placeholder same design
+  // Collected section (privacy-friendly): show amount + collected date only
+  const collected = [
+    { id: 'c1', amount: '$1.04', date: '1 day ago' },
+    { id: 'c2', amount: '$0.72', date: '2 days ago' },
+    { id: 'c3', amount: '$1.91', date: '5 days ago' },
+  ];
   const visible = tab === 'donated' ? donated : collected;
 
   return (
@@ -148,8 +153,9 @@ export default function Activity() {
         <div 
           ref={activityRef}
           className="scroll-animate space-y-4"
+          style={{ contentVisibility: 'auto', containIntrinsicSize: '700px' }}
         >
-          {visible.map((activity, index) => (
+          {tab === 'donated' && visible.map((activity, index) => (
             <div 
               key={activity.id}
               className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-all duration-300 transform hover:scale-[1.02]"
@@ -186,6 +192,14 @@ export default function Activity() {
                     {/* Status badge removed */}
                   </div>
                 </div>
+              </div>
+            </div>
+          ))}
+          {tab === 'collected' && collected.map((item, index) => (
+            <div key={item.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-all duration-300 transform hover:scale-[1.02]" style={{ animationDelay: `${index * 0.1}s` }}>
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-gray-600">{formatActivityDate(item.date)}</div>
+                <div className="text-lg font-semibold text-green-600">{item.amount}</div>
               </div>
             </div>
           ))}

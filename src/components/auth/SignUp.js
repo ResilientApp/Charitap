@@ -1,14 +1,18 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import RippleButton from '../RippleButton';
 
 export default function SignUp() {
-  const { signupWithEmail, loginWithGoogle, isLoading } = useAuth();
+  const { beginSignupWithEmail, loginWithGoogle, isLoading } = useAuth();
+  const nav = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [error, setError] = useState('');
+  const [showPw, setShowPw] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   const handleEmailSignup = async (e) => {
     e.preventDefault();
@@ -18,8 +22,8 @@ export default function SignUp() {
       return;
     }
     try {
-      await signupWithEmail(email, password);
-      window.location.href = '/complete-profile';
+      await beginSignupWithEmail(email, password);
+      window.location.href = '/verify-email';
     } catch (err) {
       setError(err.message || 'Failed to sign up');
     }
@@ -27,7 +31,7 @@ export default function SignUp() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-yellow-50 to-orange-50 flex items-center justify-center px-4">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 border border-yellow-100">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 md:p-10 border border-yellow-100 space-y-6 animate-fade-in">
         <div className="text-center mb-6">
           <img className="w-12 h-12 mx-auto" src="/logo.png" alt="Charitap" />
           <h1 className="text-2xl font-bold text-gray-900 mt-2">Create your Charitap account</h1>
@@ -46,30 +50,41 @@ export default function SignUp() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
+              className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
             />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
-            />
+            <div className="relative">
+              <input
+                type={showPw ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                className="w-full px-3 py-3 pr-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
+              />
+              <button type="button" aria-label="Toggle password visibility" className="absolute right-3 top-3.5 text-sm text-gray-500" onClick={() => setShowPw(v => !v)}>
+                {showPw ? 'Hide' : 'Show'}
+              </button>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">Use at least 8 characters with letters & numbers.</p>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label>
-            <input
-              type="password"
-              value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
-              required
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
-            />
+            <div className="relative">
+              <input
+                type={showConfirm ? 'text' : 'password'}
+                value={confirm}
+                onChange={(e) => setConfirm(e.target.value)}
+                required
+                className="w-full px-3 py-3 pr-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
+              />
+              <button type="button" aria-label="Toggle confirm visibility" className="absolute right-3 top-3.5 text-sm text-gray-500" onClick={() => setShowConfirm(v => !v)}>
+                {showConfirm ? 'Hide' : 'Show'}
+              </button>
+            </div>
           </div>
-          <RippleButton type="submit" className="w-full bg-yellow-400 hover:bg-yellow-500 text-black px-4 py-2 rounded-lg font-semibold">
+          <RippleButton type="submit" className="w-full bg-black text-white hover:bg-yellow-300 hover:text-black px-5 py-2.5 rounded-full font-semibold transition-colors">
             {isLoading ? 'Creating account...' : 'Sign Up'}
           </RippleButton>
         </form>
@@ -84,12 +99,12 @@ export default function SignUp() {
           onClick={async () => {
             try {
               await loginWithGoogle();
-              window.location.href = '/settings';
+              nav('/', { replace: true });
             } catch (e) {
               setError(e.message);
             }
           }}
-          className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 rounded-lg bg-white hover:bg-gray-50 transition"
+          className="w-full inline-flex items-center justify-center gap-2 px-5 py-2.5 border border-gray-300 rounded-full bg-white hover:bg-gray-50 transition"
         >
           <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" />
           <span className="text-gray-800 font-medium">Sign up with Google</span>

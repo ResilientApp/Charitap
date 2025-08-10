@@ -1,5 +1,5 @@
 import React from 'react';
-import { useAuth } from '../auth/AuthContext';
+// import { useAuth } from '../auth/AuthContext';
 import Breadcrumb from './Breadcrumb';
 import CollapsibleSection from './CollapsibleSection';
 // import RippleButton from './RippleButton';
@@ -11,7 +11,7 @@ import { Bar, Doughnut } from 'react-chartjs-2';
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement);
 
 const Dashboard = () => {
-  const { isAuthenticated } = useAuth();
+  // const { isAuthenticated } = useAuth();
   
   // Scroll animation refs
   const statsRef = useScrollAnimation(0.3);
@@ -23,12 +23,12 @@ const Dashboard = () => {
     { label: 'Collected', value: '$4.56' }
   ];
 
-  const recentDonations = [
-    { charity: 'Save the Children', amount: '$2.45', category: 'Education' },
-    { charity: 'Doctors Without Borders', amount: '$1.78', category: 'Healthcare' },
-    { charity: 'World Wildlife Fund', amount: '$3.12', category: 'Environment' },
-    { charity: 'Red Cross', amount: '$1.23', category: 'Emergency' }
-  ];
+  // const recentDonations = [
+  //   { charity: 'Save the Children', amount: '$2.45', category: 'Education' },
+  //   { charity: 'Doctors Without Borders', amount: '$1.78', category: 'Healthcare' },
+  //   { charity: 'World Wildlife Fund', amount: '$3.12', category: 'Environment' },
+  //   { charity: 'Red Cross', amount: '$1.23', category: 'Emergency' }
+  // ];
 
   // Chart data
   const monthlySpendingData = {

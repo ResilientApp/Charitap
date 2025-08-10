@@ -7,11 +7,7 @@ import {loadStripe} from '@stripe/stripe-js';
 import {Elements, CardNumberElement, CardExpiryElement, CardCvcElement, useStripe, useElements} from '@stripe/react-stripe-js';
 
 const stripePublicKey = process.env.REACT_APP_STRIPE_PUBLIC_KEY;
-if (!stripePublicKey) {
-  // eslint-disable-next-line no-console
-  console.error('Missing REACT_APP_STRIPE_PUBLIC_KEY in environment.');
-}
-const stripePromise = loadStripe(stripePublicKey || '');
+const stripePromise = stripePublicKey ? loadStripe(stripePublicKey) : null;
 
 export default function Settings() {
   const { user, profile, email, saveName, changePassword, logout, authProvider } = useAuth();
@@ -27,7 +23,6 @@ export default function Settings() {
   const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [passwordError, setPasswordError] = useState('');
-  const [isEditingName, setIsEditingName] = useState(false);
   const [firstNameEdit, setFirstNameEdit] = useState(() => (displayName?.split(' ')[0] || ''));
   const [lastNameEdit, setLastNameEdit] = useState(() => (displayName?.split(' ').slice(1).join(' ') || ''));
   const [charities, setCharities] = useState([
@@ -43,8 +38,7 @@ export default function Settings() {
   const [paymentMode, setPaymentMode] = useState('monthly'); // 'monthly' or 'threshold'
   const [thresholdAmount] = useState(5);
 
-  // Scroll animation refs
-  // removed scroll animations for stability during testing
+  const [showOnboarding, setShowOnboarding] = useState(() => localStorage.getItem('charitap_onboarding_show') === '1');
 
   const handleCharityToggle = (id) => {
     setCharities(prev => 
@@ -60,25 +54,11 @@ export default function Settings() {
     logout();
   };
 
-  const handleNameEdit = () => {
-    const parts = (displayName || '').split(' ');
-    setFirstNameEdit(parts[0] || '');
-    setLastNameEdit(parts.slice(1).join(' ') || '');
-    setIsEditingName(true);
-  };
-
   const handleNameSave = async () => {
     const finalDisplay = [firstNameEdit, lastNameEdit].filter(Boolean).join(' ').trim();
     setDisplayName(finalDisplay || 'User');
-    setIsEditingName(false);
     localStorage.setItem('userDisplayName', finalDisplay);
     await saveName(firstNameEdit, lastNameEdit);
-  };
-
-  const handleNameCancel = () => {
-    const savedName = localStorage.getItem('userDisplayName');
-    setDisplayName(savedName || (profile ? `${profile.firstName || ''} ${profile.lastName || ''}`.trim() : (user?.displayName || 'User')) || 'User');
-    setIsEditingName(false);
   };
 
   const handlePaymentModeChange = (mode) => {
@@ -92,6 +72,7 @@ export default function Settings() {
       thresholdAmount
     });
   };
+
 
   const scrollToBottom = () => {
     const charitiesContainer = document.querySelector('.charities-scroll-container');
@@ -130,73 +111,57 @@ export default function Settings() {
         </div>
 
         <div className="space-y-6">
-          {/* Profile Section */}
+          {showOnboarding && (
+            <div className="mb-6 p-4 border border-yellow-200 bg-yellow-50 rounded-xl flex items-center justify-between">
+              <div className="text-sm text-gray-800">
+                Welcome! Quick setup: Pick charities → Set payment preferences → Add a payment method.
+              </div>
+              <RippleButton
+                onClick={() => {
+                  setShowOnboarding(false);
+                  localStorage.removeItem('charitap_onboarding_show');
+                  localStorage.setItem('charitap_onboarding_done', '1');
+                  document.querySelector('[data-section="charities"]')?.scrollIntoView({ behavior: 'smooth' });
+                }}
+                className="bg-black text-white rounded-full px-4 py-2 text-sm"
+              >
+                Start
+              </RippleButton>
+            </div>
+          )}
+          {/* Profile Section (form style) */}
           <CollapsibleSection 
             title="Profile Information" 
             defaultOpen={false}
             persistKey="settings:profile"
-            icon={
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-              </svg>
-            }
+            icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>}
           >
-            <div className="space-y-4">
-              <div className="flex-1">
-                {isEditingName ? (
-                  <div className="space-y-2">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">First name</label>
-                        <input
-                          type="text"
-                          value={firstNameEdit}
-                          onChange={(e) => setFirstNameEdit(e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
-                          placeholder="First name"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Last name</label>
-                        <input
-                          type="text"
-                          value={lastNameEdit}
-                          onChange={(e) => setLastNameEdit(e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
-                          placeholder="Last name"
-                        />
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap gap-2 pt-1">
-                      <RippleButton 
-                        onClick={handleNameSave}
-                        className="bg-black text-white hover:bg-yellow-300 hover:text-black px-5 py-2.5 rounded-full text-sm font-semibold"
-                      >
-                        Save
-                      </RippleButton>
-                      <RippleButton 
-                        onClick={handleNameCancel}
-                        className="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 px-5 py-2.5 rounded-full text-sm font-semibold"
-                      >
-                        Cancel
-                      </RippleButton>
+            <div className="space-y-4 max-w-2xl">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">First name</label>
+                  <input type="text" value={firstNameEdit} onChange={(e) => setFirstNameEdit(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent" placeholder="First name" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Last name</label>
+                  <input type="text" value={lastNameEdit} onChange={(e) => setLastNameEdit(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent" placeholder="Last name" />
                 </div>
               </div>
-                ) : (
-                  <div>
-                    <h3 className="text-title text-gray-900">{displayName}</h3>
-                    <p className="text-body text-gray-600">{email}</p>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                <div className="relative">
+                  <input type="email" value={email} readOnly className="w-full px-3 py-2 border border-gray-200 bg-gray-100 text-gray-600 rounded-lg" />
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2 text-yellow-500" title="Email verified">
+                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 2c-1.1 0-2 .9-2 2H6a2 2 0 00-2 2v5c0 5.55 3.84 10.74 8 12 4.16-1.26 8-6.45 8-12V6a2 2 0 00-2-2h-4c0-1.1-.9-2-2-2z"/>
+                      <path fill="#fff" d="M10.5 13.5l-2-2 1.4-1.4 0.6 0.6 3-3 1.4 1.4-4.4 4.4z"/>
+                    </svg>
                   </div>
-                )}
+                </div>
               </div>
-              {!isEditingName && (
-                <RippleButton 
-                  onClick={handleNameEdit}
-                  className="bg-yellow-400 hover:bg-yellow-500 text-black px-4 py-2 rounded-lg text-sm font-medium"
-                >
-                  Edit Name
-                </RippleButton>
-              )}
+              <div className="flex gap-2">
+                <RippleButton onClick={handleNameSave} className="bg-black text-white hover:bg-yellow-300 hover:text-black px-5 py-2.5 rounded-full text-sm font-semibold">Save Profile</RippleButton>
+              </div>
             </div>
           </CollapsibleSection>
 
@@ -292,11 +257,11 @@ export default function Settings() {
                 Toggle them on or off to control your donation preferences.
               </p>
               
-              <div className="h-[420px] overflow-y-auto pr-2 pb-12 space-y-4 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 charities-scroll-container">
+              <div className="h-[420px] overflow-y-auto pr-2 pb-16 space-y-4 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 charities-scroll-container">
                 {charities.map((charity, index) => (
                   <div 
                     key={charity.id} 
-                    className={`relative p-4 rounded-xl border-2 transition-all duration-200 cursor-pointer hover:shadow-md overflow-hidden ${
+                    className={`relative p-4 rounded-xl border-2 transition-all duration-200 cursor-pointer hover:shadow-md overflow-hidden min-h-[96px] ${
                       charity.active 
                         ? 'border-green-200 bg-green-50 shadow-sm' 
                         : 'border-gray-200 bg-gray-50'
@@ -344,7 +309,7 @@ export default function Settings() {
                             }`}
                           />
                         </div>
-                        <span className={`text-sm font-medium transition-colors duration-300 ${
+                        <span className={`inline-block w-16 text-center text-sm font-medium transition-colors duration-300 ${
                           charity.active ? 'text-green-700' : 'text-gray-500'
                         }`}>
                           {charity.active ? 'Active' : 'Inactive'}
@@ -354,7 +319,7 @@ export default function Settings() {
                   </div>
                 ))}
                 {/* Extra bottom space for last item visibility */}
-                <div className="h-16" />
+              <div className="h-24" />
               </div>
               <div className="flex justify-end mt-2">
                 <RippleButton
@@ -387,10 +352,10 @@ export default function Settings() {
               <div className="space-y-4">
                 <h4 className="text-lg font-semibold text-gray-900">Payment Schedule</h4>
                 
-                <div className="grid md:grid-cols-2 gap-4">
+                <div className="grid md:grid-cols-2 gap-4 items-stretch">
                   {/* Monthly Payment Option */}
                   <div 
-                    className={`p-4 rounded-xl border-2 cursor-pointer transition-all duration-300 transform hover:scale-[1.02] ${
+                    className={`p-4 rounded-xl border-2 cursor-pointer transition-all duration-300 transform hover:scale-[1.02] h-full flex flex-col min-h-[176px] ${
                       paymentMode === 'monthly' 
                         ? 'border-yellow-400 bg-yellow-50' 
                         : 'border-gray-200 bg-gray-50 hover:border-gray-300'
@@ -412,21 +377,23 @@ export default function Settings() {
                     <p className="text-sm text-gray-600 mb-3 transition-colors duration-300 hover:text-gray-700">
                       Automatically donate all collected amounts at the end of each month.
                     </p>
-                    {paymentMode === 'monthly' && (
-                      <div className="space-y-2">
-                        <div className="flex items-center space-x-2 text-sm text-gray-700">
-                          <svg className="w-4 h-4 text-green-600 transition-all duration-300 hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                          <span>All collected amounts will be donated automatically</span>
+                    <div className="mt-auto min-h-6">
+                      {paymentMode === 'monthly' && (
+                        <div className="space-y-2">
+                          <div className="flex items-center space-x-2 text-sm text-gray-700">
+                            <svg className="w-4 h-4 text-green-600 transition-all duration-300 hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <span>All collected amounts will be donated automatically</span>
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
 
                   {/* Threshold Payment Option */}
                   <div 
-                    className={`p-4 rounded-xl border-2 cursor-pointer transition-all duration-300 transform hover:scale-[1.02] ${
+                    className={`p-4 rounded-xl border-2 cursor-pointer transition-all duration-300 transform hover:scale-[1.02] h-full flex flex-col min-h-[176px] ${
                       paymentMode === 'threshold' 
                         ? 'border-yellow-400 bg-yellow-50' 
                         : 'border-gray-200 bg-gray-50 hover:border-gray-300'
@@ -448,11 +415,13 @@ export default function Settings() {
                     <p className="text-sm text-gray-600 mb-3 transition-colors duration-300 hover:text-gray-700">
                       Pay when your accumulated donations reach a certain amount.
                     </p>
-                    {paymentMode === 'threshold' && (
-                      <div className="space-y-2">
-                        <p className="text-sm text-gray-700"><span className="font-semibold">Threshold Amount:</span> $5 (fixed)</p>
-                      </div>
-                    )}
+                    <div className="mt-auto min-h-6">
+                      {paymentMode === 'threshold' && (
+                        <div className="space-y-2">
+                          <p className="text-sm text-gray-700"><span className="font-semibold">Threshold Amount:</span> $5 (fixed)</p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -480,9 +449,15 @@ export default function Settings() {
               </svg>
             }
           >
-            <Elements stripe={stripePromise}>
-              <StripePaymentSection userEmail={email} displayName={displayName} />
-            </Elements>
+            {stripePromise ? (
+              <Elements stripe={stripePromise}>
+                <StripePaymentSection userEmail={email} displayName={displayName} />
+              </Elements>
+            ) : (
+              <div className="p-4 rounded-xl border border-gray-200 bg-gray-50 text-sm text-gray-600">
+                Payments are disabled. Add REACT_APP_STRIPE_PUBLIC_KEY to enable this section.
+              </div>
+            )}
           </CollapsibleSection>
 
           {/* Account Actions */}
@@ -636,7 +611,13 @@ function StripePaymentSection({ userEmail, displayName }) {
       </div>
 
       <div className="p-4 rounded-xl border border-gray-200 bg-gray-50">
-        <h4 className="text-lg font-semibold mb-3">Saved Payment Methods</h4>
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="text-lg font-semibold">Saved Payment Methods</h4>
+          <div className="flex items-center text-xs text-gray-600">
+            <svg className="w-4 h-4 text-green-600 mr-1" viewBox="0 0 24 24" fill="currentColor"><path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10Zm-1-6h2v2h-2v-2Zm0-8h2v6h-2V8Z"/></svg>
+            Your payment information is securely processed via Stripe
+          </div>
+        </div>
         <div className="space-y-2">
           {savedMethods.length === 0 && (
             <p className="text-sm text-gray-600">No saved cards yet.</p>

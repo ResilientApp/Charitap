@@ -20,6 +20,7 @@
     "framer-motion": "^12.23.0",
     "lottie-react": "^2.4.1",
     "material-ripple-effects": "^2.0.1",
+    "nodemailer": "^7.0.5",
     "react": "^19.1.0",
     "react-chartjs-2": "^5.3.0",
     "react-confetti": "^6.4.0",
@@ -65,8 +66,8 @@
   },
   "devDependencies": {
     "autoprefixer": "^10.4.21",
+    "dotenv": "^16.4.5",
     "postcss": "^8.5.3",
-    "tailwindcss": "^3.4.17",
-    "dotenv": "^16.4.5"
+    "tailwindcss": "^3.4.17"
   }
 }

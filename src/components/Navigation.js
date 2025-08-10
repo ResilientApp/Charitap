@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { toast } from 'react-toastify';
@@ -6,20 +6,23 @@ import { useSwipeable } from 'react-swipeable';
 import CountUp from 'react-countup';
 
 const pages = [
-  { to: '/', label: 'Home' },
-  { to: '/activity', label: 'Activity' },
-  { to: '/dashboard', label: 'Dashboard' },
-  { to: '/settings', label: 'Settings' },
+  { to: '/', label: 'Home', preload: () => import('./Home') },
+  { to: '/activity', label: 'Activity', preload: () => import('./Activity') },
+  { to: '/dashboard', label: 'Dashboard', preload: () => import('./Dashboard') },
+  { to: '/settings', label: 'Settings', preload: () => import('./Settings') },
 ];
 
 export default function Navigation() {
   const { isAuthenticated, isLoading, logout } = useAuth();
   const nav = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  const [animateCounts, setAnimateCounts] = useState(false);
 
   // Sample data for Total Donations
   const totalDonations = 4567.89;
-  const bypass = (process.env.REACT_APP_AUTH_BYPASS ?? 'true') === 'true';
+  const totalStr = totalDonations.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const bypass = process.env.REACT_APP_AUTH_BYPASS === 'true';
 
   const guard = (e, to) => {
     if (bypass) return;
@@ -50,6 +53,34 @@ export default function Navigation() {
     }
   };
 
+  useEffect(() => {
+    // idle prefetch for main pages
+    const id = setTimeout(() => {
+      pages.slice(1).forEach(p => p.preload?.());
+    }, 1500);
+    return () => clearTimeout(id);
+  }, []);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 8);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      const done = sessionStorage.getItem('charitap_counts_done');
+      if (!done) {
+        setAnimateCounts(true);
+        sessionStorage.setItem('charitap_counts_done', '1');
+      } else {
+        setAnimateCounts(false);
+      }
+    } else {
+      setAnimateCounts(false);
+    }
+  }, [isAuthenticated]);
+
   // Swipe handlers for mobile navigation
   const swipeHandlers = useSwipeable({
     onSwipedLeft: () => {
@@ -70,8 +101,8 @@ export default function Navigation() {
   });
 
   return (
-    <header className="bg-[#FCF8F1] sticky top-0 z-30 shadow-md w-full" role="banner" {...swipeHandlers}>
-      <div className="flex items-center justify-between h-16 lg:h-20 w-full px-4 sm:px-6 lg:px-8">
+    <header className={`sticky top-0 z-30 w-full transition-all duration-300 ${scrolled ? 'backdrop-blur-md bg-[#FCF8F1]/80 shadow-md' : 'bg-[#FCF8F1]'}`} role="banner" {...swipeHandlers}>
+      <div className={`flex items-center justify-between ${scrolled ? 'h-14 lg:h-16' : 'h-16 lg:h-20'} w-full px-4 sm:px-6 lg:px-8 transition-all duration-300`}>
           <div className="flex-shrink-0">
             <NavLink to="/" className="flex items-center space-x-2 group" aria-label="Go to home page">
               <img className="w-auto h-8 sm:h-10" src="/logo.png" alt="Charitap Logo" />
@@ -96,10 +127,12 @@ export default function Navigation() {
           </button>
 
           <nav className="hidden lg:flex lg:items-center lg:justify-center lg:space-x-8 xl:space-x-10" aria-label="Main navigation">
-            {pages.map(({ to, label }) => (
+            {pages.map(({ to, label, preload }) => (
               <NavLink
                 key={to}
                 to={to}
+                onMouseEnter={preload}
+                onFocus={preload}
                 onClick={e => guard(e, to)}
                 className={({ isActive }) =>
                   `text-base text-black transition-all duration-200 hover:text-opacity-80 relative group ${isActive ? 'font-bold underline' : ''}`
@@ -121,8 +154,12 @@ export default function Navigation() {
                 <span className="inline-flex items-center px-4 py-1.5 rounded-full bg-green-200 text-green-900 font-semibold text-base border border-green-300 relative group" title="Total donations made">
                   <span className="w-2 h-2 mr-2 rounded-full bg-green-400 animate-pulse-slow" />
                   <span className="font-semibold">Total:</span>
-                  <span className="ml-1 font-bold tracking-tight text-black">
-                    $<CountUp end={totalDonations} duration={2} separator="," decimals={2} />
+                  <span className="ml-1 font-bold tracking-tight text-black inline-block text-right w-24" style={{ fontVariantNumeric: 'tabular-nums' }} aria-live="off">
+                    {animateCounts ? (
+                      <>$<CountUp end={totalDonations} duration={1.2} separator="," decimals={2} /></>
+                    ) : (
+                      `$${totalStr}`
+                    )}
                   </span>
                   <span className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 bg-black text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap">
                     Total donations made
@@ -131,7 +168,7 @@ export default function Navigation() {
                 <span className="inline-flex items-center px-4 py-1.5 rounded-full bg-yellow-200 text-yellow-900 font-semibold text-base border border-yellow-300 relative group" title="Your current donation balance">
                   <span className="w-2 h-2 mr-2 rounded-full bg-green-400 animate-pulse-slow" />
                   <span className="font-semibold">Collected:</span>
-                  <span className="ml-1 font-bold tracking-tight text-black">$4.56</span>
+                  <span className="ml-1 font-bold tracking-tight text-black inline-block text-right w-16" style={{ fontVariantNumeric: 'tabular-nums' }} aria-live="off">$4.56</span>
                   <span className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 bg-black text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap">
                     Your current donation balance
                   </span>

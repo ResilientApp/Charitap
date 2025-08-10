@@ -8,6 +8,7 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null); // { id, email, displayName }
   const [profile, setProfile] = useState(null); // {firstName, lastName, email}
   const [authProvider, setAuthProvider] = useState(null); // 'google' | 'local' | null
+  const [emailVerified, setEmailVerified] = useState(false);
   const [loading, setLoading] = useState(true);
   // Avoid router dependency here; pages decide navigation
 
@@ -24,6 +25,7 @@ export function AuthProvider({ children }) {
           setUser({ id: data.id, email: data.email, displayName: `${data.firstName || ''} ${data.lastName || ''}`.trim() });
           setProfile({ email: data.email, firstName: data.firstName || '', lastName: data.lastName || '' });
           setAuthProvider(data.provider || null);
+          setEmailVerified(Boolean(data.verified));
         }
       } catch (_) {}
     }
@@ -40,6 +42,7 @@ export function AuthProvider({ children }) {
     // derived fields
     email: user?.email || profile?.email || '',
     displayName: profile ? `${profile.firstName || ''} ${profile.lastName || ''}`.trim() : (user?.displayName || ''),
+    emailVerified,
 
     // actions
     // TEMP local impls until MongoDB backend is ready
@@ -47,11 +50,14 @@ export function AuthProvider({ children }) {
       setLoading(true);
       try {
         const info = await signInWithGoogleGSI();
-        const stored = { id: info.id, email: info.email, firstName: info.firstName, lastName: info.lastName, provider: 'google' };
+        // reset count-up animation per session on fresh login
+        sessionStorage.removeItem('charitap_counts_done');
+        const stored = { id: info.id, email: info.email, firstName: info.firstName, lastName: info.lastName, provider: 'google', verified: true, expiresAt: Date.now() + 5*24*60*60*1000 };
         localStorage.setItem('charitap_auth', JSON.stringify(stored));
         setUser({ id: info.id, email: info.email, displayName: `${info.firstName || ''} ${info.lastName || ''}`.trim() });
         setProfile({ email: info.email, firstName: info.firstName || '', lastName: info.lastName || '' });
         setAuthProvider('google');
+        setEmailVerified(true);
         return stored;
       } finally {
         setLoading(false);
@@ -64,25 +70,44 @@ export function AuthProvider({ children }) {
       if (!userRec || userRec.password !== password) {
         throw new Error('Invalid credentials');
       }
-      const session = { id: userRec.id, email, firstName: userRec.firstName || '', lastName: userRec.lastName || '', provider: 'local', expiresAt: Date.now() + 5*24*60*60*1000 };
+      // reset count-up animation per session on fresh login
+      sessionStorage.removeItem('charitap_counts_done');
+      const session = { id: userRec.id, email, firstName: userRec.firstName || '', lastName: userRec.lastName || '', provider: 'local', verified: Boolean(userRec.verified), expiresAt: Date.now() + 5*24*60*60*1000 };
       localStorage.setItem('charitap_auth', JSON.stringify(session));
       setUser({ id: session.id, email, displayName: `${session.firstName} ${session.lastName}`.trim() });
       setProfile({ email, firstName: session.firstName, lastName: session.lastName });
       setAuthProvider('local');
+      setEmailVerified(Boolean(userRec.verified));
       return session;
     },
-    signupWithEmail: async (email, password) => {
-      // Simulate signup (replace with your MongoDB API call)
+    beginSignupWithEmail: async (email, password) => {
+      // client-side precheck; backend will actually verify email via OTP
+      const users = JSON.parse(localStorage.getItem('charitap_users') || '{}');
+      if (users[email]) throw new Error('Email already registered');
+      const pending = { email, password, createdAt: Date.now() };
+      localStorage.setItem('charitap_pending_signup', JSON.stringify(pending));
+      return pending;
+    },
+    finalizeEmailSignup: async () => {
+      const raw = localStorage.getItem('charitap_pending_signup');
+      if (!raw) throw new Error('No pending signup found');
+      const { email, password } = JSON.parse(raw);
       const users = JSON.parse(localStorage.getItem('charitap_users') || '{}');
       if (users[email]) throw new Error('Email already registered');
       const id = `local_${Math.random().toString(36).slice(2)}`;
-      users[email] = { id, email, password, firstName: '', lastName: '' };
+      users[email] = { id, email, password, firstName: '', lastName: '', verified: true };
       localStorage.setItem('charitap_users', JSON.stringify(users));
-      const session = { id, email, firstName: '', lastName: '', provider: 'local', expiresAt: Date.now() + 5*24*60*60*1000 };
+      localStorage.removeItem('charitap_pending_signup');
+      // show onboarding only right after verified signup
+      localStorage.setItem('charitap_onboarding_show', '1');
+      const session = { id, email, firstName: '', lastName: '', provider: 'local', verified: true, expiresAt: Date.now() + 5*24*60*60*1000 };
       localStorage.setItem('charitap_auth', JSON.stringify(session));
       setUser({ id, email, displayName: '' });
       setProfile({ email, firstName: '', lastName: '' });
       setAuthProvider('local');
+      setEmailVerified(true);
+      // reset count-up animation per session on fresh login
+      sessionStorage.removeItem('charitap_counts_done');
       return session;
     },
     logout: async () => {
@@ -90,6 +115,7 @@ export function AuthProvider({ children }) {
       setUser(null);
       setProfile(null);
       setAuthProvider(null);
+      setEmailVerified(false);
     },
     saveName: async (firstName, lastName) => {
       const sessionRaw = localStorage.getItem('charitap_auth');
@@ -120,8 +146,21 @@ export function AuthProvider({ children }) {
       users[session.email].password = newPassword;
       localStorage.setItem('charitap_users', JSON.stringify(users));
     },
+    markEmailVerified: async () => {
+      const sessionRaw = localStorage.getItem('charitap_auth');
+      if (!sessionRaw) return;
+      const session = JSON.parse(sessionRaw);
+      const newSession = { ...session, verified: true };
+      localStorage.setItem('charitap_auth', JSON.stringify(newSession));
+      const users = JSON.parse(localStorage.getItem('charitap_users') || '{}');
+      if (users[session.email]) {
+        users[session.email].verified = true;
+        localStorage.setItem('charitap_users', JSON.stringify(users));
+      }
+      setEmailVerified(true);
+    },
     authProvider
-  }), [user, profile, loading, authProvider]);
+  }), [user, profile, loading, authProvider, emailVerified]);
 
   return (
     <AuthContext.Provider value={value}>

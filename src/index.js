@@ -2,7 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 // Removed Auth0; using custom AuthProvider backed by Firebase Auth
 import { AuthProvider } from './auth/AuthContext';
-import { ToastContainer } from 'react-toastify';
+import { ToastContainer, Slide } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import './styles/main.css';
 import App from './App';
@@ -28,6 +28,7 @@ root.render(
         draggable
         pauseOnHover
         theme="light"
+        transition={Slide}
       />
     </AuthProvider>
   </React.StrictMode>

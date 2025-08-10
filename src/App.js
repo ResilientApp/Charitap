@@ -15,6 +15,7 @@ const Settings = lazy(() => import('./components/Settings'));
 const SignIn = lazy(() => import('./components/auth/SignIn'));
 const SignUp = lazy(() => import('./components/auth/SignUp'));
 const CompleteProfile = lazy(() => import('./components/auth/CompleteProfile'));
+const VerifyEmail = lazy(() => import('./components/auth/VerifyEmail'));
 
 // Loading component
 const LoadingSpinner = () => (
@@ -29,7 +30,7 @@ const LoadingSpinner = () => (
 function App() {
   const { isLoading } = useAuth();
   const location = useLocation();
-  const hideChrome = location.pathname === '/signin' || location.pathname === '/signup';
+  const hideChrome = ['/signin','/signup','/complete-profile'].includes(location.pathname);
 
   if (isLoading) {
     return <LoadingSpinner />;
@@ -46,6 +47,7 @@ function App() {
               {/* Public home currently not used */}
               <Route path="/signin" element={<SignIn />} />
               <Route path="/signup" element={<SignUp />} />
+              <Route path="/verify-email" element={<VerifyEmail />} />
               <Route path="/complete-profile" element={<CompleteProfile />} />
               <Route path="/dashboard" element={<ProtectedRoute element={Dashboard} />} />
               <Route path="/activity" element={<ProtectedRoute element={Activity} />} />

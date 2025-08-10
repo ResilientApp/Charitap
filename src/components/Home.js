@@ -24,6 +24,8 @@ const Home = () => {
         ref={heroRef}
         className="scroll-animate relative overflow-hidden py-20 px-4 sm:px-6 lg:px-8"
       >
+        {/* Parallax background */}
+        <div className="pointer-events-none absolute inset-0 -z-10" aria-hidden="true" style={{ background: 'radial-gradient(1200px 600px at 50% -200px, rgba(253,230,138,0.35), transparent)', transform: 'translateZ(0)' }} />
         <div className="max-w-7xl mx-auto">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             {/* Left side - Text content */}

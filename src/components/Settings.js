@@ -6,8 +6,7 @@ import RippleButton from './RippleButton';
 import {loadStripe} from '@stripe/stripe-js';
 import {Elements, CardNumberElement, CardExpiryElement, CardCvcElement, useStripe, useElements} from '@stripe/react-stripe-js';
 
-const stripePublicKey = process.env.REACT_APP_STRIPE_PUBLIC_KEY;
-const stripePromise = stripePublicKey ? loadStripe(stripePublicKey) : null;
+const stripePromise = loadStripe(process.env.REACT_APP_STRIPE_PUBLIC_KEY);
 
 export default function Settings() {
   const { user, profile, email, saveName, changePassword, logout, authProvider } = useAuth();
@@ -449,15 +448,9 @@ export default function Settings() {
               </svg>
             }
           >
-            {stripePromise ? (
-              <Elements stripe={stripePromise}>
-                <StripePaymentSection userEmail={email} displayName={displayName} />
-              </Elements>
-            ) : (
-              <div className="p-4 rounded-xl border border-gray-200 bg-gray-50 text-sm text-gray-600">
-                Payments are disabled. Add REACT_APP_STRIPE_PUBLIC_KEY to enable this section.
-              </div>
-            )}
+            <Elements stripe={stripePromise}>
+              <StripePaymentSection userEmail={email} displayName={displayName} />
+            </Elements>
           </CollapsibleSection>
 
           {/* Account Actions */}
@@ -618,7 +611,7 @@ function StripePaymentSection({ userEmail, displayName }) {
             Your payment information is securely processed via Stripe
           </div>
         </div>
-        <div className="space-y-2">
+        <div className="space-y-2 max-h-80 md:max-h-96 overflow-y-auto pr-2 pb-16">
           {savedMethods.length === 0 && (
             <p className="text-sm text-gray-600">No saved cards yet.</p>
           )}
@@ -659,6 +652,7 @@ function StripePaymentSection({ userEmail, displayName }) {
               </div>
             </div>
           ))}
+          <div className="h-6" />
         </div>
       </div>
     </div>

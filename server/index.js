@@ -7,7 +7,14 @@ const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
-const stripe = STRIPE_SECRET_KEY ? require('stripe')(STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' }) : null;
+let stripe = null;
+try {
+  if (STRIPE_SECRET_KEY) {
+    stripe = require('stripe')(STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' });
+  }
+} catch (e) {
+  console.error('Stripe SDK init failed:', e.message);
+}
 
 const app = express();
 app.use(cors({ origin: ['http://localhost:3000'], credentials: false }));
@@ -34,7 +41,7 @@ async function getOrCreateCustomerByEmail(email, name) {
 // Create a SetupIntent for saving a card
 app.post('/api/create-setup-intent', async (req, res) => {
   try {
-    if (!stripe) throw new Error('Stripe disabled');
+    if (!stripe) throw new Error('Stripe secret missing. Set STRIPE_SECRET_KEY in server/.env');
     const { email, name } = req.body || {};
     const customerId = await getOrCreateCustomerByEmail(email, name);
     const setupIntent = await stripe.setupIntents.create({ customer: customerId, usage: 'off_session' });
@@ -48,7 +55,7 @@ app.post('/api/create-setup-intent', async (req, res) => {
 // List payment methods
 app.post('/api/list-payment-methods', async (req, res) => {
   try {
-    if (!stripe) throw new Error('Stripe disabled');
+    if (!stripe) throw new Error('Stripe secret missing. Set STRIPE_SECRET_KEY in server/.env');
     const { email } = req.body || {};
     const customerId = await getOrCreateCustomerByEmail(email);
     const pms = await stripe.paymentMethods.list({ customer: customerId, type: 'card' });
@@ -61,7 +68,7 @@ app.post('/api/list-payment-methods', async (req, res) => {
 // Set default payment method for customer
 app.post('/api/set-default-payment-method', async (req, res) => {
   try {
-    if (!stripe) throw new Error('Stripe disabled');
+    if (!stripe) throw new Error('Stripe secret missing. Set STRIPE_SECRET_KEY in server/.env');
     const { email, paymentMethodId } = req.body || {};
     const customerId = await getOrCreateCustomerByEmail(email);
     await stripe.customers.update(customerId, {
@@ -76,7 +83,7 @@ app.post('/api/set-default-payment-method', async (req, res) => {
 // Detach a payment method
 app.post('/api/detach-payment-method', async (req, res) => {
   try {
-    if (!stripe) throw new Error('Stripe disabled');
+    if (!stripe) throw new Error('Stripe secret missing. Set STRIPE_SECRET_KEY in server/.env');
     const { paymentMethodId } = req.body || {};
     const pm = await stripe.paymentMethods.detach(paymentMethodId);
     res.json({ ok: true, paymentMethod: pm });

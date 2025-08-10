@@ -6,6 +6,7 @@ import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import './styles/main.css';
 import App from './App';
+import { BrowserRouter as Router } from 'react-router-dom';
 
 // No Auth0 configuration needed
 
@@ -13,7 +14,9 @@ const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
     <AuthProvider>
-      <App />
+      <Router>
+        <App />
+      </Router>
       <ToastContainer
         position="top-right"
         autoClose={3000}

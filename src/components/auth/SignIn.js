@@ -15,7 +15,7 @@ export default function SignIn() {
     setError('');
     try {
       await loginWithEmail(email, password);
-      nav('/dashboard', { replace: true });
+      nav('/settings', { replace: true });
     } catch (err) {
       setError(err.message || 'Failed to sign in');
     }
@@ -26,8 +26,8 @@ export default function SignIn() {
       <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 border border-yellow-100">
         <div className="text-center mb-6">
           <img className="w-12 h-12 mx-auto" src="/logo.png" alt="Charitap" />
-          <h1 className="text-2xl font-bold text-gray-900 mt-2">Welcome back</h1>
-          <p className="text-gray-600">Sign in to continue your impact</p>
+          <h1 className="text-2xl font-bold text-gray-900 mt-2">Sign in to Charitap</h1>
+          <p className="text-gray-600">Join your clicks to a cause — every tap counts.</p>
         </div>
 
         {error && (
@@ -62,19 +62,15 @@ export default function SignIn() {
 
         <div className="my-4 flex items-center">
           <div className="flex-1 h-px bg-gray-200" />
-          <span className="px-3 text-xs text-gray-400">or</span>
+          <span className="px-3 text-xs text-gray-400">or continue with</span>
           <div className="flex-1 h-px bg-gray-200" />
         </div>
 
         <button
           onClick={async () => {
             try {
-              const p = await loginWithGoogle();
-              if (!p?.firstName || !p?.lastName) {
-                nav('/settings', { replace: true });
-              } else {
-                nav('/dashboard', { replace: true });
-              }
+              await loginWithGoogle();
+              nav('/settings', { replace: true });
             } catch (e) {
               setError(e.message);
             }

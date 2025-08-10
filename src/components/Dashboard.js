@@ -2,7 +2,7 @@ import React from 'react';
 import { useAuth } from '../auth/AuthContext';
 import Breadcrumb from './Breadcrumb';
 import CollapsibleSection from './CollapsibleSection';
-import RippleButton from './RippleButton';
+// import RippleButton from './RippleButton';
 import useScrollAnimation from '../hooks/useScrollAnimation';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement } from 'chart.js';
 import { Bar, Doughnut } from 'react-chartjs-2';

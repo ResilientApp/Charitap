@@ -1,5 +1,5 @@
 import React, { Suspense, lazy } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { Routes, Route, useLocation } from 'react-router-dom';
 import { useAuth } from './auth/AuthContext';
 import Navigation from './components/Navigation';
 import Footer from './components/Footer';
@@ -9,12 +9,12 @@ import './styles/main.css';
 
 // Lazy load components for better performance
 const Home = lazy(() => import('./components/Home'));
-const HomePublic = lazy(() => import('./components/HomePublic'));
 const Dashboard = lazy(() => import('./components/Dashboard'));
 const Activity = lazy(() => import('./components/Activity'));
 const Settings = lazy(() => import('./components/Settings'));
 const SignIn = lazy(() => import('./components/auth/SignIn'));
 const SignUp = lazy(() => import('./components/auth/SignUp'));
+const CompleteProfile = lazy(() => import('./components/auth/CompleteProfile'));
 
 // Loading component
 const LoadingSpinner = () => (
@@ -28,6 +28,8 @@ const LoadingSpinner = () => (
 
 function App() {
   const { isLoading } = useAuth();
+  const location = useLocation();
+  const hideChrome = location.pathname === '/signin' || location.pathname === '/signup';
 
   if (isLoading) {
     return <LoadingSpinner />;
@@ -35,25 +37,24 @@ function App() {
 
   return (
     <ErrorBoundary>
-      <Router>
-        <div className="min-h-screen bg-gray-50">
-          <Navigation />
-          <main className="flex-1">
-            <Suspense fallback={<LoadingSpinner />}>
-              <Routes>
-                <Route path="/" element={<Home />} />
-                <Route path="/public" element={<HomePublic />} />
-                <Route path="/signin" element={<SignIn />} />
-                <Route path="/signup" element={<SignUp />} />
-                <Route path="/dashboard" element={<ProtectedRoute element={Dashboard} />} />
-                <Route path="/activity" element={<ProtectedRoute element={Activity} />} />
-                <Route path="/settings" element={<ProtectedRoute element={Settings} />} />
-              </Routes>
-            </Suspense>
-          </main>
-          <Footer />
-        </div>
-      </Router>
+      <div className="min-h-screen bg-gray-50">
+        {!hideChrome && <Navigation />}
+        <main className="flex-1">
+          <Suspense fallback={<LoadingSpinner />}>
+            <Routes>
+              <Route path="/" element={<Home />} />
+              {/* Public home currently not used */}
+              <Route path="/signin" element={<SignIn />} />
+              <Route path="/signup" element={<SignUp />} />
+              <Route path="/complete-profile" element={<CompleteProfile />} />
+              <Route path="/dashboard" element={<ProtectedRoute element={Dashboard} />} />
+              <Route path="/activity" element={<ProtectedRoute element={Activity} />} />
+              <Route path="/settings" element={<ProtectedRoute element={Settings} />} />
+            </Routes>
+          </Suspense>
+        </main>
+        {!hideChrome && <Footer />}
+      </div>
     </ErrorBoundary>
   );
 }

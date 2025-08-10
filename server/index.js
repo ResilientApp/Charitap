@@ -1,9 +1,14 @@
 /* eslint-disable no-console */
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 
-const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '***REMOVED***';
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
+if (!STRIPE_SECRET_KEY) {
+  console.error('Missing STRIPE_SECRET_KEY in environment. Add it to a .env file at project root.');
+  process.exit(1);
+}
 const stripe = require('stripe')(STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' });
 
 const app = express();
@@ -47,6 +52,31 @@ app.post('/api/list-payment-methods', async (req, res) => {
     const customerId = await getOrCreateCustomerByEmail(email);
     const pms = await stripe.paymentMethods.list({ customer: customerId, type: 'card' });
     res.json({ paymentMethods: pms.data });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Set default payment method for customer
+app.post('/api/set-default-payment-method', async (req, res) => {
+  try {
+    const { email, paymentMethodId } = req.body || {};
+    const customerId = await getOrCreateCustomerByEmail(email);
+    await stripe.customers.update(customerId, {
+      invoice_settings: { default_payment_method: paymentMethodId },
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Detach a payment method
+app.post('/api/detach-payment-method', async (req, res) => {
+  try {
+    const { paymentMethodId } = req.body || {};
+    const pm = await stripe.paymentMethods.detach(paymentMethodId);
+    res.json({ ok: true, paymentMethod: pm });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }

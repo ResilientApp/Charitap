@@ -19,8 +19,7 @@ export default function SignUp() {
     }
     try {
       await signupWithEmail(email, password);
-      // Force name entry next
-      window.location.href = '/settings';
+      window.location.href = '/complete-profile';
     } catch (err) {
       setError(err.message || 'Failed to sign up');
     }
@@ -31,8 +30,8 @@ export default function SignUp() {
       <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 border border-yellow-100">
         <div className="text-center mb-6">
           <img className="w-12 h-12 mx-auto" src="/logo.png" alt="Charitap" />
-          <h1 className="text-2xl font-bold text-gray-900 mt-2">Create your account</h1>
-          <p className="text-gray-600">Start making micro-donations in minutes</p>
+          <h1 className="text-2xl font-bold text-gray-900 mt-2">Create your Charitap account</h1>
+          <p className="text-gray-600">It takes less than a minute to start giving with every click.</p>
         </div>
 
         {error && (
@@ -77,19 +76,15 @@ export default function SignUp() {
 
         <div className="my-4 flex items-center">
           <div className="flex-1 h-px bg-gray-200" />
-          <span className="px-3 text-xs text-gray-400">or</span>
+          <span className="px-3 text-xs text-gray-400">or sign up with</span>
           <div className="flex-1 h-px bg-gray-200" />
         </div>
 
         <button
           onClick={async () => {
             try {
-              const p = await loginWithGoogle();
-              if (!p?.firstName || !p?.lastName) {
-                window.location.href = '/settings';
-              } else {
-                window.location.href = '/dashboard';
-              }
+              await loginWithGoogle();
+              window.location.href = '/settings';
             } catch (e) {
               setError(e.message);
             }

@@ -1,27 +1,35 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import Breadcrumb from './Breadcrumb';
 import CollapsibleSection from './CollapsibleSection';
 import RippleButton from './RippleButton';
-import useScrollAnimation from '../hooks/useScrollAnimation';
 import {loadStripe} from '@stripe/stripe-js';
-import {Elements, CardElement, useStripe, useElements} from '@stripe/react-stripe-js';
+import {Elements, CardNumberElement, CardExpiryElement, CardCvcElement, useStripe, useElements} from '@stripe/react-stripe-js';
 
-const stripePromise = loadStripe(process.env.REACT_APP_STRIPE_PUBLIC_KEY || '***REMOVED***');
+const stripePublicKey = process.env.REACT_APP_STRIPE_PUBLIC_KEY;
+if (!stripePublicKey) {
+  // eslint-disable-next-line no-console
+  console.error('Missing REACT_APP_STRIPE_PUBLIC_KEY in environment.');
+}
+const stripePromise = loadStripe(stripePublicKey || '');
 
 export default function Settings() {
-  const { user, profile, email, saveName, changePassword, logout } = useAuth();
+  const { user, profile, email, saveName, changePassword, logout, authProvider } = useAuth();
   const [displayName, setDisplayName] = useState(() => {
     const saved = localStorage.getItem('userDisplayName');
     const initial = saved || (profile ? `${profile.firstName || ''} ${profile.lastName || ''}`.trim() : (user?.displayName || 'User'));
     return initial || 'User';
   });
-  const [firstName, setFirstName] = useState(profile?.firstName || '');
-  const [lastName, setLastName] = useState(profile?.lastName || '');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrent, setShowCurrent] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
   const [isEditingName, setIsEditingName] = useState(false);
+  const [firstNameEdit, setFirstNameEdit] = useState(() => (displayName?.split(' ')[0] || ''));
+  const [lastNameEdit, setLastNameEdit] = useState(() => (displayName?.split(' ').slice(1).join(' ') || ''));
   const [charities, setCharities] = useState([
     { id: 1, name: 'Save the Children', active: true, category: 'Education' },
     { id: 2, name: 'Doctors Without Borders', active: true, category: 'Healthcare' },
@@ -36,8 +44,7 @@ export default function Settings() {
   const [thresholdAmount, setThresholdAmount] = useState(25);
 
   // Scroll animation refs
-  const profileRef = useScrollAnimation(0.3);
-  const charitiesRef = useScrollAnimation(0.2);
+  // removed scroll animations for stability during testing
 
   const handleCharityToggle = (id) => {
     setCharities(prev => 
@@ -54,15 +61,18 @@ export default function Settings() {
   };
 
   const handleNameEdit = () => {
+    const parts = (displayName || '').split(' ');
+    setFirstNameEdit(parts[0] || '');
+    setLastNameEdit(parts.slice(1).join(' ') || '');
     setIsEditingName(true);
   };
 
   const handleNameSave = async () => {
+    const finalDisplay = [firstNameEdit, lastNameEdit].filter(Boolean).join(' ').trim();
+    setDisplayName(finalDisplay || 'User');
     setIsEditingName(false);
-    localStorage.setItem('userDisplayName', displayName);
-    const [fn, ...rest] = displayName.split(' ');
-    const ln = rest.join(' ');
-    await saveName(fn, ln);
+    localStorage.setItem('userDisplayName', finalDisplay);
+    await saveName(firstNameEdit, lastNameEdit);
   };
 
   const handleNameCancel = () => {
@@ -93,6 +103,19 @@ export default function Settings() {
     }
   };
 
+  const passwordValid = useMemo(() => {
+    if (!newPassword || !confirmPassword) return false;
+    const minLen = newPassword.length >= 8;
+    const hasLetter = /[A-Za-z]/.test(newPassword);
+    const hasNumber = /\d/.test(newPassword);
+    const matches = newPassword === confirmPassword;
+    const ok = minLen && hasLetter && hasNumber && matches;
+    setPasswordError(
+      ok ? '' : !minLen ? 'Minimum 8 characters' : !hasLetter || !hasNumber ? 'Use letters and numbers' : !matches ? 'Passwords do not match' : ''
+    );
+    return ok;
+  }, [newPassword, confirmPassword]);
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -110,7 +133,8 @@ export default function Settings() {
           {/* Profile Section */}
           <CollapsibleSection 
             title="Profile Information" 
-            defaultOpen={true}
+            defaultOpen={false}
+            persistKey="settings:profile"
             icon={
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
@@ -121,23 +145,38 @@ export default function Settings() {
               <div className="flex-1">
                 {isEditingName ? (
                   <div className="space-y-2">
-                    <input
-                      type="text"
-                      value={displayName}
-                      onChange={(e) => setDisplayName(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
-                      placeholder="Enter your name"
-                    />
-                    <div className="flex space-x-2">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">First name</label>
+                        <input
+                          type="text"
+                          value={firstNameEdit}
+                          onChange={(e) => setFirstNameEdit(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
+                          placeholder="First name"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Last name</label>
+                        <input
+                          type="text"
+                          value={lastNameEdit}
+                          onChange={(e) => setLastNameEdit(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
+                          placeholder="Last name"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2 pt-1">
                       <RippleButton 
                         onClick={handleNameSave}
-                        className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm font-medium"
+                        className="bg-black text-white hover:bg-yellow-300 hover:text-black px-5 py-2.5 rounded-full text-sm font-semibold"
                       >
                         Save
                       </RippleButton>
                       <RippleButton 
                         onClick={handleNameCancel}
-                        className="bg-gray-500 hover:bg-gray-600 text-white px-3 py-1 rounded text-sm font-medium"
+                        className="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 px-5 py-2.5 rounded-full text-sm font-semibold"
                       >
                         Cancel
                       </RippleButton>
@@ -162,43 +201,61 @@ export default function Settings() {
           </CollapsibleSection>
 
           {/* Password Change Section */}
+          {authProvider !== 'google' && (
           <CollapsibleSection 
             title="Password"
             defaultOpen={false}
+            persistKey="settings:password"
             icon={
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
               </svg>
             }
           >
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <input
-                  type="password"
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  placeholder="Current Password"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
-                />
-                <input
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="New Password"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
-                />
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Confirm New Password"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
-                />
+            <div className="space-y-4 max-w-2xl">
+              <div className="grid grid-cols-1 gap-4">
+                <div className="relative">
+                  <input
+                    type={showCurrent ? 'text' : 'password'}
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    placeholder="Current password"
+                    className="w-full px-3 py-3 pr-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
+                  />
+                  <button type="button" onClick={() => setShowCurrent(v => !v)} className="absolute right-3 top-3 md:top-3.5 text-sm text-gray-500">
+                    {showCurrent ? 'Hide' : 'Show'}
+                  </button>
+                </div>
+                <div className="relative">
+                  <input
+                    type={showNew ? 'text' : 'password'}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="New password (min 8, letters & numbers)"
+                    className="w-full px-3 py-3 pr-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
+                  />
+                  <button type="button" onClick={() => setShowNew(v => !v)} className="absolute right-3 top-3 md:top-3.5 text-sm text-gray-500">
+                    {showNew ? 'Hide' : 'Show'}
+                  </button>
+                </div>
+                <div className="relative">
+                  <input
+                    type={showConfirm ? 'text' : 'password'}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Confirm new password"
+                    className="w-full px-3 py-3 pr-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
+                  />
+                  <button type="button" onClick={() => setShowConfirm(v => !v)} className="absolute right-3 top-3 md:top-3.5 text-sm text-gray-500">
+                    {showConfirm ? 'Hide' : 'Show'}
+                  </button>
+                </div>
               </div>
+              {passwordError && <p className="text-sm text-red-600">{passwordError}</p>}
               <div className="flex justify-end">
                 <RippleButton
                   onClick={async () => {
-                    if (!newPassword || newPassword !== confirmPassword) return;
+                    if (!passwordValid) return;
                     try {
                       await changePassword(currentPassword, newPassword);
                       setCurrentPassword('');
@@ -209,18 +266,20 @@ export default function Settings() {
                       alert(e.message);
                     }
                   }}
-                  className="bg-yellow-400 hover:bg-yellow-500 text-black px-4 py-2 rounded-lg text-sm font-medium"
+                  className={`bg-yellow-400 hover:bg-yellow-500 text-black px-5 py-2.5 rounded-full text-sm font-semibold ${passwordValid ? '' : 'opacity-60 cursor-not-allowed'}`}
                 >
                   Change Password
                 </RippleButton>
               </div>
             </div>
           </CollapsibleSection>
+          )}
 
           {/* Charities Section */}
           <CollapsibleSection 
             title="My Charities" 
-            defaultOpen={true}
+            defaultOpen={false}
+            persistKey="settings:charities"
             icon={
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
@@ -233,11 +292,11 @@ export default function Settings() {
                 Toggle them on or off to control your donation preferences.
               </p>
               
-              <div className="h-[400px] overflow-y-auto pr-2 pb-8 space-y-4 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 charities-scroll-container">
+              <div className="h-[420px] overflow-y-auto pr-2 pb-12 space-y-4 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 charities-scroll-container">
                 {charities.map((charity, index) => (
                   <div 
                     key={charity.id} 
-                    className={`relative p-4 rounded-xl border-2 transition-all duration-300 cursor-pointer hover:shadow-md ${
+                    className={`relative p-4 rounded-xl border-2 transition-all duration-200 cursor-pointer hover:shadow-md overflow-hidden ${
                       charity.active 
                         ? 'border-green-200 bg-green-50 shadow-sm' 
                         : 'border-gray-200 bg-gray-50'
@@ -295,7 +354,7 @@ export default function Settings() {
                   </div>
                 ))}
                 {/* Extra bottom space for last item visibility */}
-                <div className="h-8" />
+                <div className="h-16" />
               </div>
               <div className="flex justify-end mt-2">
                 <RippleButton
@@ -311,7 +370,8 @@ export default function Settings() {
           {/* Payment Preferences Section */}
           <CollapsibleSection 
             title="Payment Preferences" 
-            defaultOpen={true}
+            defaultOpen={false}
+            persistKey="settings:payment-prefs"
             icon={
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
@@ -422,7 +482,8 @@ export default function Settings() {
           {/* Payment Methods (Stripe) */}
           <CollapsibleSection 
             title="Payment Methods"
-            defaultOpen={true}
+            defaultOpen={false}
+            persistKey="settings:payment-methods"
             icon={
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
@@ -438,6 +499,7 @@ export default function Settings() {
           <CollapsibleSection 
             title="Account Actions" 
             defaultOpen={false}
+            persistKey="settings:account-actions"
             icon={
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
@@ -448,11 +510,11 @@ export default function Settings() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <RippleButton 
                   onClick={handleLogout}
-                  className="bg-red-500 hover:bg-red-600 text-white px-4 py-3 rounded-lg font-medium transition-colors duration-200"
+                  className="bg-black text-white hover:bg-yellow-300 hover:text-black px-5 py-2.5 rounded-full text-sm font-semibold transition-colors duration-200"
                 >
                   Sign Out
                 </RippleButton>
-                <RippleButton className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-3 rounded-lg font-medium transition-colors duration-200">
+                <RippleButton className="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 px-5 py-2.5 rounded-full text-sm font-semibold transition-colors duration-200">
                   Delete Account
                 </RippleButton>
               </div>
@@ -469,6 +531,10 @@ function StripePaymentSection({ userEmail, displayName }) {
   const elements = useElements();
   const [status, setStatus] = React.useState('');
   const [savedMethods, setSavedMethods] = React.useState([]);
+  const [cardholderName, setCardholderName] = React.useState(displayName || '');
+  const [cardholderEmail, setCardholderEmail] = React.useState(userEmail || '');
+  const [cardZip, setCardZip] = React.useState('');
+  const [defaultPmId, setDefaultPmId] = React.useState('');
 
   const fetchSavedMethods = async () => {
     const res = await fetch('http://localhost:4242/api/list-payment-methods', {
@@ -478,10 +544,19 @@ function StripePaymentSection({ userEmail, displayName }) {
     });
     const data = await res.json();
     if (data.paymentMethods) setSavedMethods(data.paymentMethods);
+    // Attempt to get default from first card's customer if available via separate call is not available; skip for now
   };
 
   React.useEffect(() => {
     if (userEmail) fetchSavedMethods();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userEmail]);
+
+  React.useEffect(() => {
+    setCardholderName(displayName || '');
+  }, [displayName]);
+  React.useEffect(() => {
+    setCardholderEmail(userEmail || '');
   }, [userEmail]);
 
   const handleAttachCard = async () => {
@@ -496,10 +571,15 @@ function StripePaymentSection({ userEmail, displayName }) {
       const data = await res.json();
       if (!data.clientSecret) throw new Error(data.error || 'Failed to create setup intent');
 
+      const cardNumber = elements.getElement(CardNumberElement);
       const result = await stripe.confirmCardSetup(data.clientSecret, {
         payment_method: {
-          card: elements.getElement(CardElement),
-          billing_details: { email: userEmail, name: displayName }
+          card: cardNumber,
+          billing_details: {
+            email: cardholderEmail || userEmail,
+            name: cardholderName || displayName,
+            address: { postal_code: cardZip || undefined }
+          }
         }
       });
       if (result.error) throw result.error;
@@ -514,8 +594,50 @@ function StripePaymentSection({ userEmail, displayName }) {
     <div className="space-y-4">
       <div className="p-4 rounded-xl border border-gray-200 bg-gray-50">
         <label className="block text-sm font-medium text-gray-700 mb-2">Add a new card</label>
-        <div className="p-3 rounded-lg bg-white border border-gray-200">
-          <CardElement options={{ hidePostalCode: true }} />
+        <div className="grid grid-cols-1 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Cardholder Name</label>
+              <input
+                type="text"
+                value={cardholderName}
+                onChange={(e) => setCardholderName(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
+                placeholder="Full name"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <input
+                type="email"
+                value={cardholderEmail}
+                onChange={(e) => setCardholderEmail(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
+                placeholder="you@example.com"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">ZIP / Postal Code</label>
+              <input
+                type="text"
+                value={cardZip}
+                onChange={(e) => setCardZip(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
+                placeholder="ZIP"
+              />
+            </div>
+          </div>
+          <div className="p-3 rounded-lg bg-white border border-gray-200">
+            <CardNumberElement options={{ showIcon: true }} />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="p-3 rounded-lg bg-white border border-gray-200">
+              <CardExpiryElement />
+            </div>
+            <div className="p-3 rounded-lg bg-white border border-gray-200">
+              <CardCvcElement />
+            </div>
+          </div>
         </div>
         <div className="flex justify-end mt-3">
           <RippleButton onClick={handleAttachCard} className="bg-yellow-400 hover:bg-yellow-500 text-black px-4 py-2 rounded-lg text-sm font-medium">Save Card</RippleButton>
@@ -534,8 +656,36 @@ function StripePaymentSection({ userEmail, displayName }) {
               <div className="flex items-center gap-3">
                 <img src={`/card-brands/${pm.card.brand}.svg`} alt={pm.card.brand} className="w-6 h-6" onError={(e)=>{e.currentTarget.style.display='none'}} />
                 <span className="text-sm text-gray-700">{pm.card.brand.toUpperCase()} •••• {pm.card.last4}</span>
+                <span className="text-xs text-gray-500">exp {pm.card.exp_month}/{pm.card.exp_year}</span>
               </div>
-              <span className="text-xs text-gray-500">exp {pm.card.exp_month}/{pm.card.exp_year}</span>
+              <div className="flex items-center gap-2">
+                <RippleButton
+                  onClick={async () => {
+                    await fetch('http://localhost:4242/api/set-default-payment-method', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ email: userEmail, paymentMethodId: pm.id })
+                    });
+                    setDefaultPmId(pm.id);
+                  }}
+                  className={`px-3 py-1.5 rounded-full text-xs font-semibold ${defaultPmId === pm.id ? 'bg-green-200 text-green-900' : 'bg-yellow-400 text-black hover:bg-yellow-500'}`}
+                >
+                  {defaultPmId === pm.id ? 'Default' : 'Make default'}
+                </RippleButton>
+                <RippleButton
+                  onClick={async () => {
+                    await fetch('http://localhost:4242/api/detach-payment-method', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ paymentMethodId: pm.id })
+                    });
+                    await fetchSavedMethods();
+                  }}
+                  className="px-3 py-1.5 rounded-full text-xs font-semibold bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
+                >
+                  Remove
+                </RippleButton>
+              </div>
             </div>
           ))}
         </div>

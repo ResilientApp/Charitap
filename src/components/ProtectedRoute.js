@@ -6,16 +6,17 @@ import { toast } from 'react-toastify';
 
 export default function ProtectedRoute({ element: Component }) {
   const { isAuthenticated, isLoading } = useAuth();
+  const bypass = process.env.REACT_APP_AUTH_BYPASS === 'true';
   const [redirect, setRedirect] = useState(false);
 
   // when we know auth status and it's false, kick off toast + delayed redirect
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
+    if (!isLoading && !isAuthenticated && !bypass) {
       toast.info('Please log in to view that page.', { autoClose: 2000 });
       const timer = setTimeout(() => setRedirect(true), 2000);
       return () => clearTimeout(timer);
     }
-  }, [isLoading, isAuthenticated]);
+  }, [isLoading, isAuthenticated, bypass]);
 
   // 1) Loading spinner
   if (isLoading) {
@@ -27,7 +28,7 @@ export default function ProtectedRoute({ element: Component }) {
   }
 
   // 2) Not authenticated → show overlay then redirect
-  if (!isAuthenticated) {
+  if (!isAuthenticated && !bypass) {
     if (redirect) {
       return <Navigate to="/" replace />;
     }

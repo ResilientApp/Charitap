@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 // Auth not required directly in this component
 import Breadcrumb from './Breadcrumb';
 import RippleButton from './RippleButton';
@@ -86,20 +86,27 @@ export default function Activity() {
     }
   };
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'completed':
-        return 'bg-green-100 text-green-800';
-      case 'pending':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'failed':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
+  const formatActivityDate = (input) => {
+    if (!input) return '';
+    const m = input.match(/(\d+)\s+(hour|hours|day|days)\s+ago/);
+    if (m) {
+      const n = parseInt(m[1], 10);
+      const unit = m[2];
+      const d = new Date();
+      if (unit.startsWith('hour')) {
+        d.setHours(d.getHours() - n);
+      } else {
+        d.setDate(d.getDate() - n);
+      }
+      return d.toLocaleDateString();
     }
+    return input;
   };
 
-  const donationActivities = activities.filter(activity => activity.type === 'donation');
+  const [tab, setTab] = useState('donated'); // 'donated' | 'collected'
+  const donated = activities.filter(a => a.type === 'donation');
+  const collected = activities.filter(a => a.type === 'donation'); // placeholder same design
+  const visible = tab === 'donated' ? donated : collected;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -117,12 +124,32 @@ export default function Activity() {
           </p>
         </div>
 
+        {/* Tabs */}
+        <div className="mb-6">
+          <div className="inline-flex rounded-full border border-gray-200 bg-white p-1">
+            <button
+              className={`px-4 py-2 rounded-full text-sm font-semibold ${tab==='donated' ? 'bg-yellow-400 text-black' : 'text-gray-700 hover:bg-gray-100'}`}
+              onClick={() => setTab('donated')}
+              aria-pressed={tab==='donated'}
+            >
+              Donated
+            </button>
+            <button
+              className={`px-4 py-2 rounded-full text-sm font-semibold ${tab==='collected' ? 'bg-yellow-400 text-black' : 'text-gray-700 hover:bg-gray-100'}`}
+              onClick={() => setTab('collected')}
+              aria-pressed={tab==='collected'}
+            >
+              Collected
+            </button>
+          </div>
+        </div>
+
         {/* Activity List */}
         <div 
           ref={activityRef}
           className="scroll-animate space-y-4"
         >
-          {donationActivities.map((activity, index) => (
+          {visible.map((activity, index) => (
             <div 
               key={activity.id}
               className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-all duration-300 transform hover:scale-[1.02]"
@@ -153,13 +180,10 @@ export default function Activity() {
                         {activity.category}
                       </span>
                       <span className="text-caption text-gray-500 transition-colors duration-300 hover:text-gray-700">
-                        {activity.date}
+                        {formatActivityDate(activity.date)}
                       </span>
                     </div>
-                    
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium transition-all duration-300 hover:scale-105 ${getStatusColor(activity.status)}`}>
-                      {activity.status}
-                    </span>
+                    {/* Status badge removed */}
                   </div>
                 </div>
               </div>
@@ -168,7 +192,7 @@ export default function Activity() {
         </div>
 
         {/* Empty State */}
-        {donationActivities.length === 0 && (
+        {visible.length === 0 && (
           <div className="text-center py-12">
             <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">

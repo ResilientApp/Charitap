@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
 const CollapsibleSection = ({ 
   title, 
@@ -6,9 +6,25 @@ const CollapsibleSection = ({
   defaultOpen = false,
   className = '',
   icon,
+  persistKey,
   ...props 
 }) => {
-  const [isOpen, setIsOpen] = useState(defaultOpen);
+  const storageKey = persistKey ? `collapsible:${persistKey}` : null;
+  const [isOpen, setIsOpen] = useState(() => {
+    if (storageKey) {
+      try {
+        const saved = localStorage.getItem(storageKey);
+        if (saved === 'true' || saved === 'false') return saved === 'true';
+      } catch (_) {}
+    }
+    return defaultOpen;
+  });
+
+  useEffect(() => {
+    if (storageKey) {
+      try { localStorage.setItem(storageKey, String(isOpen)); } catch (_) {}
+    }
+  }, [isOpen, storageKey]);
 
   return (
     <div className={`bg-white rounded-xl shadow-sm border border-gray-100 ${className}`} {...props}>

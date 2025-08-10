@@ -18,7 +18,7 @@ const Dashboard = () => {
 
   const stats = [
     { label: 'Total Donations', value: '$4,567.89' },
-    { label: 'This Month', value: '$89.45' },
+    { label: 'Last Month', value: '$89.45' },
     { label: 'Charities Supported', value: '24' },
     { label: 'Collected', value: '$4.56' }
   ];

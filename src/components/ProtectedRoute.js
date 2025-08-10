@@ -27,7 +27,7 @@ export default function ProtectedRoute({ element: Component }) {
     );
   }
 
-  // 2) Not authenticated → show overlay then redirect
+  // 2) Not authenticated → show overlay then redirect (unless bypass)
   if (!isAuthenticated && !bypass) {
     if (redirect) {
       return <Navigate to="/" replace />;
@@ -43,7 +43,7 @@ export default function ProtectedRoute({ element: Component }) {
     );
   }
 
-  // 3) Authenticated → render the page with a fade-in
+  // 3) Authenticated or bypass → render the page with a fade-in
   return (
     <div className="fade-in">
       <Component />

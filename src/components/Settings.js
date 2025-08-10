@@ -41,7 +41,7 @@ export default function Settings() {
 
   // Payment preferences state
   const [paymentMode, setPaymentMode] = useState('monthly'); // 'monthly' or 'threshold'
-  const [thresholdAmount, setThresholdAmount] = useState(25);
+  const [thresholdAmount] = useState(5);
 
   // Scroll animation refs
   // removed scroll animations for stability during testing
@@ -450,17 +450,7 @@ export default function Settings() {
                     </p>
                     {paymentMode === 'threshold' && (
                       <div className="space-y-2">
-                        <label className="block text-sm font-medium text-gray-700 transition-colors duration-300 hover:text-gray-900">
-                          Threshold Amount ($)
-                        </label>
-                        <input
-                          type="number"
-                          value={thresholdAmount}
-                          onChange={(e) => setThresholdAmount(Number(e.target.value))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent transition-all duration-300 hover:border-yellow-300"
-                          min="1"
-                          max="500"
-                        />
+                        <p className="text-sm text-gray-700"><span className="font-semibold">Threshold Amount:</span> $5 (fixed)</p>
                       </div>
                     )}
                   </div>

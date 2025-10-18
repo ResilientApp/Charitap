@@ -13,27 +13,6 @@ export function AuthProvider({ children}) {
   const [loading, setLoading] = useState(true);
   const [token, setToken] = useState(null);
 
-  // Function to update user state from API response
-  const updateUserState = (userData, token) => {
-    if (userData) {
-      const { id, email, displayName, firstName, lastName, profilePicture, authProvider, paymentPreference, selectedCharities } = userData;
-      const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000; // 7 days expiration
-      const storedData = { id, email, displayName, firstName, lastName, profilePicture, authProvider, paymentPreference, selectedCharities, token, expiresAt };
-      localStorage.setItem('charitap_auth', JSON.stringify(storedData));
-
-      setUser({ id, email, displayName, firstName, lastName, profilePicture, authProvider, paymentPreference, selectedCharities });
-      setProfile({ email, firstName, lastName });
-      setAuthProvider(authProvider);
-      setEmailVerified(true);
-    } else {
-      localStorage.removeItem('charitap_auth');
-      setUser(null);
-      setProfile(null);
-      setAuthProvider(null);
-      setEmailVerified(false);
-    }
-  };
-
   // Load user from localStorage on mount
   useEffect(() => {
     const raw = localStorage.getItem('charitap_auth');
@@ -184,35 +163,11 @@ export function AuthProvider({ children}) {
         }
       },
 
-      loginWithGoogle: async (googleCredential) => {
+      loginWithGoogle: async () => {
         setLoading(true);
         try {
-          console.log('AuthContext: Starting Google login with credential:', googleCredential ? 'Present' : 'Missing');
-          
-          // Decode Google credential JWT
-          let googleInfo;
-          if (googleCredential) {
-            // Direct credential from GoogleLogin component
-            const { jwtDecode } = await import('jwt-decode');
-            const decoded = jwtDecode(googleCredential);
-            googleInfo = {
-              id: decoded.sub,
-              email: decoded.email,
-              fullName: decoded.name || '',
-              picture: decoded.picture || ''
-            };
-            console.log('AuthContext: Decoded Google info:', googleInfo);
-          } else {
-            // Fallback to custom popup flow
-            googleInfo = await signInWithGoogleGSI();
-          }
-          
-          console.log('AuthContext: Calling backend with:', {
-            googleId: googleInfo.id,
-            email: googleInfo.email,
-            displayName: googleInfo.fullName,
-            profilePicture: googleInfo.picture
-          });
+          // Get Google sign-in info
+          const googleInfo = await signInWithGoogleGSI();
           
           // Send to backend
           const response = await authAPI.googleAuth(
@@ -221,8 +176,6 @@ export function AuthProvider({ children}) {
             googleInfo.fullName || googleInfo.email.split('@')[0],
             googleInfo.picture
           );
-          
-          console.log('AuthContext: Backend response:', response);
           
           const session = saveAuthData(response);
           
@@ -259,44 +212,20 @@ export function AuthProvider({ children}) {
       },
 
       saveName: async (firstName, lastName) => {
-        setLoading(true);
         try {
-          const response = await authAPI.updateProfile({ firstName, lastName });
-          if (response.user) {
-            // Update local state with new profile info
-            const currentAuth = JSON.parse(localStorage.getItem('charitap_auth') || '{}');
-            const updatedAuth = {
-              ...currentAuth,
-              firstName: response.user.firstName,
-              lastName: response.user.lastName,
-              displayName: response.user.displayName || `${firstName} ${lastName}`.trim()
-            };
-            localStorage.setItem('charitap_auth', JSON.stringify(updatedAuth));
-            // Update user state manually since updateUserState is not in scope here
-            setUser({ 
-              id: response.user.id, 
-              email: response.user.email, 
-              displayName: response.user.displayName,
-              firstName: response.user.firstName,
-              lastName: response.user.lastName,
-              profilePicture: response.user.profilePicture,
-              authProvider: response.user.authProvider,
-              paymentPreference: response.user.paymentPreference,
-              selectedCharities: response.user.selectedCharities
-            });
-            setProfile({ 
-              email: response.user.email, 
-              firstName: response.user.firstName, 
-              lastName: response.user.lastName 
-            });
-            return response.user;
-          } else {
-            throw new Error(response.error || 'Failed to save name');
+          await authAPI.updateProfile(firstName, lastName);
+          
+          const sessionRaw = localStorage.getItem('charitap_auth');
+          if (sessionRaw) {
+            const session = JSON.parse(sessionRaw);
+            const newSession = { ...session, firstName, lastName, displayName: `${firstName} ${lastName}`.trim() };
+            localStorage.setItem('charitap_auth', JSON.stringify(newSession));
           }
+          
+          setProfile({ email: user?.email || '', firstName, lastName });
+          setUser(prev => ({ ...prev, displayName: `${firstName} ${lastName}`.trim() }));
         } catch (error) {
           throw new Error(error.message || 'Failed to update profile');
-        } finally {
-          setLoading(false);
         }
       },
 

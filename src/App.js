@@ -16,7 +16,6 @@ const Settings = lazy(() => import('./components/Settings'));
 const SignIn = lazy(() => import('./components/auth/SignIn'));
 const SignUp = lazy(() => import('./components/auth/SignUp'));
 const CompleteProfile = lazy(() => import('./components/auth/CompleteProfile'));
-const VerifyEmail = lazy(() => import('./components/auth/VerifyEmail'));
 
 // Loading component
 const LoadingSpinner = () => (
@@ -49,7 +48,6 @@ function App() {
                 {/* Public home currently not used */}
                 <Route path="/signin" element={<SignIn />} />
                 <Route path="/signup" element={<SignUp />} />
-                <Route path="/verify-email" element={<VerifyEmail />} />
                 <Route path="/complete-profile" element={<CompleteProfile />} />
                 <Route path="/dashboard" element={<ProtectedRoute element={Dashboard} />} />
                 <Route path="/activity" element={<ProtectedRoute element={Activity} />} />

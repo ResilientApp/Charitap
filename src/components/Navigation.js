@@ -4,6 +4,7 @@ import { useAuth } from '../auth/AuthContext';
 import { toast } from 'react-toastify';
 import { useSwipeable } from 'react-swipeable';
 import CountUp from 'react-countup';
+import { dashboardAPI } from '../services/api';
 
 const pages = [
   { to: '/', label: 'Home', preload: () => import('./Home') },
@@ -18,11 +19,33 @@ export default function Navigation() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [animateCounts, setAnimateCounts] = useState(false);
-
-  // Sample data for Total Donations
-  const totalDonations = 4567.89;
-  const totalStr = totalDonations.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const [totalDonations, setTotalDonations] = useState(0);
+  const [collectedAmount, setCollectedAmount] = useState(0);
   const bypass = process.env.REACT_APP_AUTH_BYPASS === 'true';
+
+  // Fetch real data from backend
+  useEffect(() => {
+    const fetchNavData = async () => {
+      if (!isAuthenticated) return;
+      
+      try {
+        const [totalData, collectedData] = await Promise.all([
+          dashboardAPI.getTotalDonated().catch(() => ({ totalDonated: '0.00' })),
+          dashboardAPI.getCollectedThisMonth().catch(() => ({ totalAmount: '0.00' }))
+        ]);
+        
+        setTotalDonations(parseFloat(totalData.totalDonated || 0));
+        setCollectedAmount(parseFloat(collectedData.totalAmount || 0));
+      } catch (error) {
+        console.error('Error fetching navigation data:', error);
+      }
+    };
+
+    fetchNavData();
+  }, [isAuthenticated]);
+
+  const totalStr = totalDonations.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const collectedStr = collectedAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   const guard = (e, to) => {
     if (bypass) return;
@@ -168,7 +191,7 @@ export default function Navigation() {
                 <span className="inline-flex items-center px-4 py-1.5 rounded-full bg-yellow-200 text-yellow-900 font-semibold text-base border border-yellow-300 relative group" title="Your current donation balance">
                   <span className="w-2 h-2 mr-2 rounded-full bg-green-400 animate-pulse-slow" />
                   <span className="font-semibold">Collected:</span>
-                  <span className="ml-1 font-bold tracking-tight text-black inline-block text-right w-16" style={{ fontVariantNumeric: 'tabular-nums' }} aria-live="off">$4.56</span>
+                  <span className="ml-1 font-bold tracking-tight text-black inline-block text-right w-16" style={{ fontVariantNumeric: 'tabular-nums' }} aria-live="off">${collectedStr}</span>
                   <span className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 bg-black text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap">
                     Your current donation balance
                   </span>
@@ -181,7 +204,7 @@ export default function Navigation() {
                 className="hidden lg:inline-flex items-center justify-center px-5 py-2.5 text-base transition-all duration-200 hover:bg-yellow-300 hover:text-black focus:text-black focus:bg-yellow-300 font-semibold text-white bg-black rounded-full hover:scale-105 active:scale-95 transform"
                 title="Sign out of your account"
               >
-                Logout
+                Sign Out
               </button>
             ) : (
               <button
@@ -215,7 +238,7 @@ export default function Navigation() {
                   onClick={() => { logout(); setMenuOpen(false); }}
                   className="w-full items-center justify-center px-5 py-3 text-base transition-all duration-200 hover:bg-yellow-300 hover:text-black focus:text-black focus:bg-yellow-300 font-semibold text-white bg-black rounded-full hover:scale-105 active:scale-95 transform"
                 >
-                  Logout
+                  Sign Out
                 </button>
               ) : (
                 <button

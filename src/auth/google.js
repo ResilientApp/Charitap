@@ -2,7 +2,7 @@
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 import { jwtDecode } from 'jwt-decode';
 
-// For backward compatibility, we'll keep the old function but make it use the new implementation
+// Simplified Google OAuth implementation
 export async function signInWithGoogleGSI() {
   const clientId = process.env.REACT_APP_GOOGLE_CLIENT_ID || 'your_google_client_id_here';
   
@@ -11,63 +11,85 @@ export async function signInWithGoogleGSI() {
   }
 
   return new Promise((resolve, reject) => {
-    // Create a temporary Google Login button and trigger it
-    const tempDiv = document.createElement('div');
-    tempDiv.style.display = 'none';
-    document.body.appendChild(tempDiv);
-
-    const handleSuccess = (credentialResponse) => {
-      try {
-        const decoded = jwtDecode(credentialResponse.credential);
-        resolve({
-          id: decoded.sub,
-          email: decoded.email,
-          firstName: decoded.given_name || '',
-          lastName: decoded.family_name || '',
-          fullName: decoded.name || '',
-          picture: decoded.picture || ''
-        });
-      } catch (e) {
-        reject(e);
-      } finally {
-        document.body.removeChild(tempDiv);
-      }
-    };
-
-    const handleError = () => {
-      reject(new Error('Google sign-in failed'));
-      document.body.removeChild(tempDiv);
-    };
-
-    // We'll use a different approach - create a popup window
+    // Create a popup window for Google OAuth
     const popup = window.open(
       `https://accounts.google.com/oauth/authorize?client_id=${clientId}&response_type=code&scope=openid%20email%20profile&redirect_uri=${encodeURIComponent(window.location.origin)}&state=google_signin`,
       'google_signin',
       'width=500,height=600,scrollbars=yes,resizable=yes'
     );
 
-    // Listen for the popup to close or receive a message
-    const checkClosed = setInterval(() => {
-      if (popup.closed) {
-        clearInterval(checkClosed);
+    // Check if popup was blocked or failed to open
+    if (!popup || popup.closed || typeof popup.closed === 'undefined') {
+      reject(new Error('Popup was blocked. Please allow popups for this site and try again.'));
+      return;
+    }
+
+    let intervalId;
+    let messageHandler;
+
+    // Clean up function
+    const cleanup = () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
+      if (messageHandler) {
+        window.removeEventListener('message', messageHandler);
+        messageHandler = null;
+      }
+    };
+
+    // Check if popup is closed
+    intervalId = setInterval(() => {
+      try {
+        if (popup && popup.closed) {
+          cleanup();
+          reject(new Error('Google sign-in was cancelled'));
+        }
+      } catch (error) {
+        // Popup might be from different origin, ignore the error
+        cleanup();
         reject(new Error('Google sign-in was cancelled'));
       }
     }, 1000);
 
     // Listen for messages from the popup
-    const messageHandler = (event) => {
+    messageHandler = (event) => {
       if (event.origin !== window.location.origin) return;
       
-      if (event.data.type === 'GOOGLE_SIGNIN_SUCCESS') {
-        clearInterval(checkClosed);
-        window.removeEventListener('message', messageHandler);
-        popup.close();
-        handleSuccess({ credential: event.data.credential });
-      } else if (event.data.type === 'GOOGLE_SIGNIN_ERROR') {
-        clearInterval(checkClosed);
-        window.removeEventListener('message', messageHandler);
-        popup.close();
-        handleError();
+      if (event.data && event.data.type === 'GOOGLE_SIGNIN_SUCCESS') {
+        cleanup();
+        try {
+          if (popup && !popup.closed) {
+            popup.close();
+          }
+        } catch (error) {
+          // Ignore errors when closing popup
+        }
+        
+        try {
+          const decoded = jwtDecode(event.data.credential);
+          resolve({
+            id: decoded.sub,
+            email: decoded.email,
+            firstName: decoded.given_name || '',
+            lastName: decoded.family_name || '',
+            fullName: decoded.name || '',
+            picture: decoded.picture || ''
+          });
+        } catch (e) {
+          reject(new Error('Failed to decode Google token'));
+        }
+      } else if (event.data && event.data.type === 'GOOGLE_SIGNIN_ERROR') {
+        cleanup();
+        try {
+          if (popup && !popup.closed) {
+            popup.close();
+          }
+        } catch (error) {
+          // Ignore errors when closing popup
+        }
+        reject(new Error('Google sign-in failed'));
       }
     };
 

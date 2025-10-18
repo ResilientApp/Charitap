@@ -6,7 +6,7 @@ import { GoogleLogin } from '../../auth/google';
 import RippleButton from '../RippleButton';
 
 export default function SignUp() {
-  const { beginSignupWithEmail, loginWithGoogle, isLoading } = useAuth();
+  const { signupWithEmail, loginWithGoogle, isLoading } = useAuth();
   const nav = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -23,8 +23,8 @@ export default function SignUp() {
       return;
     }
     try {
-      await beginSignupWithEmail(email, password);
-      window.location.href = '/verify-email';
+      await signupWithEmail(email, password);
+      nav('/', { replace: true });
     } catch (err) {
       setError(err.message || 'Failed to sign up');
     }
@@ -99,10 +99,13 @@ export default function SignUp() {
         <div className="w-full">
           <GoogleLogin
             onSuccess={async (credentialResponse) => {
+              console.log('Google OAuth Success:', credentialResponse);
               try {
-                await loginWithGoogle();
+                const result = await loginWithGoogle(credentialResponse.credential);
+                console.log('Login result:', result);
                 nav('/', { replace: true });
               } catch (e) {
+                console.error('Google OAuth Error:', e);
                 setError(e.message);
               }
             }}

@@ -1,61 +1,71 @@
-import React, { useState } from 'react';
-// Auth not required directly in this component
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../auth/AuthContext';
 import Breadcrumb from './Breadcrumb';
-import RippleButton from './RippleButton';
 import useScrollAnimation from '../hooks/useScrollAnimation';
+import { activityAPI } from '../services/api';
 
 export default function Activity() {
   // Scroll animation refs
   const headerRef = useScrollAnimation(0.3);
   const activityRef = useScrollAnimation(0.2);
+  
+  const { isAuthenticated } = useAuth();
+  const [activities, setActivities] = useState([]);
 
-  const activities = [
-    {
-      id: 1,
-      type: 'donation',
-      charity: 'Save the Children',
-      amount: '$2.45',
-      date: '2 hours ago',
-      category: 'Education',
-      status: 'completed'
-    },
-    {
-      id: 2,
-      type: 'donation',
-      charity: 'Doctors Without Borders',
-      amount: '$1.78',
-      date: '5 hours ago',
-      category: 'Healthcare',
-      status: 'completed'
-    },
-    {
-      id: 3,
-      type: 'charity_added',
-      charity: 'World Wildlife Fund',
-      amount: null,
-      date: '1 day ago',
-      category: 'Environment',
-      status: 'completed'
-    },
-    {
-      id: 4,
-      type: 'donation',
-      charity: 'Red Cross',
-      amount: '$3.12',
-      date: '2 days ago',
-      category: 'Emergency',
-      status: 'pending'
-    },
-    {
-      id: 5,
-      type: 'goal_reached',
-      charity: 'Monthly Goal',
-      amount: '$50.00',
-      date: '3 days ago',
-      category: 'Achievement',
-      status: 'completed'
-    }
-  ];
+  // Fetch activity data from backend
+  useEffect(() => {
+    const fetchActivityData = async () => {
+      if (!isAuthenticated) return;
+      
+      try {
+        // Fetch both collected and donated data
+        const [collected, donated] = await Promise.all([
+          activityAPI.getCollected().catch(() => ({ roundups: [] })),
+          activityAPI.getDonations().catch(() => ({ transactions: [] }))
+        ]);
+
+        // Combine both into activities list for display
+        const combinedActivities = [];
+        
+        // Add donations
+        (donated.transactions || []).forEach((tx, idx) => {
+          combinedActivities.push({
+            id: `donation-${idx}`,
+            type: 'donation',
+            charity: tx.charityName || 'Unknown Charity',
+            amount: `$${parseFloat(tx.amount || 0).toFixed(2)}`,
+            date: tx.date || new Date().toISOString(),
+            category: tx.charityType || 'General',
+            status: 'completed'
+          });
+        });
+
+        // Add collected roundups
+        (collected.roundups || []).forEach((ru, idx) => {
+          combinedActivities.push({
+            id: `roundup-${idx}`,
+            type: 'roundup',
+            charity: 'Round-Up Collection',
+            amount: `$${parseFloat(ru.roundUpAmount || 0).toFixed(2)}`,
+            date: ru.date || ru.createdAt || new Date().toISOString(),
+            category: 'Collection',
+            status: 'completed',
+            purchaseAmount: ru.purchaseAmount
+          });
+        });
+
+        // Sort by date (newest first)
+        combinedActivities.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+        setActivities(combinedActivities);
+        
+      } catch (error) {
+        console.error('Error fetching activity data:', error);
+      }
+    };
+
+    fetchActivityData();
+  }, [isAuthenticated]);
 
   const getActivityIcon = (type) => {
     switch (type) {
@@ -63,6 +73,12 @@ export default function Activity() {
         return (
           <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+          </svg>
+        );
+      case 'roundup':
+        return (
+          <svg className="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 8h6m-5 0a3 3 0 110 6H9l3 3m-3-6h6m6 1a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
         );
       case 'charity_added':
@@ -105,12 +121,8 @@ export default function Activity() {
 
   const [tab, setTab] = useState('donated'); // 'donated' | 'collected'
   const donated = activities.filter(a => a.type === 'donation');
-  // Collected section (privacy-friendly): show amount + collected date only
-  const collected = [
-    { id: 'c1', amount: '$1.04', date: '1 day ago' },
-    { id: 'c2', amount: '$0.72', date: '2 days ago' },
-    { id: 'c3', amount: '$1.91', date: '5 days ago' },
-  ];
+  // Collected section: show round-ups collected
+  const collected = activities.filter(a => a.type === 'roundup');
   const visible = tab === 'donated' ? donated : collected;
 
   return (
@@ -213,13 +225,14 @@ export default function Activity() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
               </svg>
             </div>
-            <h3 className="text-title text-gray-900 mb-2">No activities found</h3>
+            <h3 className="text-title text-gray-900 mb-2">
+              {tab === 'donated' ? 'No Donations Yet' : 'No Round-Ups Collected'}
+            </h3>
             <p className="text-body text-gray-600 mb-6">
-              You haven't made any donations yet. Start making a difference today!
+              {tab === 'donated' 
+                ? "You haven't made any donations yet. Start making a difference today!"
+                : "You haven't collected any round-ups yet. Make some purchases to start rounding up!"}
             </p>
-            <RippleButton className="bg-yellow-400 hover:bg-yellow-500 text-black px-6 py-3 rounded-lg font-medium">
-              Make Your First Donation
-            </RippleButton>
           </div>
         )}
       </div>

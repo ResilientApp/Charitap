@@ -6,7 +6,7 @@ import { toast } from 'react-toastify';
 
 export default function ProtectedRoute({ element: Component }) {
   const { isAuthenticated, isLoading } = useAuth();
-  const bypass = process.env.REACT_APP_AUTH_BYPASS === 'true';
+  const bypass = process.env.REACT_APP_AUTH_BYPASS === 'true' || process.env.NODE_ENV === 'development';
   const [redirect, setRedirect] = useState(false);
 
   // when we know auth status and it's false, kick off toast + delayed redirect

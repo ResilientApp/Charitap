@@ -1,112 +1,81 @@
 // src/auth/google.js
-/* global google */
+import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
+import { jwtDecode } from 'jwt-decode';
 
-const GOOGLE_SCRIPT_SRC = 'https://accounts.google.com/gsi/client';
-
-function loadGoogleScript() {
-  return new Promise((resolve, reject) => {
-    if (window.google && window.google.accounts && window.google.accounts.id) {
-      resolve();
-      return;
-    }
-    const existing = document.querySelector(`script[src="${GOOGLE_SCRIPT_SRC}"]`);
-    if (existing) {
-      existing.addEventListener('load', () => resolve());
-      existing.addEventListener('error', (e) => reject(e));
-      return;
-    }
-    const script = document.createElement('script');
-    script.src = GOOGLE_SCRIPT_SRC;
-    script.async = true;
-    script.defer = true;
-    script.onload = () => resolve();
-    script.onerror = (e) => reject(e);
-    document.head.appendChild(script);
-  });
-}
-
-function base64UrlDecode(str) {
-  // Replace non-url compatible chars with base64 standard chars
-  str = str.replace(/-/g, '+').replace(/_/g, '/');
-  // Pad with trailing '='s
-  const pad = str.length % 4;
-  if (pad) {
-    if (pad === 1) {
-      throw new Error('InvalidLengthError: Incorrect padding');
-    }
-    str += new Array(5 - pad).join('=');
-  }
-  // atob can handle base64 std encoding
-  const decoded = atob(str);
-  try {
-    // decodeURIComponent for utf8
-    return decodeURIComponent(
-      decoded
-        .split('')
-        .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-        .join('')
-    );
-  } catch (_) {
-    return decoded;
-  }
-}
-
-function decodeJwt(idToken) {
-  const parts = idToken.split('.');
-  if (parts.length !== 3) throw new Error('Invalid ID token');
-  const payload = JSON.parse(base64UrlDecode(parts[1]));
-  return payload;
-}
-
+// For backward compatibility, we'll keep the old function but make it use the new implementation
 export async function signInWithGoogleGSI() {
-  await loadGoogleScript();
-  const clientId = process.env.REACT_APP_GOOGLE_CLIENT_ID;
-  if (!clientId) {
-    throw new Error('Missing REACT_APP_GOOGLE_CLIENT_ID in environment');
+  const clientId = process.env.REACT_APP_GOOGLE_CLIENT_ID || 'your_google_client_id_here';
+  
+  if (clientId === 'your_google_client_id_here') {
+    throw new Error('Please set up your Google Client ID in the environment variables. Add REACT_APP_GOOGLE_CLIENT_ID to your .env file.');
   }
 
   return new Promise((resolve, reject) => {
-    let resolved = false;
-    const timeout = setTimeout(() => {
-      if (!resolved) reject(new Error('Google sign-in timed out'));
-    }, 60000);
+    // Create a temporary Google Login button and trigger it
+    const tempDiv = document.createElement('div');
+    tempDiv.style.display = 'none';
+    document.body.appendChild(tempDiv);
 
-    try {
-      google.accounts.id.initialize({
-        client_id: clientId,
-        callback: (response) => {
-          try {
-            const payload = decodeJwt(response.credential);
-            resolved = true;
-            clearTimeout(timeout);
-            resolve({
-              id: payload.sub,
-              email: payload.email,
-              firstName: payload.given_name || '',
-              lastName: payload.family_name || '',
-              fullName: payload.name || '',
-              picture: payload.picture || ''
-            });
-          } catch (e) {
-            clearTimeout(timeout);
-            reject(e);
-          }
-        },
-        ux_mode: 'popup'
-      });
-      // Prompt One Tap / popup selection UI
-      google.accounts.id.prompt((notification) => {
-        // If dismissed, still keep waiting for callback within timeout
-        if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-          // If not displayed (e.g., blocked), try to render a moment again after a short delay
-          setTimeout(() => google.accounts.id.prompt(), 500);
-        }
-      });
-    } catch (e) {
-      clearTimeout(timeout);
-      reject(e);
-    }
+    const handleSuccess = (credentialResponse) => {
+      try {
+        const decoded = jwtDecode(credentialResponse.credential);
+        resolve({
+          id: decoded.sub,
+          email: decoded.email,
+          firstName: decoded.given_name || '',
+          lastName: decoded.family_name || '',
+          fullName: decoded.name || '',
+          picture: decoded.picture || ''
+        });
+      } catch (e) {
+        reject(e);
+      } finally {
+        document.body.removeChild(tempDiv);
+      }
+    };
+
+    const handleError = () => {
+      reject(new Error('Google sign-in failed'));
+      document.body.removeChild(tempDiv);
+    };
+
+    // We'll use a different approach - create a popup window
+    const popup = window.open(
+      `https://accounts.google.com/oauth/authorize?client_id=${clientId}&response_type=code&scope=openid%20email%20profile&redirect_uri=${encodeURIComponent(window.location.origin)}&state=google_signin`,
+      'google_signin',
+      'width=500,height=600,scrollbars=yes,resizable=yes'
+    );
+
+    // Listen for the popup to close or receive a message
+    const checkClosed = setInterval(() => {
+      if (popup.closed) {
+        clearInterval(checkClosed);
+        reject(new Error('Google sign-in was cancelled'));
+      }
+    }, 1000);
+
+    // Listen for messages from the popup
+    const messageHandler = (event) => {
+      if (event.origin !== window.location.origin) return;
+      
+      if (event.data.type === 'GOOGLE_SIGNIN_SUCCESS') {
+        clearInterval(checkClosed);
+        window.removeEventListener('message', messageHandler);
+        popup.close();
+        handleSuccess({ credential: event.data.credential });
+      } else if (event.data.type === 'GOOGLE_SIGNIN_ERROR') {
+        clearInterval(checkClosed);
+        window.removeEventListener('message', messageHandler);
+        popup.close();
+        handleError();
+      }
+    };
+
+    window.addEventListener('message', messageHandler);
   });
 }
+
+// Export the components for use in the app
+export { GoogleOAuthProvider, GoogleLogin };
 
 

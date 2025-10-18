@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
+import { GoogleLogin } from '../../auth/google';
 import RippleButton from '../RippleButton';
 
 function ForgotPasswordModal({ open, onClose, presetEmail }) {
@@ -162,20 +163,27 @@ export default function SignIn() {
           <div className="flex-1 h-px bg-gray-200" />
         </div>
 
-        <button
-          onClick={async () => {
-            try {
-              await loginWithGoogle();
-              nav('/', { replace: true });
-            } catch (e) {
-              setError(e.message);
-            }
-          }}
-          className="w-full inline-flex items-center justify-center gap-2 px-5 py-2.5 border border-gray-300 rounded-full bg-white hover:bg-gray-50 transition"
-        >
-          <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" />
-          <span className="text-gray-800 font-medium">Continue with Google</span>
-        </button>
+        <div className="w-full">
+          <GoogleLogin
+            onSuccess={async (credentialResponse) => {
+              try {
+                await loginWithGoogle();
+                nav('/', { replace: true });
+              } catch (e) {
+                setError(e.message);
+              }
+            }}
+            onError={() => {
+              setError('Google sign-in failed. Please try again.');
+            }}
+            useOneTap={false}
+            theme="outline"
+            size="large"
+            text="continue_with"
+            shape="pill"
+            width="100%"
+          />
+        </div>
 
         <p className="text-xs text-gray-500 mt-3 text-center">We’ll never post without your permission. Payments use bank‑grade encryption via Stripe.</p>
 

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { GoogleLogin } from '../../auth/google';
 import RippleButton from '../RippleButton';
 
 export default function SignUp() {
@@ -30,8 +31,8 @@ export default function SignUp() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-yellow-50 to-orange-50 flex items-center justify-center px-4">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 md:p-10 border border-yellow-100 space-y-6 animate-fade-in">
+    <div className="min-h-screen bg-gradient-to-br from-yellow-50 to-orange-50 flex items-center justify-center px-4 py-12">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 md:p-10 border border-yellow-100 space-y-6 animate-fade-in my-8">
         <div className="text-center mb-6">
           <img className="w-12 h-12 mx-auto" src="/logo.png" alt="Charitap" />
           <h1 className="text-2xl font-bold text-gray-900 mt-2">Create your Charitap account</h1>
@@ -67,7 +68,7 @@ export default function SignUp() {
                 {showPw ? 'Hide' : 'Show'}
               </button>
             </div>
-            <p className="text-xs text-gray-500 mt-1">Use at least 8 characters with letters & numbers.</p>
+            <p className="text-xs text-gray-500 mt-1">Choose any password you prefer.</p>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label>
@@ -95,20 +96,27 @@ export default function SignUp() {
           <div className="flex-1 h-px bg-gray-200" />
         </div>
 
-        <button
-          onClick={async () => {
-            try {
-              await loginWithGoogle();
-              nav('/', { replace: true });
-            } catch (e) {
-              setError(e.message);
-            }
-          }}
-          className="w-full inline-flex items-center justify-center gap-2 px-5 py-2.5 border border-gray-300 rounded-full bg-white hover:bg-gray-50 transition"
-        >
-          <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" />
-          <span className="text-gray-800 font-medium">Sign up with Google</span>
-        </button>
+        <div className="w-full">
+          <GoogleLogin
+            onSuccess={async (credentialResponse) => {
+              try {
+                await loginWithGoogle();
+                nav('/', { replace: true });
+              } catch (e) {
+                setError(e.message);
+              }
+            }}
+            onError={() => {
+              setError('Google sign-in failed. Please try again.');
+            }}
+            useOneTap={false}
+            theme="outline"
+            size="large"
+            text="signup_with"
+            shape="pill"
+            width="100%"
+          />
+        </div>
 
         <p className="text-sm text-gray-600 mt-6 text-center">
           Already have an account?{' '}

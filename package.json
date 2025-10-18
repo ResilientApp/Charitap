@@ -4,6 +4,7 @@
   "private": true,
   "dependencies": {
     "@auth0/auth0-react": "^2.3.0",
+    "@react-oauth/google": "^0.12.2",
     "@react-three/drei": "^10.0.7",
     "@react-three/fiber": "^9.1.2",
     "@stripe/react-stripe-js": "^2.9.0",
@@ -18,6 +19,7 @@
     "cors": "^2.8.5",
     "express": "^5.1.0",
     "framer-motion": "^12.23.0",
+    "jwt-decode": "^4.0.0",
     "lottie-react": "^2.4.1",
     "material-ripple-effects": "^2.0.1",
     "nodemailer": "^7.0.5",

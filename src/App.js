@@ -1,6 +1,7 @@
 import React, { Suspense, lazy } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import { useAuth } from './auth/AuthContext';
+import { GoogleOAuthProvider } from './auth/google';
 import Navigation from './components/Navigation';
 import Footer from './components/Footer';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -37,27 +38,29 @@ function App() {
   }
 
   return (
-    <ErrorBoundary>
-      <div className="min-h-screen bg-gray-50">
-        {!hideChrome && <Navigation />}
-        <main className="flex-1">
-          <Suspense fallback={<LoadingSpinner />}>
-            <Routes>
-              <Route path="/" element={<Home />} />
-              {/* Public home currently not used */}
-              <Route path="/signin" element={<SignIn />} />
-              <Route path="/signup" element={<SignUp />} />
-              <Route path="/verify-email" element={<VerifyEmail />} />
-              <Route path="/complete-profile" element={<CompleteProfile />} />
-              <Route path="/dashboard" element={<ProtectedRoute element={Dashboard} />} />
-              <Route path="/activity" element={<ProtectedRoute element={Activity} />} />
-              <Route path="/settings" element={<ProtectedRoute element={Settings} />} />
-            </Routes>
-          </Suspense>
-        </main>
-        {!hideChrome && <Footer />}
-      </div>
-    </ErrorBoundary>
+    <GoogleOAuthProvider clientId={process.env.REACT_APP_GOOGLE_CLIENT_ID || 'your_google_client_id_here'}>
+      <ErrorBoundary>
+        <div className="min-h-screen bg-gray-50">
+          {!hideChrome && <Navigation />}
+          <main className="flex-1">
+            <Suspense fallback={<LoadingSpinner />}>
+              <Routes>
+                <Route path="/" element={<Home />} />
+                {/* Public home currently not used */}
+                <Route path="/signin" element={<SignIn />} />
+                <Route path="/signup" element={<SignUp />} />
+                <Route path="/verify-email" element={<VerifyEmail />} />
+                <Route path="/complete-profile" element={<CompleteProfile />} />
+                <Route path="/dashboard" element={<ProtectedRoute element={Dashboard} />} />
+                <Route path="/activity" element={<ProtectedRoute element={Activity} />} />
+                <Route path="/settings" element={<ProtectedRoute element={Settings} />} />
+              </Routes>
+            </Suspense>
+          </main>
+          {!hideChrome && <Footer />}
+        </div>
+      </ErrorBoundary>
+    </GoogleOAuthProvider>
   );
 }
 

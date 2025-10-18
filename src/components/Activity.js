@@ -1,77 +1,228 @@
 import React, { useState } from 'react';
+// Auth not required directly in this component
+import Breadcrumb from './Breadcrumb';
+import RippleButton from './RippleButton';
+import useScrollAnimation from '../hooks/useScrollAnimation';
 
 export default function Activity() {
-  const [transactions] = useState([
-    { date: '2025-05-01', time: '14:32', amount: 24.99, roundup: 0.01 },
-    { date: '2025-05-02', time: '09:17', amount: 49.95, roundup: 0.05 },
-  ]);
+  // Scroll animation refs
+  const headerRef = useScrollAnimation(0.3);
+  const activityRef = useScrollAnimation(0.2);
 
-  const [history] = useState([
-    { date: '2025-04-30', donated: 5.0, charities: ['Red Cross'] },
-    { date: '2025-04-01', donated: 15.25, charities: ['UNICEF', 'WWF'] },
-  ]);
+  const activities = [
+    {
+      id: 1,
+      type: 'donation',
+      charity: 'Save the Children',
+      amount: '$2.45',
+      date: '2 hours ago',
+      category: 'Education',
+      status: 'completed'
+    },
+    {
+      id: 2,
+      type: 'donation',
+      charity: 'Doctors Without Borders',
+      amount: '$1.78',
+      date: '5 hours ago',
+      category: 'Healthcare',
+      status: 'completed'
+    },
+    {
+      id: 3,
+      type: 'charity_added',
+      charity: 'World Wildlife Fund',
+      amount: null,
+      date: '1 day ago',
+      category: 'Environment',
+      status: 'completed'
+    },
+    {
+      id: 4,
+      type: 'donation',
+      charity: 'Red Cross',
+      amount: '$3.12',
+      date: '2 days ago',
+      category: 'Emergency',
+      status: 'pending'
+    },
+    {
+      id: 5,
+      type: 'goal_reached',
+      charity: 'Monthly Goal',
+      amount: '$50.00',
+      date: '3 days ago',
+      category: 'Achievement',
+      status: 'completed'
+    }
+  ];
+
+  const getActivityIcon = (type) => {
+    switch (type) {
+      case 'donation':
+        return (
+          <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+          </svg>
+        );
+      case 'charity_added':
+        return (
+          <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+          </svg>
+        );
+      case 'goal_reached':
+        return (
+          <svg className="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        );
+      default:
+        return (
+          <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        );
+    }
+  };
+
+  const formatActivityDate = (input) => {
+    if (!input) return '';
+    const m = input.match(/(\d+)\s+(hour|hours|day|days)\s+ago/);
+    if (m) {
+      const n = parseInt(m[1], 10);
+      const unit = m[2];
+      const d = new Date();
+      if (unit.startsWith('hour')) {
+        d.setHours(d.getHours() - n);
+      } else {
+        d.setDate(d.getDate() - n);
+      }
+      return d.toLocaleDateString();
+    }
+    return input;
+  };
+
+  const [tab, setTab] = useState('donated'); // 'donated' | 'collected'
+  const donated = activities.filter(a => a.type === 'donation');
+  // Collected section (privacy-friendly): show amount + collected date only
+  const collected = [
+    { id: 'c1', amount: '$1.04', date: '1 day ago' },
+    { id: 'c2', amount: '$0.72', date: '2 days ago' },
+    { id: 'c3', amount: '$1.91', date: '5 days ago' },
+  ];
+  const visible = tab === 'donated' ? donated : collected;
 
   return (
-    <div className="page-content fade-in space-y-8">
-      {/* Recent Transactions */}
-      <div className="bg-card rounded-2xl p-6">
-        <h3 className="text-xl mb-4 text-[#626F47] slide-in-left">
-          Recent Transactions
-        </h3>
-        <table className="w-full text-left">
-          <thead>
-            <tr className="border-b">
-              <th className="py-2">Date</th>
-              <th className="py-2">Time</th>
-              <th className="py-2">Amount</th>
-              <th className="py-2">Round-up</th>
-            </tr>
-          </thead>
-          <tbody>
-            {transactions.map((tx, i) => (
-              <tr
-                key={i}
-                className="border-b last:border-none fade-in"
-                style={{ animationDelay: `${i * 0.1}s` }}
-              >
-                <td className="py-2">{tx.date}</td>
-                <td className="py-2">{tx.time}</td>
-                <td className="py-2">${tx.amount.toFixed(2)}</td>
-                <td className="py-2">${tx.roundup.toFixed(2)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <Breadcrumb />
+        
+        {/* Header */}
+        <div 
+          ref={headerRef}
+          className="scroll-animate mb-8"
+        >
+          <h1 className="text-headline text-gray-900 mb-2">Activity</h1>
+          <p className="text-body text-gray-600">
+            Track your donation history and impact over time.
+          </p>
+        </div>
 
-      {/* Donation History */}
-      <div className="bg-card rounded-2xl p-6">
-        <h3 className="text-xl mb-4 text-[#626F47] slide-in-left">
-          Donation History
-        </h3>
-        <table className="w-full text-left">
-          <thead>
-            <tr className="border-b">
-              <th className="py-2">Date</th>
-              <th className="py-2">Donated</th>
-              <th className="py-2">Charities</th>
-            </tr>
-          </thead>
-          <tbody>
-            {history.map((h, i) => (
-              <tr
-                key={i}
-                className="border-b last:border-none fade-in"
-                style={{ animationDelay: `${i * 0.1}s` }}
-              >
-                <td className="py-2">{h.date}</td>
-                <td className="py-2 text-black">${h.donated.toFixed(2)}</td>
-                <td className="py-2">{h.charities.join(', ')}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        {/* Tabs */}
+        <div className="mb-6">
+          <div className="inline-flex rounded-full border border-gray-200 bg-white p-1">
+            <button
+              className={`px-4 py-2 rounded-full text-sm font-semibold ${tab==='donated' ? 'bg-yellow-400 text-black' : 'text-gray-700 hover:bg-gray-100'}`}
+              onClick={() => setTab('donated')}
+              aria-pressed={tab==='donated'}
+            >
+              Donated
+            </button>
+            <button
+              className={`px-4 py-2 rounded-full text-sm font-semibold ${tab==='collected' ? 'bg-yellow-400 text-black' : 'text-gray-700 hover:bg-gray-100'}`}
+              onClick={() => setTab('collected')}
+              aria-pressed={tab==='collected'}
+            >
+              Collected
+            </button>
+          </div>
+        </div>
+
+        {/* Activity List */}
+        <div 
+          ref={activityRef}
+          className="scroll-animate space-y-4"
+          style={{ contentVisibility: 'auto', containIntrinsicSize: '700px' }}
+        >
+          {tab === 'donated' && visible.map((activity, index) => (
+            <div 
+              key={activity.id}
+              className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-all duration-300 transform hover:scale-[1.02]"
+              style={{ animationDelay: `${index * 0.1}s` }}
+            >
+              <div className="flex items-start space-x-4">
+                <div className="flex-shrink-0">
+                  <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center transition-all duration-300 hover:bg-yellow-100">
+                    {getActivityIcon(activity.type)}
+                  </div>
+                </div>
+                
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-title text-gray-900 truncate transition-colors duration-300 hover:text-yellow-600">
+                      {activity.charity}
+                    </h3>
+                    {activity.amount && (
+                      <span className="text-lg font-semibold text-green-600 transition-all duration-300 hover:scale-110">
+                        {activity.amount}
+                      </span>
+                    )}
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-4">
+                      <span className="text-caption text-gray-600 transition-colors duration-300 hover:text-gray-800">
+                        {activity.category}
+                      </span>
+                      <span className="text-caption text-gray-500 transition-colors duration-300 hover:text-gray-700">
+                        {formatActivityDate(activity.date)}
+                      </span>
+                    </div>
+                    {/* Status badge removed */}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+          {tab === 'collected' && collected.map((item, index) => (
+            <div key={item.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-all duration-300 transform hover:scale-[1.02]" style={{ animationDelay: `${index * 0.1}s` }}>
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-gray-600">{formatActivityDate(item.date)}</div>
+                <div className="text-lg font-semibold text-green-600">{item.amount}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Empty State */}
+        {visible.length === 0 && (
+          <div className="text-center py-12">
+            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+            </div>
+            <h3 className="text-title text-gray-900 mb-2">No activities found</h3>
+            <p className="text-body text-gray-600 mb-6">
+              You haven't made any donations yet. Start making a difference today!
+            </p>
+            <RippleButton className="bg-yellow-400 hover:bg-yellow-500 text-black px-6 py-3 rounded-lg font-medium">
+              Make Your First Donation
+            </RippleButton>
+          </div>
+        )}
       </div>
     </div>
   );
-}
+};

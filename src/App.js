@@ -1,82 +1,64 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { ToastContainer } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
-import { useAuth0 } from '@auth0/auth0-react';
-
+import React, { Suspense, lazy } from 'react';
+import { Routes, Route, useLocation } from 'react-router-dom';
+import { useAuth } from './auth/AuthContext';
 import Navigation from './components/Navigation';
-import Home         from './components/Home';
-import HomePublic   from './components/HomePublic';
-import Activity     from './components/Activity';
-import Dashboard    from './components/Dashboard';
-import Settings     from './components/Settings';
+import Footer from './components/Footer';
 import ProtectedRoute from './components/ProtectedRoute';
-import { useEffect } from 'react';
+import ErrorBoundary from './components/ErrorBoundary';
+import './styles/main.css';
 
+// Lazy load components for better performance
+const Home = lazy(() => import('./components/Home'));
+const Dashboard = lazy(() => import('./components/Dashboard'));
+const Activity = lazy(() => import('./components/Activity'));
+const Settings = lazy(() => import('./components/Settings'));
+const SignIn = lazy(() => import('./components/auth/SignIn'));
+const SignUp = lazy(() => import('./components/auth/SignUp'));
+const CompleteProfile = lazy(() => import('./components/auth/CompleteProfile'));
+const VerifyEmail = lazy(() => import('./components/auth/VerifyEmail'));
+
+// Loading component
+const LoadingSpinner = () => (
+  <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-yellow-50 to-orange-50">
+    <div className="text-center">
+      <div className="spinner mx-auto mb-4"></div>
+      <p className="text-gray-600 animate-pulse">Loading Charitap...</p>
+    </div>
+  </div>
+);
 
 function App() {
-  const { isAuthenticated, isLoading, user } = useAuth0();
+  const { isLoading } = useAuth();
+  const location = useLocation();
+  const hideChrome = ['/signin','/signup','/complete-profile'].includes(location.pathname);
 
-  useEffect(() => {
-    if (isAuthenticated && user) {
-      const email = user.email;
-      const userId = user.sub;
-
-    if (chrome && chrome.runtime && chrome.runtime.sendMessage) {
-      chrome.runtime.sendMessage(
-        "hmadgdapmiiiimdhebjchcocnjennahi",
-        { type: "SAVE_USER_ID", userId: userId },
-        (response) => {
-          if (chrome.runtime.lastError) {
-            console.error(`Website: Error sending message to extension hmadgdapmiiiimdhebjchcocnjennahi: ${chrome.runtime.lastError.message}`);
-            // Consider UI feedback for the user if critical
-          } else if (response && response.status === "success") {
-            console.log(`Website: User ID successfully sent to extension. Response: ${response.message}`);
-          } else {
-            console.warn(`Website: Extension response indicates an issue or no acknowledgment:`, response);
-          }
-        }
-      );
-    } else {
-      console.warn("Website: Chrome runtime not available. Cannot send message to extension. Is it installed and enabled?");
-    }
-
-      console.log("Stored Email:", email);
-      console.log("Stored UserID:", userId);
-    }
-  }, [isAuthenticated, user]);
-
-  // ✅ Move this AFTER the hook
-  if (isLoading) return null;
+  if (isLoading) {
+    return <LoadingSpinner />;
+  }
 
   return (
-    <Router>
-      <div className="App max-w-6xl mx-auto">
-        <Navigation />
-        <ToastContainer position="top-right" />
-
-        <Routes>
-          <Route
-            path="/"
-            element={isAuthenticated ? <Home /> : <HomePublic />}
-          />
-          <Route
-            path="/activity"
-            element={<ProtectedRoute element={Activity} />}
-          />
-          <Route
-            path="/dashboard"
-            element={<ProtectedRoute element={Dashboard} />}
-          />
-          <Route
-            path="/settings"
-            element={<ProtectedRoute element={Settings} />}
-          />
-        </Routes>
+    <ErrorBoundary>
+      <div className="min-h-screen bg-gray-50">
+        {!hideChrome && <Navigation />}
+        <main className="flex-1">
+          <Suspense fallback={<LoadingSpinner />}>
+            <Routes>
+              <Route path="/" element={<Home />} />
+              {/* Public home currently not used */}
+              <Route path="/signin" element={<SignIn />} />
+              <Route path="/signup" element={<SignUp />} />
+              <Route path="/verify-email" element={<VerifyEmail />} />
+              <Route path="/complete-profile" element={<CompleteProfile />} />
+              <Route path="/dashboard" element={<ProtectedRoute element={Dashboard} />} />
+              <Route path="/activity" element={<ProtectedRoute element={Activity} />} />
+              <Route path="/settings" element={<ProtectedRoute element={Settings} />} />
+            </Routes>
+          </Suspense>
+        </main>
+        {!hideChrome && <Footer />}
       </div>
-    </Router>
+    </ErrorBoundary>
   );
 }
-
 
 export default App;

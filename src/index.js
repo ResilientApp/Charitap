@@ -1,18 +1,35 @@
 import React from 'react';
-import { createRoot } from 'react-dom/client';
+import ReactDOM from 'react-dom/client';
+// Removed Auth0; using custom AuthProvider backed by Firebase Auth
+import { AuthProvider } from './auth/AuthContext';
+import { ToastContainer, Slide } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 import './styles/main.css';
 import App from './App';
-import { Auth0Provider } from '@auth0/auth0-react';
+import { BrowserRouter as Router } from 'react-router-dom';
 
-const container = document.getElementById('root');
-const root = createRoot(container);
+// No Auth0 configuration needed
 
+const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
-  <Auth0Provider
-    domain={process.env.REACT_APP_AUTH0_DOMAIN}
-    clientId={process.env.REACT_APP_AUTH0_CLIENT_ID}
-    authorizationParams={{ redirect_uri: window.location.origin }}
-  >
-    <App />
-  </Auth0Provider>
+  <React.StrictMode>
+    <AuthProvider>
+      <Router>
+        <App />
+      </Router>
+      <ToastContainer
+        position="top-right"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="light"
+        transition={Slide}
+      />
+    </AuthProvider>
+  </React.StrictMode>
 );

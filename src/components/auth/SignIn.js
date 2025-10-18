@@ -167,7 +167,7 @@ export default function SignIn() {
           <GoogleLogin
             onSuccess={async (credentialResponse) => {
               try {
-                await loginWithGoogle();
+                await loginWithGoogle(credentialResponse.credential);
                 nav('/', { replace: true });
               } catch (e) {
                 setError(e.message);

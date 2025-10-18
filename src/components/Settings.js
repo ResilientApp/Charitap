@@ -1,15 +1,16 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import Breadcrumb from './Breadcrumb';
 import CollapsibleSection from './CollapsibleSection';
 import RippleButton from './RippleButton';
 import {loadStripe} from '@stripe/stripe-js';
 import {Elements, CardNumberElement, CardExpiryElement, CardCvcElement, useStripe, useElements} from '@stripe/react-stripe-js';
+import { settingsAPI } from '../services/api';
 
-const stripePromise = loadStripe(process.env.REACT_APP_STRIPE_PUBLIC_KEY);
+const stripePromise = loadStripe(process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY);
 
 export default function Settings() {
-  const { user, profile, email, saveName, changePassword, logout, authProvider } = useAuth();
+  const { user, profile, email, saveName, changePassword, logout, authProvider, isAuthenticated } = useAuth();
   const [displayName, setDisplayName] = useState(() => {
     const saved = localStorage.getItem('userDisplayName');
     const initial = saved || (profile ? `${profile.firstName || ''} ${profile.lastName || ''}`.trim() : (user?.displayName || 'User'));
@@ -24,29 +25,86 @@ export default function Settings() {
   const [passwordError, setPasswordError] = useState('');
   const [firstNameEdit, setFirstNameEdit] = useState(() => (displayName?.split(' ')[0] || ''));
   const [lastNameEdit, setLastNameEdit] = useState(() => (displayName?.split(' ').slice(1).join(' ') || ''));
-  const [charities, setCharities] = useState([
-    { id: 1, name: 'Save the Children', active: true, category: 'Education' },
-    { id: 2, name: 'Doctors Without Borders', active: true, category: 'Healthcare' },
-    { id: 3, name: 'World Wildlife Fund', active: false, category: 'Environment' },
-    { id: 4, name: 'Red Cross', active: true, category: 'Emergency' },
-    { id: 5, name: 'UNICEF', active: false, category: 'Children' },
-    { id: 6, name: 'Amnesty International', active: false, category: 'Human Rights' }
-  ]);
+  const [charities, setCharities] = useState([]);
 
   // Payment preferences state
   const [paymentMode, setPaymentMode] = useState('monthly'); // 'monthly' or 'threshold'
-  const [thresholdAmount] = useState(5);
 
   const [showOnboarding, setShowOnboarding] = useState(() => localStorage.getItem('charitap_onboarding_show') === '1');
 
-  const handleCharityToggle = (id) => {
-    setCharities(prev => 
-      prev.map(charity => 
-        charity.id === id 
-          ? { ...charity, active: !charity.active }
-          : charity
-      )
-    );
+  // Fetch charities from backend
+  useEffect(() => {
+    const fetchCharities = async () => {
+      if (!isAuthenticated) return;
+      
+      try {
+        const response = await settingsAPI.getCharities();
+        
+        // Map backend charities to frontend format
+        // User's selectedCharities are in user.selectedCharities
+        const userSelectedCharities = user?.selectedCharities || [];
+        
+        const mappedCharities = (response.charities || []).map(charity => ({
+          id: charity._id,
+          name: charity.name,
+          category: charity.category || 'General',
+          active: userSelectedCharities.includes(charity._id) // Only active if user has selected it
+        }));
+        
+        setCharities(mappedCharities);
+      } catch (error) {
+        console.error('Error fetching charities:', error);
+        // Fallback to mock charities
+        const mockCharities = [
+          { id: 1, name: 'Save the Children', active: false, category: 'Education' },
+          { id: 2, name: 'Doctors Without Borders', active: false, category: 'Healthcare' },
+          { id: 3, name: 'World Wildlife Fund', active: false, category: 'Environment' },
+          { id: 4, name: 'Red Cross', active: false, category: 'Emergency' },
+          { id: 5, name: 'UNICEF', active: false, category: 'Children' },
+          { id: 6, name: 'Amnesty International', active: false, category: 'Human Rights' },
+          { id: 7, name: 'Feeding America', active: false, category: 'Hunger Relief' },
+          { id: 8, name: 'Habitat for Humanity', active: false, category: 'Housing' },
+          { id: 9, name: 'Oxfam', active: false, category: 'Global Development' },
+          { id: 10, name: 'Greenpeace', active: false, category: 'Environment' }
+        ];
+        setCharities(mockCharities);
+      }
+    };
+
+    fetchCharities();
+  }, [isAuthenticated, user?.selectedCharities]);
+
+  // Fetch payment preference
+  useEffect(() => {
+    if (user?.paymentPreference) {
+      setPaymentMode(user.paymentPreference);
+    }
+  }, [user?.paymentPreference]);
+
+  const handleCharityToggle = async (id) => {
+    try {
+      // Optimistic update
+      setCharities(prev => 
+        prev.map(charity => 
+          charity.id === id 
+            ? { ...charity, active: !charity.active }
+            : charity
+        )
+      );
+      
+      // Call backend
+      await settingsAPI.toggleCharity(id);
+    } catch (error) {
+      console.error('Error toggling charity:', error);
+      // Revert on error
+      setCharities(prev => 
+        prev.map(charity => 
+          charity.id === id 
+            ? { ...charity, active: !charity.active }
+            : charity
+        )
+      );
+    }
   };
 
   const handleLogout = () => {
@@ -64,24 +122,16 @@ export default function Settings() {
     setPaymentMode(mode);
   };
 
-  const handleSavePaymentSettings = () => {
-    // Here you would typically save the payment settings to your backend
-    console.log('Saving payment settings:', {
-      paymentMode,
-      thresholdAmount
-    });
-  };
-
-
-  const scrollToBottom = () => {
-    const charitiesContainer = document.querySelector('.charities-scroll-container');
-    if (charitiesContainer) {
-      charitiesContainer.scrollTo({
-        top: charitiesContainer.scrollHeight,
-        behavior: 'smooth'
-      });
+  const handleSavePaymentSettings = async () => {
+    try {
+      await settingsAPI.updatePaymentPreference(paymentMode);
+      console.log('Payment settings saved successfully');
+    } catch (error) {
+      console.error('Error saving payment settings:', error);
     }
   };
+
+
 
   const passwordValid = useMemo(() => {
     if (!newPassword || !confirmPassword) return false;
@@ -320,14 +370,6 @@ export default function Settings() {
                 {/* Extra bottom space for last item visibility */}
               <div className="h-24" />
               </div>
-              <div className="flex justify-end mt-2">
-                <RippleButton
-                  onClick={scrollToBottom}
-                  className="bg-yellow-400 hover:bg-yellow-500 text-black px-4 py-2 rounded-lg text-sm font-medium shadow"
-                >
-                  Scroll to Bottom
-                </RippleButton>
-              </div>
             </div>
           </CollapsibleSection>
 
@@ -429,10 +471,10 @@ export default function Settings() {
               <div className="flex justify-end">
                 <RippleButton 
                   onClick={handleSavePaymentSettings}
-                  className="bg-yellow-400 hover:bg-yellow-500 text-black px-6 py-3 rounded-lg font-medium transition-all duration-300 transform hover:scale-105 hover:rotate-1 shadow-lg hover:shadow-xl"
+                  className="bg-yellow-400 hover:bg-yellow-500 text-black px-6 py-3 rounded-lg font-medium transition-colors shadow-lg"
                 >
                   Save Payment Settings
-              </RippleButton>
+                </RippleButton>
               </div>
             </div>
           </CollapsibleSection>
@@ -495,14 +537,26 @@ function StripePaymentSection({ userEmail, displayName }) {
   const [defaultPmId, setDefaultPmId] = React.useState('');
 
   const fetchSavedMethods = async () => {
-    const res = await fetch('http://localhost:4242/api/list-payment-methods', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: userEmail })
-    });
-    const data = await res.json();
-    if (data.paymentMethods) setSavedMethods(data.paymentMethods);
-    // Attempt to get default from first card's customer if available via separate call is not available; skip for now
+    try {
+      const res = await fetch(`${process.env.REACT_APP_SERVER_URL || 'http://localhost:3001'}/api/stripe/list-payment-methods`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email: userEmail })
+      });
+      
+      if (!res.ok) {
+        console.error('Failed to fetch payment methods');
+        return;
+      }
+      
+      const data = await res.json();
+      if (data.paymentMethods) setSavedMethods(data.paymentMethods);
+    } catch (error) {
+      console.error('Error fetching payment methods:', error);
+      // Silently fail - payment methods may not be set up yet
+    }
   };
 
   React.useEffect(() => {
@@ -521,7 +575,7 @@ function StripePaymentSection({ userEmail, displayName }) {
     if (!stripe || !elements) return;
     setStatus('');
     try {
-      const res = await fetch('http://localhost:4242/api/create-setup-intent', {
+      const res = await fetch(`${process.env.REACT_APP_SERVER_URL || 'http://localhost:3001'}/api/create-setup-intent`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: userEmail, name: displayName })
@@ -625,7 +679,7 @@ function StripePaymentSection({ userEmail, displayName }) {
               <div className="flex items-center gap-2">
                 <RippleButton
                   onClick={async () => {
-                    await fetch('http://localhost:4242/api/set-default-payment-method', {
+                    await fetch(`${process.env.REACT_APP_SERVER_URL || 'http://localhost:3001'}/api/set-default-payment-method`, {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ email: userEmail, paymentMethodId: pm.id })
@@ -638,7 +692,7 @@ function StripePaymentSection({ userEmail, displayName }) {
                 </RippleButton>
                 <RippleButton
                   onClick={async () => {
-                    await fetch('http://localhost:4242/api/detach-payment-method', {
+                    await fetch(`${process.env.REACT_APP_SERVER_URL || 'http://localhost:3001'}/api/detach-payment-method`, {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ paymentMethodId: pm.id })

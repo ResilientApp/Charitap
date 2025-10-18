@@ -1,42 +1,79 @@
-import React from 'react';
-// import { useAuth } from '../auth/AuthContext';
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../auth/AuthContext';
 import Breadcrumb from './Breadcrumb';
 import CollapsibleSection from './CollapsibleSection';
-// import RippleButton from './RippleButton';
 import useScrollAnimation from '../hooks/useScrollAnimation';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement } from 'chart.js';
 import { Bar, Doughnut } from 'react-chartjs-2';
+import { dashboardAPI } from '../services/api';
 
 // Register Chart.js components
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement);
 
 const Dashboard = () => {
-  // const { isAuthenticated } = useAuth();
+  const { isAuthenticated } = useAuth();
   
   // Scroll animation refs
   const statsRef = useScrollAnimation(0.3);
 
-  const stats = [
-    { label: 'Total Donations', value: '$4,567.89' },
-    { label: 'Last Month', value: '$89.45' },
-    { label: 'Charities Supported', value: '24' },
-    { label: 'Collected', value: '$4.56' }
-  ];
+  // State for dashboard data
+  const [stats, setStats] = useState([
+    { label: 'Total Donations', value: '$0.00' },
+    { label: 'Last Month', value: '$0.00' },
+    { label: 'Charities Supported', value: '0' },
+    { label: 'Collected', value: '$0.00' }
+  ]);
+  const [monthlyData, setMonthlyData] = useState([]);
+  const [charityBreakdown, setCharityBreakdown] = useState([]);
 
-  // const recentDonations = [
-  //   { charity: 'Save the Children', amount: '$2.45', category: 'Education' },
-  //   { charity: 'Doctors Without Borders', amount: '$1.78', category: 'Healthcare' },
-  //   { charity: 'World Wildlife Fund', amount: '$3.12', category: 'Environment' },
-  //   { charity: 'Red Cross', amount: '$1.23', category: 'Emergency' }
-  // ];
+  // Fetch dashboard data from backend
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      if (!isAuthenticated) return;
+      
+      try {
+        // Fetch all dashboard metrics in parallel
+        const [totalDonated, collectedThisMonth, uniqueCharities, monthlyDonations, charityBreakdownData] = await Promise.all([
+          dashboardAPI.getTotalDonated().catch(() => ({ totalDonated: '0.00', transactionCount: 0 })),
+          dashboardAPI.getCollectedThisMonth().catch(() => ({ totalAmount: '0.00', count: 0 })),
+          dashboardAPI.getUniqueCharities().catch(() => ({ uniqueCharitiesCount: 0 })),
+          dashboardAPI.getMonthlyDonations().catch(() => ({ monthlyDonations: [] })),
+          dashboardAPI.getCharityBreakdown().catch(() => ({ charityBreakdown: [], totalDonated: 0 }))
+        ]);
 
-  // Chart data
+        // Update stats
+        const lastMonthAmount = monthlyDonations.monthlyDonations && monthlyDonations.monthlyDonations.length > 0
+          ? monthlyDonations.monthlyDonations[monthlyDonations.monthlyDonations.length - 1].amount || 0
+          : 0;
+
+        setStats([
+          { label: 'Total Donations', value: `$${parseFloat(totalDonated.totalDonated || 0).toFixed(2)}` },
+          { label: 'Last Month', value: `$${parseFloat(lastMonthAmount).toFixed(2)}` },
+          { label: 'Charities Supported', value: String(uniqueCharities.uniqueCharitiesCount || 0) },
+          { label: 'Collected', value: `$${parseFloat(collectedThisMonth.totalAmount || 0).toFixed(2)}` }
+        ]);
+
+        // Update monthly data
+        setMonthlyData(monthlyDonations.monthlyDonations || []);
+        
+        // Update charity breakdown
+        setCharityBreakdown(charityBreakdownData.charityBreakdown || []);
+        
+      } catch (error) {
+        console.error('Error fetching dashboard data:', error);
+      }
+    };
+
+    fetchDashboardData();
+  }, [isAuthenticated]);
+
+  // Chart data - dynamically generated from backend data
   const monthlySpendingData = {
-    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+    labels: monthlyData.map(m => m.month?.substring(0, 3) || 'N/A'),
     datasets: [
       {
         label: 'Monthly Donations',
-        data: [45, 52, 38, 67, 89, 76, 92, 85, 78, 95, 88, 102],
+        data: monthlyData.map(m => parseFloat(m.amount || 0)),
         backgroundColor: 'rgba(251, 191, 36, 0.8)',
         borderColor: 'rgba(251, 191, 36, 1)',
         borderWidth: 2,
@@ -46,19 +83,13 @@ const Dashboard = () => {
     ]
   };
 
+  const colors = ['#F59E0B', '#10B981', '#3B82F6', '#EF4444', '#8B5CF6', '#6B7280', '#EC4899', '#14B8A6'];
   const charitiesSupportedData = {
-    labels: ['Save the Children', 'Doctors Without Borders', 'World Wildlife Fund', 'Red Cross', 'UNICEF', 'Others'],
+    labels: charityBreakdown.map(c => c.charityName || 'Unknown'),
     datasets: [
       {
-        data: [25, 20, 15, 12, 10, 18],
-        backgroundColor: [
-          '#F59E0B',
-          '#10B981',
-          '#3B82F6',
-          '#EF4444',
-          '#8B5CF6',
-          '#6B7280'
-        ],
+        data: charityBreakdown.map(c => parseFloat(c.percentage || 0)),
+        backgroundColor: charityBreakdown.map((_, i) => colors[i % colors.length]),
         borderWidth: 2,
         borderColor: '#ffffff',
         hoverOffset: 4,
@@ -176,28 +207,38 @@ const Dashboard = () => {
                 }
               >
                 <div className="p-4">
-                  <div className="grid md:grid-cols-2 gap-8">
-                    <div className="h-80 transform transition-all duration-500 hover:scale-[1.02]">
-                      <Doughnut data={charitiesSupportedData} options={chartOptions} />
-                    </div>
-                    <div className="flex flex-col justify-center space-y-4">
-                      <h4 className="text-lg font-semibold text-gray-900 mb-4">Donation Distribution</h4>
-                      {charitiesSupportedData.labels.map((label, index) => (
-                        <div key={index} className="flex items-center justify-between transform transition-all duration-300 hover:scale-105">
-                          <div className="flex items-center space-x-3">
-                            <div 
-                              className="w-4 h-4 rounded-full"
-                              style={{ backgroundColor: charitiesSupportedData.datasets[0].backgroundColor[index] }}
-                            ></div>
-                            <span className="text-sm text-gray-700">{label}</span>
+                  {charityBreakdown.length > 0 ? (
+                    <div className="grid md:grid-cols-2 gap-8">
+                      <div className="h-80 transform transition-all duration-500 hover:scale-[1.02]">
+                        <Doughnut data={charitiesSupportedData} options={chartOptions} />
+                      </div>
+                      <div className="flex flex-col justify-center space-y-4">
+                        <h4 className="text-lg font-semibold text-gray-900 mb-4">Donation Distribution</h4>
+                        {charitiesSupportedData.labels.map((label, index) => (
+                          <div key={index} className="flex items-center justify-between transform transition-all duration-300 hover:scale-105">
+                            <div className="flex items-center space-x-3">
+                              <div 
+                                className="w-4 h-4 rounded-full"
+                                style={{ backgroundColor: charitiesSupportedData.datasets[0].backgroundColor[index] }}
+                              ></div>
+                              <span className="text-sm text-gray-700">{label}</span>
+                            </div>
+                            <span className="text-sm font-medium text-gray-900">
+                              {charitiesSupportedData.datasets[0].data[index]}%
+                            </span>
                           </div>
-                          <span className="text-sm font-medium text-gray-900">
-                            {charitiesSupportedData.datasets[0].data[index]}%
-                          </span>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="text-center py-12">
+                      <svg className="w-16 h-16 mx-auto text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                      </svg>
+                      <h3 className="text-lg font-semibold text-gray-700 mb-2">No Charities Supported Yet</h3>
+                      <p className="text-gray-500 mb-4">You haven't made any donations yet. Start making a difference today!</p>
+                    </div>
+                  )}
                 </div>
               </CollapsibleSection>
             </div>

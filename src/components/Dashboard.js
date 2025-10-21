@@ -29,38 +29,57 @@ const Dashboard = () => {
   // Fetch dashboard data from backend
   useEffect(() => {
     const fetchDashboardData = async () => {
-      if (!isAuthenticated) return;
+      console.log('Dashboard: isAuthenticated =', isAuthenticated);
+      if (!isAuthenticated) {
+        console.log('Dashboard: Not authenticated, skipping data fetch');
+        return;
+      }
       
       try {
+        console.log('Dashboard: Fetching data from backend...');
+        
         // Fetch all dashboard metrics in parallel
         const [totalDonated, collectedThisMonth, uniqueCharities, monthlyDonations, charityBreakdownData] = await Promise.all([
-          dashboardAPI.getTotalDonated().catch(() => ({ totalDonated: '0.00', transactionCount: 0 })),
-          dashboardAPI.getCollectedThisMonth().catch(() => ({ totalAmount: '0.00', count: 0 })),
-          dashboardAPI.getUniqueCharities().catch(() => ({ uniqueCharitiesCount: 0 })),
-          dashboardAPI.getMonthlyDonations().catch(() => ({ monthlyDonations: [] })),
-          dashboardAPI.getCharityBreakdown().catch(() => ({ charityBreakdown: [], totalDonated: 0 }))
+          dashboardAPI.getTotalDonated().catch(err => { console.error('getTotalDonated error:', err); return { totalDonated: '0.00', transactionCount: 0 }; }),
+          dashboardAPI.getCollectedThisMonth().catch(err => { console.error('getCollectedThisMonth error:', err); return { collectedThisMonth: '0.00', count: 0 }; }),
+          dashboardAPI.getUniqueCharities().catch(err => { console.error('getUniqueCharities error:', err); return { uniqueCharities: 0 }; }),
+          dashboardAPI.getMonthlyDonations().catch(err => { console.error('getMonthlyDonations error:', err); return { monthlyDonations: [] }; }),
+          dashboardAPI.getCharityBreakdown().catch(err => { console.error('getCharityBreakdown error:', err); return { charities: [], totalDonated: 0 }; })
         ]);
+
+        console.log('Dashboard: Data received:', {
+          totalDonated,
+          collectedThisMonth,
+          uniqueCharities,
+          monthlyDonations,
+          charityBreakdownData
+        });
 
         // Update stats
-        const lastMonthAmount = monthlyDonations.monthlyDonations && monthlyDonations.monthlyDonations.length > 0
-          ? monthlyDonations.monthlyDonations[monthlyDonations.monthlyDonations.length - 1].amount || 0
+        // monthlyDonations array is sorted with most recent first (index 0 = current month, index 1 = last month)
+        const lastMonthAmount = monthlyDonations.monthlyDonations && monthlyDonations.monthlyDonations.length > 1
+          ? monthlyDonations.monthlyDonations[1].amount || 0  // FIXED: Get second item (last month), not last item
           : 0;
 
-        setStats([
+        const newStats = [
           { label: 'Total Donations', value: `$${parseFloat(totalDonated.totalDonated || 0).toFixed(2)}` },
           { label: 'Last Month', value: `$${parseFloat(lastMonthAmount).toFixed(2)}` },
-          { label: 'Charities Supported', value: String(uniqueCharities.uniqueCharitiesCount || 0) },
-          { label: 'Collected', value: `$${parseFloat(collectedThisMonth.totalAmount || 0).toFixed(2)}` }
-        ]);
+          { label: 'Charities Supported', value: String(uniqueCharities.uniqueCharities || 0) }, // FIXED: was uniqueCharitiesCount
+          { label: 'Collected', value: `$${parseFloat(collectedThisMonth.collectedThisMonth || 0).toFixed(2)}` } // FIXED: was totalAmount
+        ];
+
+        console.log('Dashboard: Setting stats to:', newStats);
+        setStats(newStats);
 
         // Update monthly data
         setMonthlyData(monthlyDonations.monthlyDonations || []);
         
         // Update charity breakdown
-        setCharityBreakdown(charityBreakdownData.charityBreakdown || []);
+        setCharityBreakdown(charityBreakdownData.charities || []); // FIXED: was charityBreakdown
         
+        console.log('Dashboard: Data update complete');
       } catch (error) {
-        console.error('Error fetching dashboard data:', error);
+        console.error('Dashboard: Error fetching dashboard data:', error);
       }
     };
 
@@ -85,7 +104,7 @@ const Dashboard = () => {
 
   const colors = ['#F59E0B', '#10B981', '#3B82F6', '#EF4444', '#8B5CF6', '#6B7280', '#EC4899', '#14B8A6'];
   const charitiesSupportedData = {
-    labels: charityBreakdown.map(c => c.charityName || 'Unknown'),
+    labels: charityBreakdown.map(c => c.name || 'Unknown'),  // FIXED: was c.charityName
     datasets: [
       {
         data: charityBreakdown.map(c => parseFloat(c.percentage || 0)),

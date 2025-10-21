@@ -163,27 +163,19 @@ export default function Settings() {
 
 
 
-  // Password strength validation with visual feedback
+  // Password strength validation
   const getPasswordStrength = (pwd) => {
     const minLen = pwd.length >= 8;
     const hasLetter = /[A-Za-z]/.test(pwd);
     const hasNumber = /\d/.test(pwd);
-    const hasSymbol = /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(pwd);
+    const hasSymbol = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pwd);
     
-    const checks = {
-      minLen,
-      hasLetter,
-      hasNumber,
-      hasSymbol
-    };
-    
+    const checks = { minLen, hasLetter, hasNumber, hasSymbol };
     const passedChecks = Object.values(checks).filter(Boolean).length;
-    const totalChecks = Object.keys(checks).length;
     
     let strength = 'weak';
     let color = 'red';
-    
-    if (passedChecks === totalChecks) {
+    if (passedChecks === 4) {
       strength = 'strong';
       color = 'green';
     } else if (passedChecks >= 3) {
@@ -191,7 +183,7 @@ export default function Settings() {
       color = 'yellow';
     }
     
-    return { checks, strength, color, passedChecks, totalChecks };
+    return { checks, strength, color, passedChecks, totalChecks: 4 };
   };
 
   const passwordStrength = getPasswordStrength(newPassword);
@@ -202,7 +194,7 @@ export default function Settings() {
     const minLen = newPassword.length >= 8;
     const hasLetter = /[A-Za-z]/.test(newPassword);
     const hasNumber = /\d/.test(newPassword);
-    const hasSymbol = /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(newPassword);
+    const hasSymbol = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(newPassword);
     const matches = newPassword === confirmPassword;
     const notCurrent = newPassword !== currentPassword;
     const ok = minLen && hasLetter && hasNumber && hasSymbol && matches && notCurrent;
@@ -341,88 +333,90 @@ export default function Settings() {
                     {showCurrent ? 'Hide' : 'Show'}
                   </button>
                 </div>
-                <div className="relative">
-                  <input
-                    type={showNew ? 'text' : 'password'}
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="New password (min 8, letters & numbers)"
-                    className="w-full px-3 py-3 pr-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
-                  />
-                  <button type="button" onClick={() => setShowNew(v => !v)} className="absolute right-3 top-3 md:top-3.5 text-sm text-gray-500">
-                    {showNew ? 'Hide' : 'Show'}
-                  </button>
+                <div className="space-y-2">
+                  <div className="relative">
+                    <input
+                      type={showNew ? 'text' : 'password'}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="New password (min 8, letters, numbers & symbols)"
+                      className="w-full px-3 py-3 pr-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
+                    />
+                    <button type="button" onClick={() => setShowNew(v => !v)} className="absolute right-3 top-3 md:top-3.5 text-sm text-gray-500">
+                      {showNew ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
+                  
+                  {/* Password Strength Indicator */}
+                  {newPassword && (
+                    <div className="mt-2">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs text-gray-600">Password strength:</span>
+                        <span className={`text-xs font-semibold ${
+                          passwordStrength.color === 'green' ? 'text-green-600' :
+                          passwordStrength.color === 'yellow' ? 'text-yellow-600' : 'text-red-600'
+                        }`}>
+                          {passwordStrength.strength.toUpperCase()}
+                        </span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-1.5">
+                        <div 
+                          className={`h-1.5 rounded-full transition-all duration-300 ${
+                            passwordStrength.color === 'green' ? 'bg-green-500' :
+                            passwordStrength.color === 'yellow' ? 'bg-yellow-500' : 'bg-red-500'
+                          }`}
+                          style={{ width: `${(passwordStrength.passedChecks / passwordStrength.totalChecks) * 100}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Password Requirements Checklist */}
+                  {newPassword && (
+                    <div className="mt-2 space-y-1">
+                      <div className="flex items-center text-xs">
+                        <span className={`mr-2 ${passwordStrength.checks.minLen ? 'text-green-600' : 'text-gray-400'}`}>
+                          {passwordStrength.checks.minLen ? '✓' : '○'}
+                        </span>
+                        <span className={passwordStrength.checks.minLen ? 'text-green-600' : 'text-gray-600'}>
+                          At least 8 characters
+                        </span>
+                      </div>
+                      <div className="flex items-center text-xs">
+                        <span className={`mr-2 ${passwordStrength.checks.hasLetter ? 'text-green-600' : 'text-gray-400'}`}>
+                          {passwordStrength.checks.hasLetter ? '✓' : '○'}
+                        </span>
+                        <span className={passwordStrength.checks.hasLetter ? 'text-green-600' : 'text-gray-600'}>
+                          At least one letter
+                        </span>
+                      </div>
+                      <div className="flex items-center text-xs">
+                        <span className={`mr-2 ${passwordStrength.checks.hasNumber ? 'text-green-600' : 'text-gray-400'}`}>
+                          {passwordStrength.checks.hasNumber ? '✓' : '○'}
+                        </span>
+                        <span className={passwordStrength.checks.hasNumber ? 'text-green-600' : 'text-gray-600'}>
+                          At least one number
+                        </span>
+                      </div>
+                      <div className="flex items-center text-xs">
+                        <span className={`mr-2 ${passwordStrength.checks.hasSymbol ? 'text-green-600' : 'text-gray-400'}`}>
+                          {passwordStrength.checks.hasSymbol ? '✓' : '○'}
+                        </span>
+                        <span className={passwordStrength.checks.hasSymbol ? 'text-green-600' : 'text-gray-600'}>
+                          At least one symbol (!@#$%^&*...)
+                        </span>
+                      </div>
+                      <div className="flex items-center text-xs">
+                        <span className={`mr-2 ${!isCurrentPassword ? 'text-green-600' : 'text-red-400'}`}>
+                          {!isCurrentPassword ? '✓' : '○'}
+                        </span>
+                        <span className={!isCurrentPassword ? 'text-green-600' : 'text-red-600'}>
+                          Different from current password
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                
-                {/* Password Strength Indicator for New Password */}
-                {newPassword && (
-                  <div className="mt-2">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs text-gray-600">Password strength:</span>
-                      <span className={`text-xs font-medium ${
-                        passwordStrength.color === 'green' ? 'text-green-600' :
-                        passwordStrength.color === 'yellow' ? 'text-yellow-600' : 'text-red-600'
-                      }`}>
-                        {passwordStrength.strength.toUpperCase()}
-                      </span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div 
-                        className={`h-2 rounded-full transition-all duration-300 ${
-                          passwordStrength.color === 'green' ? 'bg-green-500' :
-                          passwordStrength.color === 'yellow' ? 'bg-yellow-500' : 'bg-red-500'
-                        }`}
-                        style={{ width: `${(passwordStrength.passedChecks / passwordStrength.totalChecks) * 100}%` }}
-                      ></div>
-                    </div>
-                  </div>
-                )}
-                
-                {/* Password Requirements Checklist */}
-                {newPassword && (
-                  <div className="mt-3 space-y-1">
-                    <div className="flex items-center text-xs">
-                      <span className={`mr-2 ${passwordStrength.checks.minLen ? 'text-green-600' : 'text-gray-400'}`}>
-                        {passwordStrength.checks.minLen ? '✓' : '○'}
-                      </span>
-                      <span className={passwordStrength.checks.minLen ? 'text-green-600' : 'text-gray-500'}>
-                        At least 8 characters
-                      </span>
-                    </div>
-                    <div className="flex items-center text-xs">
-                      <span className={`mr-2 ${passwordStrength.checks.hasLetter ? 'text-green-600' : 'text-gray-400'}`}>
-                        {passwordStrength.checks.hasLetter ? '✓' : '○'}
-                      </span>
-                      <span className={passwordStrength.checks.hasLetter ? 'text-green-600' : 'text-gray-500'}>
-                        At least one letter
-                      </span>
-                    </div>
-                    <div className="flex items-center text-xs">
-                      <span className={`mr-2 ${passwordStrength.checks.hasNumber ? 'text-green-600' : 'text-gray-400'}`}>
-                        {passwordStrength.checks.hasNumber ? '✓' : '○'}
-                      </span>
-                      <span className={passwordStrength.checks.hasNumber ? 'text-green-600' : 'text-gray-500'}>
-                        At least one number
-                      </span>
-                    </div>
-                    <div className="flex items-center text-xs">
-                      <span className={`mr-2 ${passwordStrength.checks.hasSymbol ? 'text-green-600' : 'text-gray-400'}`}>
-                        {passwordStrength.checks.hasSymbol ? '✓' : '○'}
-                      </span>
-                      <span className={passwordStrength.checks.hasSymbol ? 'text-green-600' : 'text-gray-500'}>
-                        At least one symbol (!@#$%^&*...)
-                      </span>
-                    </div>
-                    <div className="flex items-center text-xs">
-                      <span className={`mr-2 ${!isCurrentPassword ? 'text-green-600' : 'text-red-400'}`}>
-                        {!isCurrentPassword ? '✓' : '○'}
-                      </span>
-                      <span className={!isCurrentPassword ? 'text-green-600' : 'text-red-500'}>
-                        Different from current password
-                      </span>
-                    </div>
-                  </div>
-                )}
                 <div className="relative">
                   <input
                     type={showConfirm ? 'text' : 'password'}

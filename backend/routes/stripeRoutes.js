@@ -74,4 +74,67 @@ router.post('/create-customer', authenticateToken, async (req, res) => {
   }
 });
 
+// API to save payment method (FROM GITHUB - CRITICAL FEATURE)
+router.post('/save-payment-method', authenticateToken, async (req, res) => {
+  try {
+    const { paymentMethodId } = req.body;
+
+    if (!paymentMethodId) {
+      return res.status(400).json({ error: 'Payment method ID is required' });
+    }
+
+    // Create customer if doesn't exist
+    if (!req.user.stripeCustomerId) {
+      const customer = await stripe.customers.create({
+        email: req.user.email,
+        name: req.user.displayName || req.user.email,
+        payment_method: paymentMethodId,
+        invoice_settings: {
+          default_payment_method: paymentMethodId,
+        },
+        metadata: {
+          userId: req.user._id.toString()
+        }
+      });
+      req.user.stripeCustomerId = customer.id;
+    } else {
+      // Attach payment method to existing customer
+      await stripe.paymentMethods.attach(paymentMethodId, {
+        customer: req.user.stripeCustomerId,
+      });
+      
+      // Set as default payment method
+      await stripe.customers.update(req.user.stripeCustomerId, {
+        invoice_settings: {
+          default_payment_method: paymentMethodId,
+        },
+      });
+    }
+
+    // Get payment method details for display
+    const paymentMethod = await stripe.paymentMethods.retrieve(paymentMethodId);
+    
+    // Save payment method info to user
+    req.user.defaultPaymentMethod = paymentMethodId;
+    req.user.paymentMethodLast4 = paymentMethod.card.last4;
+    req.user.paymentMethodBrand = paymentMethod.card.brand;
+    req.user.paymentMethodExpMonth = paymentMethod.card.exp_month;
+    req.user.paymentMethodExpYear = paymentMethod.card.exp_year;
+    await req.user.save();
+
+    res.json({
+      message: 'Payment method saved successfully',
+      paymentMethod: {
+        last4: paymentMethod.card.last4,
+        brand: paymentMethod.card.brand,
+        expMonth: paymentMethod.card.exp_month,
+        expYear: paymentMethod.card.exp_year
+      }
+    });
+  } catch (error) {
+    console.error('Save payment method error:', error);
+    res.status(500).json({ error: 'Failed to save payment method' });
+  }
+});
+
 module.exports = router;

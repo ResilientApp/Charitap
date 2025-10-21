@@ -1,7 +1,8 @@
 const mongoose = require('mongoose');
 
 const transactionSchema = new mongoose.Schema({
-  stripeTransactionId: { type: String }, 
+  stripeTransactionId: { type: String }, // The transfer to charity
+  stripePaymentIntentId: { type: String }, // The charge to user (FROM GITHUB)
   userEmail: { type: String, required: true },
   amount: { type: Number, required: true },
   charity: { type: mongoose.Schema.Types.ObjectId, ref: 'Charity', required: true },

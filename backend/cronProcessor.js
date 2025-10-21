@@ -21,7 +21,7 @@ mongoose.connect(process.env.MONGODB_URI, {
 
 async function processUserRoundups(user) {
   const unpaidRoundUps = await RoundUp.find({ user: user.email, isPaid: false });
-  const totalAmount = unpaidRoundUps.reduce((sum, ru) => sum + ru.roundUpAmount, 0);
+  let totalAmount = unpaidRoundUps.reduce((sum, ru) => sum + ru.roundUpAmount, 0);
 
   // Handle different payment preferences
   if (user.paymentPreference === 'threshold') {
@@ -30,43 +30,96 @@ async function processUserRoundups(user) {
   } else if (user.paymentPreference === 'monthly') {
     // For monthly users, ensure minimum of $1
     if (totalAmount < 1) {
-      // Round up to $1 if less than $1
-      const roundUpToDollar = 1 - totalAmount;
-      // Create a virtual roundup entry to make up the difference
       totalAmount = 1;
-      console.log(`Rounding up ${user.email} to $1 (added $${roundUpToDollar.toFixed(2)})`);
+      console.log(`Rounding up ${user.email} to $1 minimum`);
     }
   }
 
   const charities = await Charity.find({ _id: { $in: user.selectedCharities } });
-  if (!charities.length) return;
-
-  const perCharityAmount = totalAmount / charities.length;
-
-  for (const charity of charities) {
-    try {
-      const transfer = await stripe.transfers.create({
-        amount: Math.round(perCharityAmount * 100), // converting to cents for Stripe integration
-        currency: 'usd',
-        destination: charity.stripeAccountId,
-        transfer_group: `user_${user.email}`,
-      });
-
-      await Transaction.create({
-        stripeTransactionId: transfer.id,
-        userEmail: user.email,
-        amount: perCharityAmount,
-        charity: charity._id,
-      });
-
-      console.log(`Transferred $${perCharityAmount.toFixed(2)} to ${charity.name} for ${user.email}`);
-    } catch (err) {
-      console.error(`Error transferring to ${charity.name}:`, err.message);
-    }
+  if (!charities.length) {
+    console.log(`No charities selected for ${user.email}`);
+    return;
   }
 
-  // Mark all processed roundups as paid
-  await RoundUp.updateMany({ user: user.email, isPaid: false }, { $set: { isPaid: true } });
+  // Check if user has payment method
+  if (!user.defaultPaymentMethod) {
+    console.log(`No payment method for ${user.email} - skipping`);
+    return;
+  }
+
+  try {
+    // STEP 1: Charge the user's card
+    console.log(`Charging ${user.email} for $${totalAmount.toFixed(2)}`);
+    
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: Math.round(totalAmount * 100), // Convert to cents
+      currency: 'usd',
+      customer: user.stripeCustomerId,
+      payment_method: user.defaultPaymentMethod,
+      off_session: true, // Charge without user being present
+      confirm: true, // Confirm immediately
+      description: `Charitap donation - ${unpaidRoundUps.length} roundups`,
+      metadata: {
+        userEmail: user.email,
+        roundupCount: unpaidRoundUps.length.toString(),
+        totalAmount: totalAmount.toString(),
+      },
+    });
+
+    console.log(`Successfully charged ${user.email}: $${totalAmount.toFixed(2)}`);
+
+    // STEP 2: Now we have money in platform - transfer to charities
+    const perCharityAmount = totalAmount / charities.length;
+
+    for (const charity of charities) {
+      try {
+        const transfer = await stripe.transfers.create({
+          amount: Math.round(perCharityAmount * 100),
+          currency: 'usd',
+          destination: charity.stripeAccountId,
+          transfer_group: `payment_${paymentIntent.id}`,
+          description: `Donation from ${user.email}`,
+        });
+
+        await Transaction.create({
+          stripeTransactionId: transfer.id,
+          stripePaymentIntentId: paymentIntent.id, // Link to user's charge
+          userEmail: user.email,
+          amount: perCharityAmount,
+          charity: charity._id,
+        });
+
+        console.log(`Transferred $${perCharityAmount.toFixed(2)} to ${charity.name}`);
+      } catch (err) {
+        console.error(`Error transferring to ${charity.name}:`, err.message);
+      }
+    }
+
+    // STEP 3: Mark all roundups as paid and processed
+    const now = new Date();
+    await RoundUp.updateMany(
+      { user: user.email, isPaid: false },
+      {
+        $set: {
+          isPaid: true,
+          stripePaymentIntentId: paymentIntent.id,
+          chargedAt: now,
+          processedAt: now
+        }
+      }
+    );
+
+    console.log(`Completed processing for ${user.email}`);
+
+  } catch (error) {
+    console.error(`Error charging ${user.email}:`, error.message);
+    
+    // If charging fails, don't transfer anything
+    // User will be notified about failed payment
+    if (error.type === 'StripeCardError') {
+      console.log(`Card declined for ${user.email} - will retry next cycle`);
+    }
+  }
 }
 
 // Run the cron job every day at midnight

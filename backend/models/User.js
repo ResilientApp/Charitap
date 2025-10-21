@@ -7,9 +7,22 @@ const userSchema = new mongoose.Schema({
   authProvider: { type: String, enum: ['local', 'google'], required: true }, // Track auth method
   firstName: { type: String },
   lastName: { type: String },
+  displayName: { type: String }, // For backward compatibility and Google OAuth
+  profilePicture: { type: String }, // For Google profile picture
+  
+  // Stripe payment information (FROM GITHUB - CRITICAL FOR PAYMENTS)
   stripeCustomerId: { type: String },
+  defaultPaymentMethod: { type: String }, // Stripe payment method ID
+  paymentMethodLast4: { type: String }, // Last 4 digits for display
+  paymentMethodBrand: { type: String }, // Card brand (Visa, Mastercard, etc)
+  paymentMethodExpMonth: { type: Number }, // Expiration month
+  paymentMethodExpYear: { type: Number }, // Expiration year
+  
+  // User preferences
   paymentPreference: { type: String, enum: ['threshold', 'monthly'], default: 'threshold' },
   selectedCharities: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Charity' }],
+  
+  // Timestamps
   createdAt: { type: Date, default: Date.now },
   lastLogin: { type: Date }
 });
@@ -27,4 +40,3 @@ userSchema.index({ googleId: 1 });
 userSchema.index({ email: 1 });
 
 module.exports = mongoose.model('User', userSchema);
-

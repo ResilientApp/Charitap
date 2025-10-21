@@ -18,6 +18,16 @@ const roundUpSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  // Payment tracking (FROM GITHUB - CRITICAL FOR STRIPE INTEGRATION)
+  stripePaymentIntentId: {
+    type: String
+  }, // The charge to the user (batched)
+  chargedAt: {
+    type: Date
+  }, // When user was charged
+  processedAt: {
+    type: Date
+  }, // When transferred to charity
   createdAt: {
     type: Date,
     default: Date.now

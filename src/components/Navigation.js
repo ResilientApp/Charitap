@@ -26,18 +26,31 @@ export default function Navigation() {
   // Fetch real data from backend
   useEffect(() => {
     const fetchNavData = async () => {
-      if (!isAuthenticated) return;
+      console.log('Navigation: isAuthenticated =', isAuthenticated);
+      if (!isAuthenticated) {
+        console.log('Navigation: Not authenticated, skipping data fetch');
+        return;
+      }
       
       try {
+        console.log('Navigation: Fetching data from backend...');
+        
         const [totalData, collectedData] = await Promise.all([
-          dashboardAPI.getTotalDonated().catch(() => ({ totalDonated: '0.00' })),
-          dashboardAPI.getCollectedThisMonth().catch(() => ({ totalAmount: '0.00' }))
+          dashboardAPI.getTotalDonated().catch(err => { console.error('getTotalDonated error:', err); return { totalDonated: '0.00' }; }),
+          dashboardAPI.getCollectedThisMonth().catch(err => { console.error('getCollectedThisMonth error:', err); return { collectedThisMonth: '0.00' }; })
         ]);
         
+        console.log('Navigation: Data received:', { totalData, collectedData });
+        
         setTotalDonations(parseFloat(totalData.totalDonated || 0));
-        setCollectedAmount(parseFloat(collectedData.totalAmount || 0));
+        setCollectedAmount(parseFloat(collectedData.collectedThisMonth || 0));  // FIXED: was totalAmount
+        
+        console.log('Navigation: Updated values:', {
+          total: parseFloat(totalData.totalDonated || 0),
+          collected: parseFloat(collectedData.collectedThisMonth || 0)
+        });
       } catch (error) {
-        console.error('Error fetching navigation data:', error);
+        console.error('Navigation: Error fetching navigation data:', error);
       }
     };
 

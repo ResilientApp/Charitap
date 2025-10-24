@@ -87,7 +87,7 @@ export const authAPI = {
   // Change password
   changePassword: async (currentPassword, newPassword) => {
     return apiCall('/api/auth/change-password', {
-      method: 'PUT',
+      method: 'POST',
       body: JSON.stringify({ currentPassword, newPassword }),
     });
   },

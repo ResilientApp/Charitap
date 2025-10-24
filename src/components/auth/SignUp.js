@@ -14,19 +14,66 @@ export default function SignUp() {
   const [error, setError] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  // Password strength validation with visual feedback
+  const getPasswordStrength = (pwd) => {
+    const minLen = pwd.length >= 8;
+    const hasLetter = /[A-Za-z]/.test(pwd);
+    const hasNumber = /\d/.test(pwd);
+    const hasSymbol = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pwd);
+    
+    const checks = { minLen, hasLetter, hasNumber, hasSymbol };
+    const passedChecks = Object.values(checks).filter(Boolean).length;
+    
+    let strength = 'weak';
+    let color = 'red';
+    if (passedChecks === 4) {
+      strength = 'strong';
+      color = 'green';
+    } else if (passedChecks >= 3) {
+      strength = 'medium';
+      color = 'yellow';
+    }
+    
+    return { checks, strength, color, passedChecks, totalChecks: 4 };
+  };
+
+  const passwordStrength = getPasswordStrength(password);
+  const allRequirementsMet = passwordStrength.passedChecks === 4;
 
   const handleEmailSignup = async (e) => {
     e.preventDefault();
     setError('');
-    if (password !== confirm) {
-      setError('Passwords do not match');
+    
+    // Check if all password requirements are met
+    if (!allRequirementsMet) {
+      setError('🔒 Please meet all password requirements before signing up.');
       return;
     }
+
+    if (password !== confirm) {
+      setError('❌ Passwords do not match. Please make sure both passwords are identical.');
+      return;
+    }
+
     try {
       await signupWithEmail(email, password);
       nav('/', { replace: true });
     } catch (err) {
-      setError(err.message || 'Failed to sign up');
+      // Provide user-friendly error messages
+      const errorMsg = err.message || 'Failed to sign up';
+      if (errorMsg.includes('already exists') || errorMsg.includes('duplicate')) {
+        setError('📧 An account with this email already exists. Please sign in instead.');
+      } else if (errorMsg.includes('invalid email')) {
+        setError('✉️ Please enter a valid email address.');
+      } else if (errorMsg.includes('password')) {
+        setError('🔒 Password must meet the requirements. Please try a different password.');
+      } else if (errorMsg.includes('network') || errorMsg.includes('fetch')) {
+        setError('🌐 Network error. Please check your internet connection and try again.');
+      } else {
+        setError(errorMsg);
+      }
     }
   };
 
@@ -68,7 +115,68 @@ export default function SignUp() {
                 {showPw ? 'Hide' : 'Show'}
               </button>
             </div>
-            <p className="text-xs text-gray-500 mt-1">Choose any password you prefer.</p>
+            
+            {/* Password Strength Indicator */}
+            {password && (
+              <div className="mt-2">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs text-gray-600">Password strength:</span>
+                  <span className={`text-xs font-semibold ${
+                    passwordStrength.color === 'green' ? 'text-green-600' :
+                    passwordStrength.color === 'yellow' ? 'text-yellow-600' : 'text-red-600'
+                  }`}>
+                    {passwordStrength.strength.toUpperCase()}
+                  </span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-1.5">
+                  <div 
+                    className={`h-1.5 rounded-full transition-all duration-300 ${
+                      passwordStrength.color === 'green' ? 'bg-green-500' :
+                      passwordStrength.color === 'yellow' ? 'bg-yellow-500' : 'bg-red-500'
+                    }`}
+                    style={{ width: `${(passwordStrength.passedChecks / passwordStrength.totalChecks) * 100}%` }}
+                  ></div>
+                </div>
+              </div>
+            )}
+            
+            {/* Password Requirements Checklist */}
+            {password && (
+              <div className="mt-2 space-y-1">
+                <div className="flex items-center text-xs">
+                  <span className={`mr-2 ${passwordStrength.checks.minLen ? 'text-green-600' : 'text-gray-400'}`}>
+                    {passwordStrength.checks.minLen ? '✓' : '○'}
+                  </span>
+                  <span className={passwordStrength.checks.minLen ? 'text-green-600' : 'text-gray-600'}>
+                    At least 8 characters
+                  </span>
+                </div>
+                <div className="flex items-center text-xs">
+                  <span className={`mr-2 ${passwordStrength.checks.hasLetter ? 'text-green-600' : 'text-gray-400'}`}>
+                    {passwordStrength.checks.hasLetter ? '✓' : '○'}
+                  </span>
+                  <span className={passwordStrength.checks.hasLetter ? 'text-green-600' : 'text-gray-600'}>
+                    At least one letter
+                  </span>
+                </div>
+                <div className="flex items-center text-xs">
+                  <span className={`mr-2 ${passwordStrength.checks.hasNumber ? 'text-green-600' : 'text-gray-400'}`}>
+                    {passwordStrength.checks.hasNumber ? '✓' : '○'}
+                  </span>
+                  <span className={passwordStrength.checks.hasNumber ? 'text-green-600' : 'text-gray-600'}>
+                    At least one number
+                  </span>
+                </div>
+                <div className="flex items-center text-xs">
+                  <span className={`mr-2 ${passwordStrength.checks.hasSymbol ? 'text-green-600' : 'text-gray-400'}`}>
+                    {passwordStrength.checks.hasSymbol ? '✓' : '○'}
+                  </span>
+                  <span className={passwordStrength.checks.hasSymbol ? 'text-green-600' : 'text-gray-600'}>
+                    At least one symbol (!@#$%^&*...)
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label>
@@ -85,7 +193,15 @@ export default function SignUp() {
               </button>
             </div>
           </div>
-          <RippleButton type="submit" className="w-full bg-black text-white hover:bg-yellow-300 hover:text-black px-5 py-2.5 rounded-full font-semibold transition-colors">
+          <RippleButton 
+            type="submit" 
+            disabled={!allRequirementsMet || password !== confirm || isLoading}
+            className={`w-full px-5 py-2.5 rounded-full font-semibold transition-colors ${
+              allRequirementsMet && password === confirm && !isLoading
+                ? 'bg-black text-white hover:bg-yellow-300 hover:text-black'
+                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+            }`}
+          >
             {isLoading ? 'Creating account...' : 'Sign Up'}
           </RippleButton>
         </form>
@@ -97,28 +213,52 @@ export default function SignUp() {
         </div>
 
         <div className="w-full">
-          <GoogleLogin
-            onSuccess={async (credentialResponse) => {
-              console.log('Google OAuth Success:', credentialResponse);
-              try {
-                const result = await loginWithGoogle(credentialResponse.credential);
-                console.log('Login result:', result);
-                nav('/', { replace: true });
-              } catch (e) {
-                console.error('Google OAuth Error:', e);
-                setError(e.message);
-              }
-            }}
-            onError={() => {
-              setError('Google sign-in failed. Please try again.');
-            }}
-            useOneTap={false}
-            theme="outline"
-            size="large"
-            text="signup_with"
-            shape="pill"
-            width="100%"
-          />
+          {loading ? (
+            <div className="flex items-center justify-center py-4">
+              <div className="flex flex-col items-center space-y-3">
+                <div className="w-8 h-8 border-4 border-yellow-400 border-t-transparent rounded-full animate-spin"></div>
+                <p className="text-sm text-gray-600 font-medium">Signing you up...</p>
+              </div>
+            </div>
+          ) : (
+            <GoogleLogin
+              onSuccess={async (credentialResponse) => {
+                console.log('Google OAuth Success:', credentialResponse);
+                try {
+                  setLoading(true);
+                  setError(''); // Clear any previous errors
+                  const result = await loginWithGoogle(credentialResponse.credential);
+                  console.log('Login result:', result);
+                  // Redirect immediately without delay
+                  window.location.href = '/';
+                } catch (e) {
+                  console.error('Google OAuth Error:', e);
+                  // Provide user-friendly error messages for Google OAuth
+                  const errorMsg = e.message || 'Google sign-up failed';
+                  if (errorMsg.includes('account with this email already exists')) {
+                    setError('📧 An account with this email already exists. Please sign in instead.');
+                  } else if (errorMsg.includes('popup')) {
+                    setError('🚫 Popup was blocked. Please allow popups for this site and try again.');
+                  } else if (errorMsg.includes('cancelled')) {
+                    setError('❌ Google sign-up was cancelled. Please try again if you want to continue.');
+                  } else {
+                    setError(`🔐 ${errorMsg}`);
+                  }
+                  setLoading(false);
+                }
+              }}
+              onError={() => {
+                setError('⚠️ Google sign-up failed. Please make sure you have a stable internet connection and try again.');
+                setLoading(false);
+              }}
+              useOneTap={false}
+              theme="outline"
+              size="large"
+              text="signup_with"
+              shape="pill"
+              width="100%"
+            />
+          )}
         </div>
 
         <p className="text-sm text-gray-600 mt-6 text-center">

@@ -15,41 +15,49 @@ export default function Activity() {
   // Fetch activity data from backend
   useEffect(() => {
     const fetchActivityData = async () => {
-      if (!isAuthenticated) return;
+      console.log('Activity: isAuthenticated =', isAuthenticated);
+      if (!isAuthenticated) {
+        console.log('Activity: Not authenticated, skipping data fetch');
+        return;
+      }
       
       try {
+        console.log('Activity: Fetching data from backend...');
+        
         // Fetch both collected and donated data
         const [collected, donated] = await Promise.all([
-          activityAPI.getCollected().catch(() => ({ roundups: [] })),
-          activityAPI.getDonations().catch(() => ({ transactions: [] }))
+          activityAPI.getCollected().catch(err => { console.error('getCollected error:', err); return { data: [] }; }),
+          activityAPI.getDonations().catch(err => { console.error('getDonations error:', err); return { data: [] }; })
         ]);
+
+        console.log('Activity: Data received:', { collected, donated });
 
         // Combine both into activities list for display
         const combinedActivities = [];
         
-        // Add donations
-        (donated.transactions || []).forEach((tx, idx) => {
+        // Add donations - FIXED: backend returns 'data' array, not 'transactions'
+        (donated.data || []).forEach((tx, idx) => {
           combinedActivities.push({
-            id: `donation-${idx}`,
+            id: `donation-${tx.id || idx}`,
             type: 'donation',
-            charity: tx.charityName || 'Unknown Charity',
+            charity: tx.charity?.name || 'Unknown Charity',  // FIXED: charity is an object with name
             amount: `$${parseFloat(tx.amount || 0).toFixed(2)}`,
             date: tx.date || new Date().toISOString(),
-            category: tx.charityType || 'General',
+            category: tx.charity?.type || 'General',  // FIXED: use charity.type
             status: 'completed'
           });
         });
 
-        // Add collected roundups
-        (collected.roundups || []).forEach((ru, idx) => {
+        // Add collected roundups - FIXED: backend returns 'data' array, not 'roundups'
+        (collected.data || []).forEach((ru, idx) => {
           combinedActivities.push({
-            id: `roundup-${idx}`,
+            id: `roundup-${ru.id || idx}`,
             type: 'roundup',
             charity: 'Round-Up Collection',
             amount: `$${parseFloat(ru.roundUpAmount || 0).toFixed(2)}`,
-            date: ru.date || ru.createdAt || new Date().toISOString(),
+            date: ru.date || new Date().toISOString(),  // FIXED: backend returns 'date' not 'createdAt'
             category: 'Collection',
-            status: 'completed',
+            status: ru.isPaid ? 'completed' : 'pending',  // FIXED: use isPaid to determine status
             purchaseAmount: ru.purchaseAmount
           });
         });
@@ -57,10 +65,11 @@ export default function Activity() {
         // Sort by date (newest first)
         combinedActivities.sort((a, b) => new Date(b.date) - new Date(a.date));
 
+        console.log('Activity: Combined activities:', combinedActivities.length, 'items');
         setActivities(combinedActivities);
         
       } catch (error) {
-        console.error('Error fetching activity data:', error);
+        console.error('Activity: Error fetching activity data:', error);
       }
     };
 
@@ -104,19 +113,27 @@ export default function Activity() {
 
   const formatActivityDate = (input) => {
     if (!input) return '';
-    const m = input.match(/(\d+)\s+(hour|hours|day|days)\s+ago/);
-    if (m) {
-      const n = parseInt(m[1], 10);
-      const unit = m[2];
-      const d = new Date();
-      if (unit.startsWith('hour')) {
-        d.setHours(d.getHours() - n);
-      } else {
-        d.setDate(d.getDate() - n);
-      }
-      return d.toLocaleDateString();
+    
+    try {
+      const date = new Date(input);
+      
+      // Check if date is valid
+      if (isNaN(date.getTime())) return input;
+      
+      // Format: "Oct 11, 2025 at 11:51 PM"
+      const options = { 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      };
+      
+      return date.toLocaleString('en-US', options);
+    } catch (e) {
+      return input;
     }
-    return input;
   };
 
   const [tab, setTab] = useState('donated'); // 'donated' | 'collected'

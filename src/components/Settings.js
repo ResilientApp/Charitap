@@ -6,6 +6,7 @@ import RippleButton from './RippleButton';
 import {loadStripe} from '@stripe/stripe-js';
 import {Elements, CardNumberElement, CardExpiryElement, CardCvcElement, useStripe, useElements} from '@stripe/react-stripe-js';
 import { settingsAPI } from '../services/api';
+import { toast } from 'react-toastify';
 
 const stripePromise = loadStripe(process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY);
 
@@ -23,14 +24,43 @@ export default function Settings() {
   const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [passwordError, setPasswordError] = useState('');
-  const [firstNameEdit, setFirstNameEdit] = useState(() => (displayName?.split(' ')[0] || ''));
-  const [lastNameEdit, setLastNameEdit] = useState(() => (displayName?.split(' ').slice(1).join(' ') || ''));
+  // Initialize from user/profile data, not from localStorage-derived displayName
+  const [firstNameEdit, setFirstNameEdit] = useState('');
+  const [lastNameEdit, setLastNameEdit] = useState('');
   const [charities, setCharities] = useState([]);
 
   // Payment preferences state
   const [paymentMode, setPaymentMode] = useState('monthly'); // 'monthly' or 'threshold'
 
   const [showOnboarding, setShowOnboarding] = useState(() => localStorage.getItem('charitap_onboarding_show') === '1');
+
+  // Update name fields when user data changes
+  useEffect(() => {
+    if (user?.firstName || profile?.firstName) {
+      setFirstNameEdit(user?.firstName || profile?.firstName || '');
+    }
+    if (user?.lastName || profile?.lastName) {
+      setLastNameEdit(user?.lastName || profile?.lastName || '');
+    }
+  }, [user?.firstName, user?.lastName, profile?.firstName, profile?.lastName]);
+
+  // Clear all collapsible section states on mount to keep them closed
+  useEffect(() => {
+    const settingsKeys = [
+      'collapsible:settings:profile',
+      'collapsible:settings:password',
+      'collapsible:settings:charities',
+      'collapsible:settings:payment-prefs',
+      'collapsible:settings:payment-methods'
+    ];
+    settingsKeys.forEach(key => {
+      try {
+        localStorage.removeItem(key);
+      } catch (e) {
+        // Ignore errors
+      }
+    });
+  }, []);
 
   // Fetch charities from backend
   useEffect(() => {
@@ -133,18 +163,53 @@ export default function Settings() {
 
 
 
+  // Password strength validation
+  const getPasswordStrength = (pwd) => {
+    const minLen = pwd.length >= 8;
+    const hasLetter = /[A-Za-z]/.test(pwd);
+    const hasNumber = /\d/.test(pwd);
+    const hasSymbol = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pwd);
+    
+    const checks = { minLen, hasLetter, hasNumber, hasSymbol };
+    const passedChecks = Object.values(checks).filter(Boolean).length;
+    
+    let strength = 'weak';
+    let color = 'red';
+    if (passedChecks === 4) {
+      strength = 'strong';
+      color = 'green';
+    } else if (passedChecks >= 3) {
+      strength = 'medium';
+      color = 'yellow';
+    }
+    
+    return { checks, strength, color, passedChecks, totalChecks: 4 };
+  };
+
+  const passwordStrength = getPasswordStrength(newPassword);
+  const isCurrentPassword = newPassword === currentPassword;
+
   const passwordValid = useMemo(() => {
     if (!newPassword || !confirmPassword) return false;
     const minLen = newPassword.length >= 8;
     const hasLetter = /[A-Za-z]/.test(newPassword);
     const hasNumber = /\d/.test(newPassword);
+    const hasSymbol = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(newPassword);
     const matches = newPassword === confirmPassword;
-    const ok = minLen && hasLetter && hasNumber && matches;
-    setPasswordError(
-      ok ? '' : !minLen ? 'Minimum 8 characters' : !hasLetter || !hasNumber ? 'Use letters and numbers' : !matches ? 'Passwords do not match' : ''
-    );
+    const notCurrent = newPassword !== currentPassword;
+    const ok = minLen && hasLetter && hasNumber && hasSymbol && matches && notCurrent;
+    
+    let errorMsg = '';
+    if (!minLen) errorMsg = 'Minimum 8 characters required';
+    else if (!hasLetter) errorMsg = 'Must contain at least one letter';
+    else if (!hasNumber) errorMsg = 'Must contain at least one number';
+    else if (!hasSymbol) errorMsg = 'Must contain at least one symbol (!@#$%^&*...)';
+    else if (!matches) errorMsg = 'Passwords do not match';
+    else if (!notCurrent) errorMsg = 'New password must be different from current password';
+    
+    setPasswordError(errorMsg);
     return ok;
-  }, [newPassword, confirmPassword]);
+  }, [newPassword, confirmPassword, currentPassword]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -189,11 +254,39 @@ export default function Settings() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">First name</label>
-                  <input type="text" value={firstNameEdit} onChange={(e) => setFirstNameEdit(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent" placeholder="First name" />
+                  <input 
+                    type="text" 
+                    value={firstNameEdit} 
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      // Only allow letters, spaces, hyphens, and apostrophes
+                      if (/^[a-zA-Z\s\-']*$/.test(value) || value === '') {
+                        setFirstNameEdit(value);
+                      }
+                    }}
+                    maxLength={50}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent" 
+                    placeholder="First name" 
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Letters only (2-50 characters)</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Last name</label>
-                  <input type="text" value={lastNameEdit} onChange={(e) => setLastNameEdit(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent" placeholder="Last name" />
+                  <input 
+                    type="text" 
+                    value={lastNameEdit} 
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      // Only allow letters, spaces, hyphens, and apostrophes
+                      if (/^[a-zA-Z\s\-']*$/.test(value) || value === '') {
+                        setLastNameEdit(value);
+                      }
+                    }}
+                    maxLength={50}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent" 
+                    placeholder="Last name" 
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Letters only (2-50 characters)</p>
                 </div>
               </div>
               <div>
@@ -240,17 +333,89 @@ export default function Settings() {
                     {showCurrent ? 'Hide' : 'Show'}
                   </button>
                 </div>
-                <div className="relative">
-                  <input
-                    type={showNew ? 'text' : 'password'}
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="New password (min 8, letters & numbers)"
-                    className="w-full px-3 py-3 pr-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
-                  />
-                  <button type="button" onClick={() => setShowNew(v => !v)} className="absolute right-3 top-3 md:top-3.5 text-sm text-gray-500">
-                    {showNew ? 'Hide' : 'Show'}
-                  </button>
+                <div className="space-y-2">
+                  <div className="relative">
+                    <input
+                      type={showNew ? 'text' : 'password'}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="New password (min 8, letters, numbers & symbols)"
+                      className="w-full px-3 py-3 pr-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
+                    />
+                    <button type="button" onClick={() => setShowNew(v => !v)} className="absolute right-3 top-3 md:top-3.5 text-sm text-gray-500">
+                      {showNew ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
+                  
+                  {/* Password Strength Indicator */}
+                  {newPassword && (
+                    <div className="mt-2">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs text-gray-600">Password strength:</span>
+                        <span className={`text-xs font-semibold ${
+                          passwordStrength.color === 'green' ? 'text-green-600' :
+                          passwordStrength.color === 'yellow' ? 'text-yellow-600' : 'text-red-600'
+                        }`}>
+                          {passwordStrength.strength.toUpperCase()}
+                        </span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-1.5">
+                        <div 
+                          className={`h-1.5 rounded-full transition-all duration-300 ${
+                            passwordStrength.color === 'green' ? 'bg-green-500' :
+                            passwordStrength.color === 'yellow' ? 'bg-yellow-500' : 'bg-red-500'
+                          }`}
+                          style={{ width: `${(passwordStrength.passedChecks / passwordStrength.totalChecks) * 100}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Password Requirements Checklist */}
+                  {newPassword && (
+                    <div className="mt-2 space-y-1">
+                      <div className="flex items-center text-xs">
+                        <span className={`mr-2 ${passwordStrength.checks.minLen ? 'text-green-600' : 'text-gray-400'}`}>
+                          {passwordStrength.checks.minLen ? '✓' : '○'}
+                        </span>
+                        <span className={passwordStrength.checks.minLen ? 'text-green-600' : 'text-gray-600'}>
+                          At least 8 characters
+                        </span>
+                      </div>
+                      <div className="flex items-center text-xs">
+                        <span className={`mr-2 ${passwordStrength.checks.hasLetter ? 'text-green-600' : 'text-gray-400'}`}>
+                          {passwordStrength.checks.hasLetter ? '✓' : '○'}
+                        </span>
+                        <span className={passwordStrength.checks.hasLetter ? 'text-green-600' : 'text-gray-600'}>
+                          At least one letter
+                        </span>
+                      </div>
+                      <div className="flex items-center text-xs">
+                        <span className={`mr-2 ${passwordStrength.checks.hasNumber ? 'text-green-600' : 'text-gray-400'}`}>
+                          {passwordStrength.checks.hasNumber ? '✓' : '○'}
+                        </span>
+                        <span className={passwordStrength.checks.hasNumber ? 'text-green-600' : 'text-gray-600'}>
+                          At least one number
+                        </span>
+                      </div>
+                      <div className="flex items-center text-xs">
+                        <span className={`mr-2 ${passwordStrength.checks.hasSymbol ? 'text-green-600' : 'text-gray-400'}`}>
+                          {passwordStrength.checks.hasSymbol ? '✓' : '○'}
+                        </span>
+                        <span className={passwordStrength.checks.hasSymbol ? 'text-green-600' : 'text-gray-600'}>
+                          At least one symbol (!@#$%^&*...)
+                        </span>
+                      </div>
+                      <div className="flex items-center text-xs">
+                        <span className={`mr-2 ${!isCurrentPassword ? 'text-green-600' : 'text-red-400'}`}>
+                          {!isCurrentPassword ? '✓' : '○'}
+                        </span>
+                        <span className={!isCurrentPassword ? 'text-green-600' : 'text-red-600'}>
+                          Different from current password
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div className="relative">
                   <input
@@ -275,12 +440,23 @@ export default function Settings() {
                       setCurrentPassword('');
                       setNewPassword('');
                       setConfirmPassword('');
-                      alert('Password updated successfully');
+                      toast.success('Password updated successfully! 🎉', {
+                        position: 'top-right',
+                        autoClose: 3000,
+                      });
                     } catch (e) {
-                      alert(e.message);
+                      toast.error(e.message || 'Failed to update password', {
+                        position: 'top-right',
+                        autoClose: 4000,
+                      });
                     }
                   }}
-                  className={`bg-yellow-400 hover:bg-yellow-500 text-black px-5 py-2.5 rounded-full text-sm font-semibold ${passwordValid ? '' : 'opacity-60 cursor-not-allowed'}`}
+                  disabled={!passwordValid}
+                  className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-colors ${
+                    passwordValid 
+                      ? 'bg-yellow-400 hover:bg-yellow-500 text-black' 
+                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  }`}
                 >
                   Change Password
                 </RippleButton>
@@ -494,32 +670,6 @@ export default function Settings() {
               <StripePaymentSection userEmail={email} displayName={displayName} />
             </Elements>
           </CollapsibleSection>
-
-          {/* Account Actions */}
-          <CollapsibleSection 
-            title="Account Actions" 
-            defaultOpen={false}
-            persistKey="settings:account-actions"
-            icon={
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-              </svg>
-            }
-          >
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <RippleButton 
-                  onClick={handleLogout}
-                  className="bg-black text-white hover:bg-yellow-300 hover:text-black px-5 py-2.5 rounded-full text-sm font-semibold transition-colors duration-200"
-                >
-                  Sign Out
-                </RippleButton>
-                <RippleButton className="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 px-5 py-2.5 rounded-full text-sm font-semibold transition-colors duration-200">
-                  Delete Account
-                </RippleButton>
-              </div>
-            </div>
-          </CollapsibleSection>
         </div>
       </div>
     </div>
@@ -531,10 +681,11 @@ function StripePaymentSection({ userEmail, displayName }) {
   const elements = useElements();
   const [status, setStatus] = React.useState('');
   const [savedMethods, setSavedMethods] = React.useState([]);
-  const [cardholderName, setCardholderName] = React.useState(displayName || '');
-  const [cardholderEmail, setCardholderEmail] = React.useState(userEmail || '');
+  const [cardholderName, setCardholderName] = React.useState(''); // Empty by default
+  const [cardholderEmail, setCardholderEmail] = React.useState(''); // Empty by default
   const [cardZip, setCardZip] = React.useState('');
   const [defaultPmId, setDefaultPmId] = React.useState('');
+  const [isLoading, setIsLoading] = React.useState(false);
 
   const fetchSavedMethods = async () => {
     try {
@@ -564,41 +715,123 @@ function StripePaymentSection({ userEmail, displayName }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userEmail]);
 
-  React.useEffect(() => {
-    setCardholderName(displayName || '');
-  }, [displayName]);
-  React.useEffect(() => {
-    setCardholderEmail(userEmail || '');
-  }, [userEmail]);
+  // Don't pre-fill - let users enter their own information
+  // React.useEffect(() => {
+  //   setCardholderName(displayName || '');
+  // }, [displayName]);
+  // React.useEffect(() => {
+  //   setCardholderEmail(userEmail || '');
+  // }, [userEmail]);
+
+  const validateInputs = () => {
+    // Validate cardholder name (2-50 characters, letters, spaces, hyphens only)
+    const nameRegex = /^[a-zA-Z\s\-]{2,50}$/;
+    if (!cardholderName || !nameRegex.test(cardholderName.trim())) {
+      setStatus('❌ Please enter a valid cardholder name (2-50 characters, letters only)');
+      return false;
+    }
+
+    // Validate email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!cardholderEmail || !emailRegex.test(cardholderEmail)) {
+      setStatus('❌ Please enter a valid email address');
+      return false;
+    }
+
+    // Validate ZIP (5 digits for US)
+    const zipRegex = /^\d{5}$/;
+    if (!cardZip || !zipRegex.test(cardZip)) {
+      setStatus('❌ Please enter a valid 5-digit ZIP code');
+      return false;
+    }
+
+    return true;
+  };
 
   const handleAttachCard = async () => {
-    if (!stripe || !elements) return;
-    setStatus('');
-    try {
-      const res = await fetch(`${process.env.REACT_APP_SERVER_URL || 'http://localhost:3001'}/api/create-setup-intent`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: userEmail, name: displayName })
-      });
-      const data = await res.json();
-      if (!data.clientSecret) throw new Error(data.error || 'Failed to create setup intent');
+    if (!stripe || !elements) {
+      setStatus('❌ Stripe is not loaded. Please refresh the page.');
+      return;
+    }
 
-      const cardNumber = elements.getElement(CardNumberElement);
-      const result = await stripe.confirmCardSetup(data.clientSecret, {
-        payment_method: {
-          card: cardNumber,
-          billing_details: {
-            email: cardholderEmail || userEmail,
-            name: cardholderName || displayName,
-            address: { postal_code: cardZip || undefined }
+    if (!validateInputs()) return;
+
+    setStatus('');
+    setIsLoading(true);
+
+    try {
+      const cardNumberElement = elements.getElement(CardNumberElement);
+      
+      // Create payment method with Stripe
+      const { error, paymentMethod } = await stripe.createPaymentMethod({
+        type: 'card',
+        card: cardNumberElement,
+        billing_details: {
+          name: cardholderName.trim(),
+          email: cardholderEmail.trim(),
+          address: {
+            postal_code: cardZip.trim()
           }
         }
       });
-      if (result.error) throw result.error;
-      setStatus('Card saved successfully');
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      // Get auth token from localStorage
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Please log in to save payment method');
+      }
+
+      // Save payment method to backend
+      const response = await fetch(`${process.env.REACT_APP_SERVER_URL || 'http://localhost:3001'}/api/stripe/save-payment-method`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          paymentMethodId: paymentMethod.id
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to save payment method');
+      }
+
+      const result = await response.json();
+      
+      setStatus(`✅ Card saved successfully! ${result.paymentMethod.brand.toUpperCase()} •••• ${result.paymentMethod.last4}`);
+      
+      // Clear form
+      setCardholderName('');
+      setCardholderEmail('');
+      setCardZip('');
+      cardNumberElement.clear();
+      elements.getElement(CardExpiryElement).clear();
+      elements.getElement(CardCvcElement).clear();
+
+      // Refresh saved methods
       await fetchSavedMethods();
-    } catch (e) {
-      setStatus(e.message);
+      
+      // Show success toast
+      toast.success('Payment method saved successfully!', {
+        position: 'top-right',
+        autoClose: 3000,
+      });
+
+    } catch (error) {
+      console.error('Error saving card:', error);
+      setStatus(`❌ ${error.message}`);
+      toast.error(error.message || 'Failed to save payment method', {
+        position: 'top-right',
+        autoClose: 4000,
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -613,10 +846,19 @@ function StripePaymentSection({ userEmail, displayName }) {
               <input
                 type="text"
                 value={cardholderName}
-                onChange={(e) => setCardholderName(e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  // Only allow letters, spaces, and hyphens
+                  if (/^[a-zA-Z\s\-]*$/.test(value) || value === '') {
+                    setCardholderName(value);
+                  }
+                }}
+                maxLength={50}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
-                placeholder="Full name"
+                placeholder="John Doe"
+                required
               />
+              <p className="text-xs text-gray-500 mt-1">Letters, spaces, and hyphens only</p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
@@ -626,6 +868,7 @@ function StripePaymentSection({ userEmail, displayName }) {
                 onChange={(e) => setCardholderEmail(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
                 placeholder="you@example.com"
+                required
               />
             </div>
             <div>
@@ -633,10 +876,19 @@ function StripePaymentSection({ userEmail, displayName }) {
               <input
                 type="text"
                 value={cardZip}
-                onChange={(e) => setCardZip(e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  // Only allow digits, max 5
+                  if (/^\d*$/.test(value)) {
+                    setCardZip(value);
+                  }
+                }}
+                maxLength={5}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
-                placeholder="ZIP"
+                placeholder="12345"
+                required
               />
+              <p className="text-xs text-gray-500 mt-1">5-digit ZIP code</p>
             </div>
           </div>
           <div className="p-3 rounded-lg bg-white border border-gray-200">
@@ -652,9 +904,30 @@ function StripePaymentSection({ userEmail, displayName }) {
           </div>
         </div>
         <div className="flex justify-end mt-3">
-          <RippleButton onClick={handleAttachCard} className="bg-yellow-400 hover:bg-yellow-500 text-black px-4 py-2 rounded-lg text-sm font-medium">Save Card</RippleButton>
+          <RippleButton 
+            onClick={handleAttachCard} 
+            disabled={isLoading}
+            className={`px-6 py-2 rounded-lg text-sm font-medium transition-colors ${
+              isLoading 
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                : 'bg-yellow-400 hover:bg-yellow-500 text-black'
+            }`}
+          >
+            {isLoading ? (
+              <span className="flex items-center gap-2">
+                <div className="w-4 h-4 border-2 border-gray-500 border-t-transparent rounded-full animate-spin"></div>
+                Saving...
+              </span>
+            ) : 'Save Card'}
+          </RippleButton>
         </div>
-        {status && <p className="text-sm mt-2 text-gray-600">{status}</p>}
+        {status && (
+          <p className={`text-sm mt-2 font-medium ${
+            status.includes('✅') ? 'text-green-600' : 'text-red-600'
+          }`}>
+            {status}
+          </p>
+        )}
       </div>
 
       <div className="p-4 rounded-xl border border-gray-200 bg-gray-50">

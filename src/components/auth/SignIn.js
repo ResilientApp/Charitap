@@ -96,6 +96,7 @@ export default function SignIn() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [showForgot, setShowForgot] = useState(false);
+  const [loading, setLoading] = useState(false);
   const nav = useNavigate();
 
   const handleEmailLogin = async (e) => {
@@ -105,7 +106,17 @@ export default function SignIn() {
       await loginWithEmail(email, password);
       nav('/', { replace: true });
     } catch (err) {
-      setError(err.message || 'Failed to sign in');
+      // Provide user-friendly error messages
+      const errorMsg = err.message || 'Failed to sign in';
+      if (errorMsg.includes('Invalid email or password')) {
+        setError('❌ Incorrect email or password. Please check your credentials and try again.');
+      } else if (errorMsg.includes('Google Sign-In')) {
+        setError('🔐 This account uses Google Sign-In. Please use the "Continue with Google" button below.');
+      } else if (errorMsg.includes('network') || errorMsg.includes('fetch')) {
+        setError('🌐 Network error. Please check your internet connection and try again.');
+      } else {
+        setError(errorMsg);
+      }
     }
   };
 
@@ -164,25 +175,49 @@ export default function SignIn() {
         </div>
 
         <div className="w-full">
-          <GoogleLogin
-            onSuccess={async (credentialResponse) => {
-              try {
-                await loginWithGoogle(credentialResponse.credential);
-                nav('/', { replace: true });
-              } catch (e) {
-                setError(e.message);
-              }
-            }}
-            onError={() => {
-              setError('Google sign-in failed. Please try again.');
-            }}
-            useOneTap={false}
-            theme="outline"
-            size="large"
-            text="continue_with"
-            shape="pill"
-            width="100%"
-          />
+          {loading ? (
+            <div className="flex items-center justify-center py-4">
+              <div className="flex flex-col items-center space-y-3">
+                <div className="w-8 h-8 border-4 border-yellow-400 border-t-transparent rounded-full animate-spin"></div>
+                <p className="text-sm text-gray-600 font-medium">Signing you in...</p>
+              </div>
+            </div>
+          ) : (
+            <GoogleLogin
+              onSuccess={async (credentialResponse) => {
+                try {
+                  setLoading(true);
+                  setError(''); // Clear any previous errors
+                  await loginWithGoogle(credentialResponse.credential);
+                  // Redirect immediately without delay
+                  window.location.href = '/';
+                } catch (e) {
+                  // Provide user-friendly error messages for Google OAuth
+                  const errorMsg = e.message || 'Google sign-in failed';
+                  if (errorMsg.includes('account with this email already exists')) {
+                    setError('📧 An account with this email already exists. Please use email/password login above.');
+                  } else if (errorMsg.includes('popup')) {
+                    setError('🚫 Popup was blocked. Please allow popups for this site and try again.');
+                  } else if (errorMsg.includes('cancelled')) {
+                    setError('❌ Google sign-in was cancelled. Please try again if you want to continue.');
+                  } else {
+                    setError(`🔐 ${errorMsg}`);
+                  }
+                  setLoading(false);
+                }
+              }}
+              onError={() => {
+                setError('⚠️ Google sign-in failed. Please make sure you have a stable internet connection and try again.');
+                setLoading(false);
+              }}
+              useOneTap={false}
+              theme="outline"
+              size="large"
+              text="continue_with"
+              shape="pill"
+              width="100%"
+            />
+          )}
         </div>
 
         <p className="text-xs text-gray-500 mt-3 text-center">We’ll never post without your permission. Payments use bank‑grade encryption via Stripe.</p>

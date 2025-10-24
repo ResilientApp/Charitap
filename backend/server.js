@@ -26,12 +26,16 @@ app.use(express.json());
 const stripe = stripeLib(process.env.STRIPE_SECRET_KEY);
 
 // Import routes - make sure the paths are correct
+const authRoutes = require('./routes/authRoutes');
 const stripeRoutes = require('./routes/stripeRoutes');
 const roundUpRoutes = require('./routes/roundUpRoutes');
+const charityRoutes = require('./routes/charityRoutes');
 
 // Use routes
+app.use('/api/auth', authRoutes);
 app.use('/api/stripe', stripeRoutes);
 app.use('/api/roundup', roundUpRoutes);
+app.use('/api/charities', charityRoutes);
 
 // Start the server
 app.listen(PORT, () => {

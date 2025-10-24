@@ -3,7 +3,13 @@ const mongoose = require('mongoose');
 const charitySchema = new mongoose.Schema({
   name: { type: String, required: true },
   description: String,
-  stripeAccountId: { type: String, required: true }
+  type: { 
+    type: String, 
+    enum: ['Environment', 'Education', 'Health', 'Animals', 'Human Rights', 'Poverty', 'Arts & Culture', 'Other'],
+    default: 'Other'
+  },
+  stripeAccountId: { type: String, required: true },
+  createdAt: { type: Date, default: Date.now }
 });
 
 module.exports = mongoose.model('Charity', charitySchema);

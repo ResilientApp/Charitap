@@ -71,28 +71,35 @@ export function AuthProvider({ children}) {
 
   // Chrome Extension Communication
   useEffect(() => {
-    if (user && user.id) {
+    if (user && user.id && token) {
       const email = user.email;
       const userId = user.id;
 
       if (typeof window !== 'undefined' && window.chrome && window.chrome.runtime && window.chrome.runtime.sendMessage) {
         window.chrome.runtime.sendMessage(
           process.env.REACT_APP_CHROME_EXTENSION_ID || "hmadgdapmiiiimdhebjchcocnjennahi",
-          { type: "SAVE_USER_ID", userId: userId },
+          { 
+            type: "SAVE_USER_DATA", 
+            email: email, 
+            userId: userId,
+            token: token 
+          },
           (response) => {
             if (window.chrome.runtime.lastError) {
               console.error(`Website: Error sending message to extension: ${window.chrome.runtime.lastError.message}`);
             } else if (response && response.status === "success") {
-              console.log(`Website: User ID successfully sent to extension`);
+              console.log(`Website: User data successfully sent to extension`);
             }
           }
         );
+        console.log("Stored Email:", email);
+        console.log("Stored UserID:", userId);
+        console.log("Stored Token:", token ? "Present" : "Missing");
       }
 
-      console.log("Stored Email:", email);
-      console.log("Stored UserID:", userId);
+      
     }
-  }, [user]);
+  }, [user, token]);
 
   // Save auth data to localStorage
   const saveAuthData = (authData) => {

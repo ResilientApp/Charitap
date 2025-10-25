@@ -1,15 +1,25 @@
 // == Content Script =========================================================
 
 var userId = null;
+var userEmail = null;
+var userToken = null;
 
 function onGot(item) {
-  console.log(item.userId);
+  console.log('Retrieved user data:', {
+    userId: item.userId,
+    userEmail: item.userEmail,
+    userToken: item.userToken ? 'Present' : 'Missing'
+  });
   userId = item.userId;
+  userEmail = item.userEmail;
+  userToken = item.userToken;
 }
 
 function onError(error) {
   console.log(`Error: ${error}`);
   userId = null;
+  userEmail = null;
+  userToken = null;
 }
 
 // 1) Simple heuristic: look for forms/buttons with payment keywords
@@ -220,7 +230,7 @@ function revertToCircle(btn) {
 
   // 5) Kick off
 if (looksLikePaymentPage()) {
-  let gettingItem = chrome.storage.local.get("userId");
+  let gettingItem = chrome.storage.local.get(["userId", "userEmail", "userToken"]);
   gettingItem.then(onGot, onError);
   var checkoutTotal = findCheckoutTotal();
   if (checkoutTotal !== -1) {
@@ -240,20 +250,35 @@ async function updateResource(totalCheckoutAmount) {
   try {
     var user = userId;
     const bodyJson = { "user": user, "purchaseAmount": checkoutTotal, "roundUpAmount": totalCheckoutAmount };
-    console.log(bodyJson);
+    console.log('Sending request with body:', bodyJson);
+    console.log('Using JWT token:', userToken ? 'Present' : 'Missing');
+    
+    const headers = {
+      'Content-Type': 'application/json'
+    };
+    
+    // Add Authorization header if token is available
+    if (userToken) {
+      headers['Authorization'] = `Bearer ${userToken}`;
+    }
+    
     const res = await fetch(`http://localhost:3001/api/roundup/create-roundup`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
+      headers: headers,
       body: JSON.stringify(bodyJson)
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.error(`HTTP ${res.status}: ${errorText}`);
+      throw new Error(`HTTP ${res.status}: ${errorText}`);
+    }
+    
     const data = await res.json();
     console.log('Server replied:', data);
     return data;
   } catch (err) {
-    console.error('PUT failed:', err);
+    console.error('API call failed:', err);
     throw err;
   }
 }

@@ -7,6 +7,7 @@ export default function CompleteProfile() {
   const { saveName, authProvider, finalizeEmailSignup } = useAuth();
   const [first, setFirst] = useState('');
   const [last, setLast] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const nav = useNavigate();
 
   const isGoogle = authProvider === 'google';
@@ -17,6 +18,62 @@ export default function CompleteProfile() {
       nav('/settings', { replace: true });
     }
   }, [isGoogle, nav]);
+
+  // Prevent navigation away from this page if names are not filled
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (!isGoogle && (!first.trim() || !last.trim())) {
+        e.preventDefault();
+        e.returnValue = 'Please complete your profile before leaving this page.';
+        return 'Please complete your profile before leaving this page.';
+      }
+    };
+
+    const handlePopState = (e) => {
+      if (!isGoogle && (!first.trim() || !last.trim())) {
+        e.preventDefault();
+        window.history.pushState(null, '', window.location.pathname);
+        alert('Please complete your profile before navigating away.');
+      }
+    };
+
+    // Add event listeners
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('popstate', handlePopState);
+
+    // Push current state to prevent back button
+    if (!isGoogle && (!first.trim() || !last.trim())) {
+      window.history.pushState(null, '', window.location.pathname);
+    }
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [first, last, isGoogle]);
+
+  const handleSaveAndContinue = async () => {
+    if (!first.trim() || !last.trim()) {
+      alert('Please enter both first and last name to continue.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await saveName(first.trim(), last.trim());
+      // finalize signup after email verified code screen
+      if (sessionStorage.getItem('charitap_email_verified') === '1') {
+        await finalizeEmailSignup();
+      }
+      nav('/settings', { replace: true });
+    } catch (error) {
+      alert('Failed to save profile. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const isFormValid = first.trim() && last.trim();
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-yellow-50 to-orange-50 flex items-center justify-center px-4">
@@ -46,18 +103,11 @@ export default function CompleteProfile() {
             />
           </div>
           <RippleButton
-            onClick={async () => {
-              if (!first.trim() || !last.trim()) return;
-              await saveName(first.trim(), last.trim());
-              // finalize signup after email verified code screen
-              if (sessionStorage.getItem('charitap_email_verified') === '1') {
-                await finalizeEmailSignup();
-              }
-              nav('/settings', { replace: true });
-            }}
-            className={`w-full bg-black text-white hover:bg-yellow-300 hover:text-black px-5 py-2.5 rounded-full text-sm font-semibold ${!first.trim() || !last.trim() ? 'opacity-60 cursor-not-allowed' : ''}`}
+            onClick={handleSaveAndContinue}
+            disabled={!isFormValid || isSubmitting}
+            className={`w-full bg-black text-white hover:bg-yellow-300 hover:text-black px-5 py-2.5 rounded-full text-sm font-semibold ${!isFormValid || isSubmitting ? 'opacity-60 cursor-not-allowed' : ''}`}
           >
-            Save and Continue
+            {isSubmitting ? 'Saving...' : 'Save and Continue'}
           </RippleButton>
         </div>
       </div>

@@ -162,26 +162,29 @@ export default function Navigation() {
             </svg>
           </button>
 
-          <nav className="hidden lg:flex lg:items-center lg:justify-center lg:space-x-8 xl:space-x-10" aria-label="Main navigation">
-            {pages.map(({ to, label, preload }) => (
-              <NavLink
-                key={to}
-                to={to}
-                onMouseEnter={preload}
-                onFocus={preload}
-                onClick={e => guard(e, to)}
-                className={({ isActive }) =>
-                  `text-base text-black transition-all duration-200 hover:text-opacity-80 relative group ${isActive ? 'font-bold underline' : ''}`
-                }
-                title={`Go to ${label} page`}
-              >
-                {label}
-                <span className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 bg-black text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap">
+          {/* Only show navigation menu when authenticated */}
+          {isAuthenticated && (
+            <nav className="hidden lg:flex lg:items-center lg:justify-center lg:space-x-8 xl:space-x-10" aria-label="Main navigation">
+              {pages.map(({ to, label, preload }) => (
+                <NavLink
+                  key={to}
+                  to={to}
+                  onMouseEnter={preload}
+                  onFocus={preload}
+                  onClick={e => guard(e, to)}
+                  className={({ isActive }) =>
+                    `text-base text-black transition-all duration-200 hover:text-opacity-80 relative group ${isActive ? 'font-bold underline' : ''}`
+                  }
+                  title={`Go to ${label} page`}
+                >
                   {label}
-                </span>
-              </NavLink>
-            ))}
-          </nav>
+                  <span className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 bg-black text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap">
+                    {label}
+                  </span>
+                </NavLink>
+              ))}
+            </nav>
+          )}
 
           <div className="flex items-center space-x-2 sm:space-x-4">
             {/* Show donation badges when authenticated */}
@@ -230,21 +233,22 @@ export default function Navigation() {
             )}
           </div>
         </div>
-        {/* Mobile menu */}
-        <div className={`lg:hidden ${menuOpen ? 'block' : 'hidden'} transition-all duration-300 ease-in-out`} id="mobile-menu">
-          <nav className="flex flex-col items-center space-y-4 py-6 bg-white shadow-lg rounded-b-2xl mx-4" aria-label="Mobile navigation">
-            {pages.map(({ to, label }) => (
-              <NavLink
-                key={to}
-                to={to}
-                onClick={e => { guard(e, to); setMenuOpen(false); }}
-                className={({ isActive }) =>
-                  `text-base text-black transition-all duration-200 hover:text-opacity-80 px-4 py-2 rounded-lg w-full text-center ${isActive ? 'font-bold bg-yellow-100 text-yellow-800' : 'hover:bg-gray-50'}`
-                }
-              >
-                {label}
-              </NavLink>
-            ))}
+        {/* Mobile menu - only show when authenticated */}
+        {isAuthenticated && (
+          <div className={`lg:hidden ${menuOpen ? 'block' : 'hidden'} transition-all duration-300 ease-in-out`} id="mobile-menu">
+            <nav className="flex flex-col items-center space-y-4 py-6 bg-white shadow-lg rounded-b-2xl mx-4" aria-label="Mobile navigation">
+              {pages.map(({ to, label }) => (
+                <NavLink
+                  key={to}
+                  to={to}
+                  onClick={e => { guard(e, to); setMenuOpen(false); }}
+                  className={({ isActive }) =>
+                    `text-base text-black transition-all duration-200 hover:text-opacity-80 px-4 py-2 rounded-lg w-full text-center ${isActive ? 'font-bold bg-yellow-100 text-yellow-800' : 'hover:bg-gray-50'}`
+                  }
+                >
+                  {label}
+                </NavLink>
+              ))}
             <div className="w-full border-t border-gray-200 pt-4 mt-2">
               {isAuthenticated ? (
                 <button
@@ -264,6 +268,7 @@ export default function Navigation() {
             </div>
           </nav>
         </div>
+        )}
     </header>
   );
 }

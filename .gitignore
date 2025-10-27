@@ -162,3 +162,6 @@ verify-*.js
 fix-*.js
 final-*.js
 
+# Build output
+build/
+

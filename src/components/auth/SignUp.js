@@ -57,16 +57,24 @@ export default function SignUp() {
       return;
     }
 
+    // Validate email format with proper @ and .com validation
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!emailRegex.test(email)) {
+      setError('✉️ Please enter a valid email address (e.g., user@example.com).');
+      return;
+    }
+
     try {
       await signupWithEmail(email, password);
-      nav('/', { replace: true });
+      nav('/complete-profile');
     } catch (err) {
       // Provide user-friendly error messages
       const errorMsg = err.message || 'Failed to sign up';
       if (errorMsg.includes('already exists') || errorMsg.includes('duplicate')) {
-        setError('📧 An account with this email already exists. Please sign in instead.');
+        setError('📧 An account with this email already exists. Redirecting to sign in...');
+        setTimeout(() => nav('/signin'), 2000);
       } else if (errorMsg.includes('invalid email')) {
-        setError('✉️ Please enter a valid email address.');
+        setError('✉️ Please enter a valid email address (e.g., user@example.com).');
       } else if (errorMsg.includes('password')) {
         setError('🔒 Password must meet the requirements. Please try a different password.');
       } else if (errorMsg.includes('network') || errorMsg.includes('fetch')) {

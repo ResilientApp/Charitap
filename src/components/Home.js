@@ -5,7 +5,10 @@ import RippleButton from './RippleButton';
 import useScrollAnimation from '../hooks/useScrollAnimation';
 
 const Home = () => {
-  const { isAuthenticated, displayName } = useAuth();
+  const { isAuthenticated, user } = useAuth();
+  
+  // Get display name from user data (firstName + lastName or displayName)
+  const displayName = user ? (user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : user.displayName || 'User') : 'User';
   
   // Scroll animation refs
   const heroRef = useScrollAnimation(0.3);
@@ -104,8 +107,8 @@ const Home = () => {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
                   </svg>
                 ),
-                title: "Instant Gratification",
-                description: "Feel good immediately knowing you've made a difference with every click."
+                title: "Secure & Trusted",
+                description: "Donations protected through secure transactions and verified charities."
               }
             ].map((feature, index) => (
               <div 

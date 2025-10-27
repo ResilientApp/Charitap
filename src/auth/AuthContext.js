@@ -206,6 +206,8 @@ export function AuthProvider({ children}) {
               id: decoded.sub,
               email: decoded.email,
               fullName: decoded.name || '',
+              firstName: decoded.given_name || '',
+              lastName: decoded.family_name || '',
               picture: decoded.picture || ''
             };
             console.log('AuthContext: Decoded Google info:', googleInfo);
@@ -226,7 +228,9 @@ export function AuthProvider({ children}) {
             googleInfo.id,
             googleInfo.email,
             googleInfo.fullName || googleInfo.email.split('@')[0],
-            googleInfo.picture
+            googleInfo.picture,
+            googleInfo.firstName,
+            googleInfo.lastName
           );
           
           console.log('AuthContext: Backend response:', response);
@@ -236,13 +240,18 @@ export function AuthProvider({ children}) {
           setUser({ 
             id: response.user.id, 
             email: response.user.email, 
+            firstName: response.user.firstName,
+            lastName: response.user.lastName,
             displayName: response.user.displayName,
-            profilePicture: response.user.profilePicture 
+            profilePicture: response.user.profilePicture,
+            authProvider: response.user.authProvider,
+            paymentPreference: response.user.paymentPreference,
+            selectedCharities: response.user.selectedCharities
           });
           setProfile({ 
             email: response.user.email, 
-            firstName: googleInfo.firstName || '', 
-            lastName: googleInfo.lastName || '' 
+            firstName: response.user.firstName || '', 
+            lastName: response.user.lastName || '' 
           });
           setAuthProvider('google');
           setToken(response.token);
@@ -301,6 +310,17 @@ export function AuthProvider({ children}) {
             throw new Error(response.error || 'Failed to save name');
           }
         } catch (error) {
+          // If token is invalid, clear it and redirect to login
+          if (error.message && (error.message.includes('Invalid token') || error.message.includes('Token expired'))) {
+            localStorage.removeItem('charitap_auth');
+            setUser(null);
+            setProfile(null);
+            setAuthProvider(null);
+            setToken(null);
+            setEmailVerified(false);
+            window.location.href = '/signin';
+            return;
+          }
           throw new Error(error.message || 'Failed to update profile');
         } finally {
           setLoading(false);

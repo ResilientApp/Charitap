@@ -61,11 +61,11 @@ export const authAPI = {
   },
 
   // Google OAuth
-  googleAuth: async (googleId, email, displayName, profilePicture) => {
-    console.log('API: Calling Google auth with:', { googleId, email, displayName, profilePicture });
+  googleAuth: async (googleId, email, displayName, profilePicture, firstName, lastName) => {
+    console.log('API: Calling Google auth with:', { googleId, email, displayName, profilePicture, firstName, lastName });
     const result = await apiCall('/api/auth/google', {
       method: 'POST',
-      body: JSON.stringify({ googleId, email, displayName, profilePicture }),
+      body: JSON.stringify({ googleId, email, displayName, profilePicture, firstName, lastName }),
     });
     console.log('API: Google auth response:', result);
     return result;

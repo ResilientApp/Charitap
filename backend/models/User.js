@@ -35,8 +35,6 @@ userSchema.virtual('fullName').get(function() {
   return this.displayName || this.firstName || this.lastName || '';
 });
 
-// Index for faster lookups
-userSchema.index({ googleId: 1 });
-userSchema.index({ email: 1 });
+// Note: Indexes for googleId and email are already created by unique: true in the schema
 
 module.exports = mongoose.model('User', userSchema);

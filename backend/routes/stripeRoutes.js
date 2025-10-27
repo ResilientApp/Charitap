@@ -74,6 +74,40 @@ router.post('/create-customer', authenticateToken, async (req, res) => {
   }
 });
 
+// API to list payment methods (FROM GITHUB - CRITICAL FEATURE)
+router.post('/list-payment-methods', authenticateToken, async (req, res) => {
+  try {
+    // Get stripe customer ID from authenticated user
+    if (!req.user.stripeCustomerId) {
+      return res.json({ paymentMethods: [], defaultPaymentMethod: null });
+    }
+
+    // List payment methods from Stripe
+    const paymentMethods = await stripe.paymentMethods.list({
+      customer: req.user.stripeCustomerId,
+      type: 'card',
+    });
+
+    // Format payment methods for frontend
+    const formattedMethods = paymentMethods.data.map(pm => ({
+      id: pm.id,
+      brand: pm.card.brand,
+      last4: pm.card.last4,
+      expMonth: pm.card.exp_month,
+      expYear: pm.card.exp_year,
+      isDefault: pm.id === req.user.defaultPaymentMethod
+    }));
+
+    res.json({
+      paymentMethods: formattedMethods,
+      defaultPaymentMethod: req.user.defaultPaymentMethod
+    });
+  } catch (error) {
+    console.error('List payment methods error:', error);
+    res.status(500).json({ error: 'Failed to list payment methods' });
+  }
+});
+
 // API to save payment method (FROM GITHUB - CRITICAL FEATURE)
 router.post('/save-payment-method', authenticateToken, async (req, res) => {
   try {
@@ -134,6 +168,74 @@ router.post('/save-payment-method', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Save payment method error:', error);
     res.status(500).json({ error: 'Failed to save payment method' });
+  }
+});
+
+// API to set default payment method
+router.post('/set-default-payment-method', authenticateToken, async (req, res) => {
+  try {
+    const { paymentMethodId } = req.body;
+
+    if (!paymentMethodId) {
+      return res.status(400).json({ error: 'Payment method ID is required' });
+    }
+
+    if (!req.user.stripeCustomerId) {
+      return res.status(400).json({ error: 'No Stripe customer found' });
+    }
+
+    // Set as default payment method
+    await stripe.customers.update(req.user.stripeCustomerId, {
+      invoice_settings: {
+        default_payment_method: paymentMethodId,
+      },
+    });
+
+    // Update user record
+    req.user.defaultPaymentMethod = paymentMethodId;
+    
+    // Get payment method details
+    const paymentMethod = await stripe.paymentMethods.retrieve(paymentMethodId);
+    req.user.paymentMethodLast4 = paymentMethod.card.last4;
+    req.user.paymentMethodBrand = paymentMethod.card.brand;
+    req.user.paymentMethodExpMonth = paymentMethod.card.exp_month;
+    req.user.paymentMethodExpYear = paymentMethod.card.exp_year;
+    
+    await req.user.save();
+
+    res.json({ message: 'Default payment method updated successfully' });
+  } catch (error) {
+    console.error('Set default payment method error:', error);
+    res.status(500).json({ error: 'Failed to set default payment method' });
+  }
+});
+
+// API to detach/remove payment method
+router.post('/detach-payment-method', authenticateToken, async (req, res) => {
+  try {
+    const { paymentMethodId } = req.body;
+
+    if (!paymentMethodId) {
+      return res.status(400).json({ error: 'Payment method ID is required' });
+    }
+
+    // Detach payment method from customer
+    await stripe.paymentMethods.detach(paymentMethodId);
+
+    // If this was the default, clear it from user record
+    if (req.user.defaultPaymentMethod === paymentMethodId) {
+      req.user.defaultPaymentMethod = null;
+      req.user.paymentMethodLast4 = null;
+      req.user.paymentMethodBrand = null;
+      req.user.paymentMethodExpMonth = null;
+      req.user.paymentMethodExpYear = null;
+      await req.user.save();
+    }
+
+    res.json({ message: 'Payment method removed successfully' });
+  } catch (error) {
+    console.error('Detach payment method error:', error);
+    res.status(500).json({ error: 'Failed to remove payment method' });
   }
 });
 

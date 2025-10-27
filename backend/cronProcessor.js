@@ -130,10 +130,13 @@ cron.schedule('0 0 * * *', async () => {
     const users = await User.find();
 
     for (const user of users) {
-      if (user.paymentPreference === 'monthly') {
-        const today = new Date();
-        if (today.getDate() !== 1) continue; // Run monthly jobs only on 1st
-      }
+      // Check if user should be processed today
+      const today = new Date();
+      const shouldProcess = 
+        user.paymentPreference === 'threshold' || // Threshold users: process daily
+        (user.paymentPreference === 'monthly' && today.getDate() === 1); // Monthly users: process only on 1st
+
+      if (!shouldProcess) continue;
 
       await processUserRoundups(user);
     }

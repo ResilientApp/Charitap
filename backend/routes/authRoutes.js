@@ -130,7 +130,7 @@ router.post('/login', async (req, res) => {
 // Google OAuth login/signup
 router.post('/google', async (req, res) => {
   try {
-    const { googleId, email, displayName, profilePicture } = req.body;
+    const { googleId, email, displayName, profilePicture, firstName, lastName } = req.body;
 
     // Validate input
     if (!googleId || !email) {
@@ -146,6 +146,8 @@ router.post('/google', async (req, res) => {
       // Update profile info in case it changed
       user.displayName = displayName || user.displayName;
       user.profilePicture = profilePicture || user.profilePicture;
+      user.firstName = firstName || user.firstName;
+      user.lastName = lastName || user.lastName;
       await user.save();
     } else {
       // Check if email exists with different auth provider
@@ -161,6 +163,8 @@ router.post('/google', async (req, res) => {
       user = new User({
         googleId,
         email,
+        firstName: firstName || '',
+        lastName: lastName || '',
         displayName: displayName || email.split('@')[0],
         profilePicture,
         authProvider: 'google'
@@ -178,9 +182,13 @@ router.post('/google', async (req, res) => {
       user: {
         id: user._id,
         email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
         displayName: user.displayName,
         authProvider: user.authProvider,
-        profilePicture: user.profilePicture
+        profilePicture: user.profilePicture,
+        paymentPreference: user.paymentPreference,
+        selectedCharities: user.selectedCharities
       }
     });
   } catch (error) {

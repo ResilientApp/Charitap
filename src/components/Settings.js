@@ -8,7 +8,7 @@ import {Elements, CardNumberElement, CardExpiryElement, CardCvcElement, useStrip
 import { settingsAPI } from '../services/api';
 import { toast } from 'react-toastify';
 
-const stripePromise = loadStripe(process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY);
+const stripePromise = loadStripe(process.env.REACT_APP_STRIPE_PUBLIC_KEY);
 
 export default function Settings() {
   const { user, profile, email, saveName, changePassword, logout, authProvider, isAuthenticated } = useAuth();
@@ -142,10 +142,23 @@ export default function Settings() {
   };
 
   const handleNameSave = async () => {
-    const finalDisplay = [firstNameEdit, lastNameEdit].filter(Boolean).join(' ').trim();
-    setDisplayName(finalDisplay || 'User');
-    localStorage.setItem('userDisplayName', finalDisplay);
-    await saveName(firstNameEdit, lastNameEdit);
+    try {
+      const finalDisplay = [firstNameEdit, lastNameEdit].filter(Boolean).join(' ').trim();
+      setDisplayName(finalDisplay || 'User');
+      localStorage.setItem('userDisplayName', finalDisplay);
+      await saveName(firstNameEdit, lastNameEdit);
+      
+      // Show success toast
+      toast.success('✅ Name updated successfully!', {
+        position: 'top-right',
+        autoClose: 3000,
+      });
+    } catch (error) {
+      toast.error('Failed to update name. Please try again.', {
+        position: 'top-right',
+        autoClose: 3000,
+      });
+    }
   };
 
   const handlePaymentModeChange = (mode) => {
@@ -482,7 +495,7 @@ export default function Settings() {
                 Toggle them on or off to control your donation preferences.
               </p>
               
-              <div className="h-[420px] overflow-y-auto pr-2 pb-16 space-y-4 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 charities-scroll-container">
+              <div className="h-[420px] overflow-y-auto pr-2 space-y-4 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 charities-scroll-container">
                 {charities.map((charity, index) => (
                   <div 
                     key={charity.id} 
@@ -543,8 +556,6 @@ export default function Settings() {
                     </div>
                   </div>
                 ))}
-                {/* Extra bottom space for last item visibility */}
-              <div className="h-24" />
               </div>
             </div>
           </CollapsibleSection>
@@ -689,12 +700,25 @@ function StripePaymentSection({ userEmail, displayName }) {
 
   const fetchSavedMethods = async () => {
     try {
+      const authData = localStorage.getItem('charitap_auth');
+      if (!authData) {
+        console.log('No auth token found');
+        return;
+      }
+      
+      const parsedAuth = JSON.parse(authData);
+      const token = parsedAuth.token;
+      if (!token) {
+        console.log('No auth token found');
+        return;
+      }
+
       const res = await fetch(`${process.env.REACT_APP_SERVER_URL || 'http://localhost:3001'}/api/stripe/list-payment-methods`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email: userEmail })
+          'Authorization': `Bearer ${token}`
+        }
       });
       
       if (!res.ok) {
@@ -703,7 +727,10 @@ function StripePaymentSection({ userEmail, displayName }) {
       }
       
       const data = await res.json();
-      if (data.paymentMethods) setSavedMethods(data.paymentMethods);
+      if (data.paymentMethods) {
+        setSavedMethods(data.paymentMethods);
+        if (data.defaultPaymentMethod) setDefaultPmId(data.defaultPaymentMethod);
+      }
     } catch (error) {
       console.error('Error fetching payment methods:', error);
       // Silently fail - payment methods may not be set up yet
@@ -731,21 +758,42 @@ function StripePaymentSection({ userEmail, displayName }) {
       return false;
     }
 
-    // Validate email
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!cardholderEmail || !emailRegex.test(cardholderEmail)) {
-      setStatus('❌ Please enter a valid email address');
+    // Validate email (more comprehensive)
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!cardholderEmail || !emailRegex.test(cardholderEmail.trim())) {
+      setStatus('❌ Please enter a valid email address (e.g., user@example.com)');
       return false;
     }
 
     // Validate ZIP (5 digits for US)
     const zipRegex = /^\d{5}$/;
-    if (!cardZip || !zipRegex.test(cardZip)) {
+    if (!cardZip || !zipRegex.test(cardZip.trim())) {
       setStatus('❌ Please enter a valid 5-digit ZIP code');
       return false;
     }
 
     return true;
+  };
+
+  // Real-time validation states
+  const [nameValid, setNameValid] = React.useState(false);
+  const [emailValid, setEmailValid] = React.useState(false);
+  const [zipValid, setZipValid] = React.useState(false);
+
+  // Real-time validation functions
+  const validateName = (value) => {
+    const nameRegex = /^[a-zA-Z\s\-]{2,50}$/;
+    return nameRegex.test(value.trim());
+  };
+
+  const validateEmail = (value) => {
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    return emailRegex.test(value.trim());
+  };
+
+  const validateZip = (value) => {
+    const zipRegex = /^\d{5}$/;
+    return zipRegex.test(value.trim());
   };
 
   const handleAttachCard = async () => {
@@ -780,7 +828,13 @@ function StripePaymentSection({ userEmail, displayName }) {
       }
 
       // Get auth token from localStorage
-      const token = localStorage.getItem('token');
+      const authData = localStorage.getItem('charitap_auth');
+      if (!authData) {
+        throw new Error('Please log in to save payment method');
+      }
+      
+      const parsedAuth = JSON.parse(authData);
+      const token = parsedAuth.token;
       if (!token) {
         throw new Error('Please log in to save payment method');
       }
@@ -804,8 +858,6 @@ function StripePaymentSection({ userEmail, displayName }) {
 
       const result = await response.json();
       
-      setStatus(`✅ Card saved successfully! ${result.paymentMethod.brand.toUpperCase()} •••• ${result.paymentMethod.last4}`);
-      
       // Clear form
       setCardholderName('');
       setCardholderEmail('');
@@ -817,8 +869,8 @@ function StripePaymentSection({ userEmail, displayName }) {
       // Refresh saved methods
       await fetchSavedMethods();
       
-      // Show success toast
-      toast.success('Payment method saved successfully!', {
+      // Show success toast with auto-dismiss
+      toast.success(`✅ Card saved successfully! ${result.paymentMethod.brand.toUpperCase()} •••• ${result.paymentMethod.last4}`, {
         position: 'top-right',
         autoClose: 3000,
       });
@@ -843,52 +895,115 @@ function StripePaymentSection({ userEmail, displayName }) {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Cardholder Name</label>
-              <input
-                type="text"
-                value={cardholderName}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  // Only allow letters, spaces, and hyphens
-                  if (/^[a-zA-Z\s\-]*$/.test(value) || value === '') {
-                    setCardholderName(value);
-                  }
-                }}
-                maxLength={50}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
-                placeholder="John Doe"
-                required
-              />
-              <p className="text-xs text-gray-500 mt-1">Letters, spaces, and hyphens only</p>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={cardholderName}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    // Only allow letters, spaces, and hyphens
+                    if (/^[a-zA-Z\s\-]*$/.test(value) || value === '') {
+                      setCardholderName(value);
+                      setNameValid(validateName(value));
+                    }
+                  }}
+                  maxLength={50}
+                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent ${
+                    cardholderName && !nameValid ? 'border-red-300 bg-red-50' : 
+                    cardholderName && nameValid ? 'border-green-300 bg-green-50' : 
+                    'border-gray-300'
+                  }`}
+                  placeholder="John Doe"
+                  required
+                />
+                {cardholderName && (
+                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                    {nameValid ? (
+                      <span className="text-green-500 text-sm">✓</span>
+                    ) : (
+                      <span className="text-red-500 text-sm">✗</span>
+                    )}
+                  </div>
+                )}
+              </div>
+              <p className={`text-xs mt-1 ${
+                cardholderName && !nameValid ? 'text-red-500' : 'text-gray-500'
+              }`}>
+                {cardholderName && !nameValid ? 'Invalid name format' : 'Letters, spaces, and hyphens only (2-50 characters)'}
+              </p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-              <input
-                type="email"
-                value={cardholderEmail}
-                onChange={(e) => setCardholderEmail(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
-                placeholder="you@example.com"
-                required
-              />
+              <div className="relative">
+                <input
+                  type="email"
+                  value={cardholderEmail}
+                  onChange={(e) => {
+                    setCardholderEmail(e.target.value);
+                    setEmailValid(validateEmail(e.target.value));
+                  }}
+                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent ${
+                    cardholderEmail && !emailValid ? 'border-red-300 bg-red-50' : 
+                    cardholderEmail && emailValid ? 'border-green-300 bg-green-50' : 
+                    'border-gray-300'
+                  }`}
+                  placeholder="you@example.com"
+                  required
+                />
+                {cardholderEmail && (
+                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                    {emailValid ? (
+                      <span className="text-green-500 text-sm">✓</span>
+                    ) : (
+                      <span className="text-red-500 text-sm">✗</span>
+                    )}
+                  </div>
+                )}
+              </div>
+              <p className={`text-xs mt-1 ${
+                cardholderEmail && !emailValid ? 'text-red-500' : 'text-gray-500'
+              }`}>
+                {cardholderEmail && !emailValid ? 'Invalid email format' : 'Valid email address required'}
+              </p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">ZIP / Postal Code</label>
-              <input
-                type="text"
-                value={cardZip}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  // Only allow digits, max 5
-                  if (/^\d*$/.test(value)) {
-                    setCardZip(value);
-                  }
-                }}
-                maxLength={5}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
-                placeholder="12345"
-                required
-              />
-              <p className="text-xs text-gray-500 mt-1">5-digit ZIP code</p>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={cardZip}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    // Only allow digits, max 5
+                    if (/^\d*$/.test(value)) {
+                      setCardZip(value);
+                      setZipValid(validateZip(value));
+                    }
+                  }}
+                  maxLength={5}
+                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent ${
+                    cardZip && !zipValid ? 'border-red-300 bg-red-50' : 
+                    cardZip && zipValid ? 'border-green-300 bg-green-50' : 
+                    'border-gray-300'
+                  }`}
+                  placeholder="12345"
+                  required
+                />
+                {cardZip && (
+                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                    {zipValid ? (
+                      <span className="text-green-500 text-sm">✓</span>
+                    ) : (
+                      <span className="text-red-500 text-sm">✗</span>
+                    )}
+                  </div>
+                )}
+              </div>
+              <p className={`text-xs mt-1 ${
+                cardZip && !zipValid ? 'text-red-500' : 'text-gray-500'
+              }`}>
+                {cardZip && !zipValid ? 'Must be exactly 5 digits' : '5-digit ZIP code'}
+              </p>
             </div>
           </div>
           <div className="p-3 rounded-lg bg-white border border-gray-200">
@@ -945,19 +1060,48 @@ function StripePaymentSection({ userEmail, displayName }) {
           {savedMethods.map((pm) => (
             <div key={pm.id} className="flex items-center justify-between p-3 rounded-lg bg-white border border-gray-200">
               <div className="flex items-center gap-3">
-                <img src={`/card-brands/${pm.card.brand}.svg`} alt={pm.card.brand} className="w-6 h-6" onError={(e)=>{e.currentTarget.style.display='none'}} />
-                <span className="text-sm text-gray-700">{pm.card.brand.toUpperCase()} •••• {pm.card.last4}</span>
-                <span className="text-xs text-gray-500">exp {pm.card.exp_month}/{pm.card.exp_year}</span>
+                <img src={`/card-brands/${pm.brand}.svg`} alt={pm.brand} className="w-6 h-6" onError={(e)=>{e.currentTarget.style.display='none'}} />
+                <span className="text-sm text-gray-700">{pm.brand.toUpperCase()} •••• {pm.last4}</span>
+                <span className="text-xs text-gray-500">exp {pm.expMonth}/{pm.expYear}</span>
+                {pm.isDefault && <span className="text-xs text-green-600 font-semibold ml-2">✓ Default</span>}
               </div>
               <div className="flex items-center gap-2">
                 <RippleButton
                   onClick={async () => {
-                    await fetch(`${process.env.REACT_APP_SERVER_URL || 'http://localhost:3001'}/api/set-default-payment-method`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ email: userEmail, paymentMethodId: pm.id })
-                    });
-                    setDefaultPmId(pm.id);
+                    try {
+                      const authData = localStorage.getItem('charitap_auth');
+                      if (!authData) {
+                        toast.error('Please log in to manage payment methods');
+                        return;
+                      }
+                      
+                      const parsedAuth = JSON.parse(authData);
+                      const token = parsedAuth.token;
+                      if (!token) {
+                        toast.error('Please log in to manage payment methods');
+                        return;
+                      }
+                      
+                      const response = await fetch(`${process.env.REACT_APP_SERVER_URL || 'http://localhost:3001'}/api/stripe/set-default-payment-method`, {
+                        method: 'POST',
+                        headers: { 
+                          'Content-Type': 'application/json',
+                          'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify({ paymentMethodId: pm.id })
+                      });
+                      
+                      if (response.ok) {
+                        setDefaultPmId(pm.id);
+                        toast.success('Default payment method updated');
+                      } else {
+                        const error = await response.json();
+                        toast.error(error.error || 'Failed to update default payment method');
+                      }
+                    } catch (error) {
+                      console.error('Error setting default:', error);
+                      toast.error('Failed to update default payment method');
+                    }
                   }}
                   className={`px-3 py-1.5 rounded-full text-xs font-semibold ${defaultPmId === pm.id ? 'bg-green-200 text-green-900' : 'bg-yellow-400 text-black hover:bg-yellow-500'}`}
                 >
@@ -965,12 +1109,40 @@ function StripePaymentSection({ userEmail, displayName }) {
                 </RippleButton>
                 <RippleButton
                   onClick={async () => {
-                    await fetch(`${process.env.REACT_APP_SERVER_URL || 'http://localhost:3001'}/api/detach-payment-method`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ paymentMethodId: pm.id })
-                    });
-                    await fetchSavedMethods();
+                    try {
+                      const authData = localStorage.getItem('charitap_auth');
+                      if (!authData) {
+                        toast.error('Please log in to manage payment methods');
+                        return;
+                      }
+                      
+                      const parsedAuth = JSON.parse(authData);
+                      const token = parsedAuth.token;
+                      if (!token) {
+                        toast.error('Please log in to manage payment methods');
+                        return;
+                      }
+                      
+                      const response = await fetch(`${process.env.REACT_APP_SERVER_URL || 'http://localhost:3001'}/api/stripe/detach-payment-method`, {
+                        method: 'POST',
+                        headers: { 
+                          'Content-Type': 'application/json',
+                          'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify({ paymentMethodId: pm.id })
+                      });
+                      
+                      if (response.ok) {
+                        await fetchSavedMethods();
+                        toast.success('Payment method removed');
+                      } else {
+                        const error = await response.json();
+                        toast.error(error.error || 'Failed to remove payment method');
+                      }
+                    } catch (error) {
+                      console.error('Error removing payment method:', error);
+                      toast.error('Failed to remove payment method');
+                    }
                   }}
                   className="px-3 py-1.5 rounded-full text-xs font-semibold bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
                 >

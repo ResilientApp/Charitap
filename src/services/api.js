@@ -141,6 +141,19 @@ export const activityAPI = {
   },
 };
 
+// RoundUp APIs
+export const roundUpAPI = {
+  // Get user's roundup history
+  getHistory: async () => {
+    return apiCall('/api/roundup/history');
+  },
+
+  // Get pending roundups
+  getPending: async () => {
+    return apiCall('/api/roundup/pending');
+  },
+};
+
 // Settings APIs
 export const settingsAPI = {
   // Get all charities
@@ -220,6 +233,7 @@ const apiServices = {
   authAPI,
   dashboardAPI,
   activityAPI,
+  roundUpAPI,
   settingsAPI,
   stripeAPI,
 };

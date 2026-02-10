@@ -4,17 +4,21 @@ const router = express.Router();
 const RoundUp = require('../models/RoundUp');
 const Transaction = require('../models/Transaction');
 const { authenticateToken } = require('../middleware/auth');
+const resilientDB = require('../services/resilientdb-client');
+const donationValidator = require('../services/donation-validator');
+const { validateRoundup } = require('../middleware/validation');
+const { cacheMiddleware } = require('../middleware/cache');
 
 // API to create a new RoundUp entry
-router.post('/create-roundup', authenticateToken, async (req, res) => {
+router.post('/create-roundup', authenticateToken, validateRoundup, async (req, res) => {
   try {
     const { purchaseAmount, roundUpAmount } = req.body;
-    
+
     // Validate input data
     if (!purchaseAmount || !roundUpAmount) {
       return res.status(400).json({ error: 'Purchase amount and roundup amount are required' });
     }
-    
+
     // Create a new RoundUp entry with isPaid set to false by default
     // Use authenticated user's email
     const newRoundUp = new RoundUp({
@@ -23,11 +27,66 @@ router.post('/create-roundup', authenticateToken, async (req, res) => {
       roundUpAmount,
       isPaid: false,
     });
-    
+
     await newRoundUp.save();
-    
-    // Return the created RoundUp entry in the response
+
+    // HYBRID APPROACH: KV Ledger + Backend Validation (non-blocking)
+    const blockchainPromise = (async () => {
+      try {
+        // Get user's selected charities for validation
+        const User = require('../models/User');
+        const user = await User.findOne({ email: req.user.email });
+
+        // Prepare donation data for validation
+        const donationData = {
+          amount: roundUpAmount,
+          charities: user?.selectedCharities || []
+        };
+
+        // VALIDATE before writing to blockchain
+        const validationResult = donationValidator.validateDonation(donationData);
+
+        // Write to KV Ledger with validation proof
+        const ledgerKey = resilientDB.generateKey('donation', newRoundUp._id.toString());
+        const ledgerData = {
+          transactionId: newRoundUp._id.toString(),
+          userId: resilientDB.hashSensitiveData(req.user.email),
+          purchaseAmount: parseFloat(purchaseAmount).toFixed(2),
+          roundUpAmount: parseFloat(roundUpAmount).toFixed(2),
+          timestamp: newRoundUp.createdAt.toISOString(),
+          status: 'pending',
+          // NEW: Validation proof
+          validated: validationResult.valid,
+          validationRules: validationResult.appliedRules,
+          charityCount: donationData.charities.length,
+          blockchainVersion: '2.0' // Hybrid with validation
+        };
+
+        const txId = await resilientDB.set(ledgerKey, ledgerData);
+
+        if (txId) {
+          // Update MongoDB with blockchain reference
+          newRoundUp.blockchainTxKey = ledgerKey;
+          newRoundUp.blockchainTxId = txId;
+          newRoundUp.blockchainVerified = true;
+          newRoundUp.blockchainTimestamp = new Date();
+          await newRoundUp.save();
+
+          console.log(`[Charitap] OK Validated & recorded on blockchain: ${txId}`);
+          console.log(`[Charitap] Validation: ${validationResult.appliedRules.join(', ')}`);
+        }
+
+      } catch (blockchainError) {
+        console.error('[Charitap] WARNING  Blockchain write failed (non-critical):', blockchainError.message);
+        // Store error for debugging
+        newRoundUp.blockchainError = blockchainError.message;
+        await newRoundUp.save();
+      }
+    })();
+
+    // Don't wait for blockchain - return response immediately
     res.status(201).json(newRoundUp);
+
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Something went wrong while creating the roundup' });

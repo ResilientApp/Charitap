@@ -5,14 +5,17 @@ import CollapsibleSection from './CollapsibleSection';
 import useScrollAnimation from '../hooks/useScrollAnimation';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement } from 'chart.js';
 import { Bar, Doughnut } from 'react-chartjs-2';
-import { dashboardAPI } from '../services/api';
+import { dashboardAPI, roundUpAPI } from '../services/api';
+import { useCountUp, formatCounterValue } from '../utils/counterAnimation';
+import Confetti from './Confetti';
+import { SkeletonStat, SkeletonCard } from './Skeleton';
 
 // Register Chart.js components
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement);
 
 const Dashboard = () => {
   const { isAuthenticated } = useAuth();
-  
+
   // Scroll animation refs
   const statsRef = useScrollAnimation(0.3);
 
@@ -21,10 +24,31 @@ const Dashboard = () => {
     { label: 'Total Donations', value: '$0.00' },
     { label: 'Last Month', value: '$0.00' },
     { label: 'Charities Supported', value: '0' },
-    { label: 'Collected', value: '$0.00' }
+    { label: 'Wallet Balance', value: '$0.00' },
+    { label: 'Blockchain Secured', value: '0 of 0', sublabel: 'Immutable records' }
   ]);
   const [monthlyData, setMonthlyData] = useState([]);
   const [charityBreakdown, setCharityBreakdown] = useState([]);
+  const [showConfetti, setShowConfetti] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  // Animated counter values
+  const [targetValues, setTargetValues] = useState({
+    totalDonations: 0,
+    lastMonth: 0,
+    charitiesSupported: 0,
+    walletBalance: 0,
+    blockchainSecured: 0,
+    totalTransactions: 0
+  });
+
+  // Animated counter hooks - must be called at top level
+  const animatedTotalDonations = useCountUp(targetValues.totalDonations, 2000);
+  const animatedLastMonth = useCountUp(targetValues.lastMonth, 2000);
+  const animatedCharitiesSupported = useCountUp(targetValues.charitiesSupported, 2000);
+  const animatedWalletBalance = useCountUp(targetValues.walletBalance, 2000);
+  const animatedBlockchainSecured = useCountUp(targetValues.blockchainSecured, 2000);
+  const animatedTotalTransactions = useCountUp(targetValues.totalTransactions, 2000);
 
   // Fetch dashboard data from backend
   useEffect(() => {
@@ -32,54 +56,84 @@ const Dashboard = () => {
       console.log('Dashboard: isAuthenticated =', isAuthenticated);
       if (!isAuthenticated) {
         console.log('Dashboard: Not authenticated, skipping data fetch');
+        setLoading(false);
         return;
       }
-      
+
+      setLoading(true);
       try {
         console.log('Dashboard: Fetching data from backend...');
-        
+
         // Fetch all dashboard metrics in parallel
-        const [totalDonated, collectedThisMonth, uniqueCharities, monthlyDonations, charityBreakdownData] = await Promise.all([
+        const [totalDonated, pendingData, uniqueCharities, monthlyDonations, charityBreakdownData, historyData] = await Promise.all([
           dashboardAPI.getTotalDonated().catch(err => { console.error('getTotalDonated error:', err); return { totalDonated: '0.00', transactionCount: 0 }; }),
-          dashboardAPI.getCollectedThisMonth().catch(err => { console.error('getCollectedThisMonth error:', err); return { collectedThisMonth: '0.00', count: 0 }; }),
+          roundUpAPI.getPending().catch(err => { console.error('getPending error:', err); return { totalAmount: '0.00', count: 0 }; }),
           dashboardAPI.getUniqueCharities().catch(err => { console.error('getUniqueCharities error:', err); return { uniqueCharities: 0 }; }),
           dashboardAPI.getMonthlyDonations().catch(err => { console.error('getMonthlyDonations error:', err); return { monthlyDonations: [] }; }),
-          dashboardAPI.getCharityBreakdown().catch(err => { console.error('getCharityBreakdown error:', err); return { charities: [], totalDonated: 0 }; })
+          dashboardAPI.getCharityBreakdown().catch(err => { console.error('getCharityBreakdown error:', err); return { charities: [], totalDonated: 0 }; }),
+          roundUpAPI.getHistory().catch(err => { console.error('getHistory error:', err); return { roundups: [] }; })
         ]);
 
         console.log('Dashboard: Data received:', {
           totalDonated,
-          collectedThisMonth,
+          pendingData,
           uniqueCharities,
           monthlyDonations,
-          charityBreakdownData
+          charityBreakdownData,
+          historyData
         });
 
         // Update stats
-        // monthlyDonations array is sorted with most recent first (index 0 = current month, index 1 = last month)
         const lastMonthAmount = monthlyDonations.monthlyDonations && monthlyDonations.monthlyDonations.length > 1
-          ? monthlyDonations.monthlyDonations[1].amount || 0  // FIXED: Get second item (last month), not last item
+          ? monthlyDonations.monthlyDonations[1].amount || 0
           : 0;
+
+        // Calculate blockchain stats
+        const totalTransactions = historyData.roundups?.length || 0;
+        const blockchainSecured = historyData.roundups?.filter(r => r.blockchainVerified).length || 0;
 
         const newStats = [
           { label: 'Total Donations', value: `$${parseFloat(totalDonated.totalDonated || 0).toFixed(2)}` },
           { label: 'Last Month', value: `$${parseFloat(lastMonthAmount).toFixed(2)}` },
-          { label: 'Charities Supported', value: String(uniqueCharities.uniqueCharities || 0) }, // FIXED: was uniqueCharitiesCount
-          { label: 'Collected', value: `$${parseFloat(collectedThisMonth.collectedThisMonth || 0).toFixed(2)}` } // FIXED: was totalAmount
+          { label: 'Charities Supported', value: String(uniqueCharities.uniqueCharities || 0) },
+          { label: 'Wallet Balance', value: `$${parseFloat(pendingData.totalAmount || 0).toFixed(2)}` },
+          { label: 'Blockchain Secured', value: `${blockchainSecured} of ${totalTransactions}`, sublabel: 'Immutable records' }
         ];
 
         console.log('Dashboard: Setting stats to:', newStats);
         setStats(newStats);
 
+        // Set target values for animations
+        setTargetValues({
+          totalDonations: parseFloat(totalDonated.totalDonated || 0),
+          lastMonth: parseFloat(lastMonthAmount),
+          charitiesSupported: parseInt(uniqueCharities.uniqueCharities || 0),
+          walletBalance: parseFloat(pendingData.totalAmount || 0),
+          blockchainSecured: parseInt(blockchainSecured),
+          totalTransactions: parseInt(totalTransactions)
+        });
+
+        // Trigger confetti if milestones reached
+        if (parseFloat(totalDonated.totalDonated || 0) >= 50) {
+          setTimeout(() => setShowConfetti(true), 500);
+        }
+
         // Update monthly data
-        setMonthlyData(monthlyDonations.monthlyDonations || []);
-        
+        const monthlyDonationsData = monthlyDonations.monthlyDonations || [];
+        setMonthlyData(monthlyDonationsData);
+        console.log('Dashboard: Monthly data set:', {
+          length: monthlyDonationsData.length,
+          data: monthlyDonationsData
+        });
+
         // Update charity breakdown
         setCharityBreakdown(charityBreakdownData.charities || []); // FIXED: was charityBreakdown
-        
+
         console.log('Dashboard: Data update complete');
+        setLoading(false);
       } catch (error) {
         console.error('Dashboard: Error fetching dashboard data:', error);
+        setLoading(false);
       }
     };
 
@@ -157,6 +211,7 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <Confetti trigger={showConfetti} duration={3000} />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Breadcrumb />
         
@@ -173,20 +228,50 @@ const Dashboard = () => {
         {/* Stats Cards */}
         <div 
           ref={statsRef}
-          className="scroll-animate grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8"
+          className="scroll-animate grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8"
         >
-          {stats.map((stat, index) => (
-            <div 
-              key={index}
-              className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-all duration-300 transform hover:scale-105"
-              style={{ animationDelay: `${index * 0.1}s` }}
-            >
-              <div className="mb-2">
-                <h3 className="text-caption text-gray-600">{stat.label}</h3>
-              </div>
-              <p className="text-3xl font-bold text-gray-900">{stat.value}</p>
-            </div>
-          ))}
+          {loading ? (
+            // Show skeleton loaders while data is loading
+            Array.from({ length: 5 }).map((_, index) => (
+              <SkeletonStat key={index} />
+            ))
+          ) : (
+            stats.map((stat, index) => {
+              // Animated counter value
+              let displayValue = stat.value;
+              if (index === 0) displayValue = formatCounterValue(animatedTotalDonations, 'currency');
+              else if (index === 1) displayValue = formatCounterValue(animatedLastMonth, 'currency');
+              else if (index === 2) displayValue = Math.floor(animatedCharitiesSupported).toString();
+              else if (index === 3) displayValue = formatCounterValue(animatedWalletBalance, 'currency');
+              else if (index === 4) displayValue = `${Math.floor(animatedBlockchainSecured)} of ${Math.floor(animatedTotalTransactions)}`;
+
+              return (
+                <div
+                  key={index}
+                  className={`bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-all duration-300 transform hover:scale-105 ${index === 4 ? 'bg-gradient-to-br from-yellow-50 to-green-50 border-yellow-300' : ''
+                    }`}
+                  style={{ animationDelay: `${index * 0.1}s` }}
+                >
+                  <div className="mb-2">
+                    <h3 className="text-caption text-gray-600">{stat.label}</h3>
+                  </div>
+                  <p className={`text-3xl font-bold ${index === 4 ? 'text-yellow-600' : 'text-gray-900'
+                    }`}>{displayValue}</p>
+                  {stat.sublabel && (
+                    <p className="text-xs text-gray-500 mt-1">{stat.sublabel}</p>
+                  )}
+                  {index === 4 && !stat.value.startsWith('0/0') && stat.value !== '0' && (
+                    <div className="mt-2 inline-flex items-center text-xs font-bold text-green-700">
+                      <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                      </svg>
+                      Verified
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
         </div>
 
         {/* Analytics Content */}
@@ -203,15 +288,33 @@ const Dashboard = () => {
                   </svg>
                 }
               >
-                <div className="p-4">
-                  <div className="h-80 transform transition-all duration-500 hover:scale-[1.02]">
-                    <Bar data={monthlySpendingData} options={barChartOptions} />
-                  </div>
-                  <div className="mt-4 text-center">
-                    <p className="text-sm text-gray-600">
-                      Your donation activity over the past 12 months
-                    </p>
-                  </div>
+                <div className="p-4 md:p-6">
+                  {loading ? (
+                    <SkeletonCard />
+                  ) : monthlyData.length === 0 ? (
+                    <div className="text-center py-12">
+                      <svg className="w-16 h-16 mx-auto text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                      </svg>
+                      <h3 className="text-lg font-semibold text-gray-700 mb-2">No Donation Data Yet</h3>
+                      <p className="text-gray-500 mb-4">Start making donations to see your monthly trends!</p>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
+                        <div className="min-w-[500px] md:min-w-0">
+                          <div className="h-64 md:h-80 transform transition-all duration-500 hover:scale-[1.02]">
+                            <Bar data={monthlySpendingData} options={barChartOptions} />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="mt-4 text-center">
+                        <p className="text-sm text-gray-600">
+                          Your donation activity over the past 12 months
+                        </p>
+                      </div>
+                    </>
+                  )}
                 </div>
               </CollapsibleSection>
 
@@ -225,18 +328,24 @@ const Dashboard = () => {
                   </svg>
                 }
               >
-                <div className="p-4">
-                  {charityBreakdown.length > 0 ? (
-                    <div className="grid md:grid-cols-2 gap-8">
-                      <div className="h-80 transform transition-all duration-500 hover:scale-[1.02]">
-                        <Doughnut data={charitiesSupportedData} options={chartOptions} />
+                <div className="p-4 md:p-6">
+                  {loading || charityBreakdown.length === 0 ? (
+                    <SkeletonCard />
+                  ) : charityBreakdown && charityBreakdown.length > 0 ? (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
+                        <div className="min-w-[300px] md:min-w-0">
+                          <div className="h-64 md:h-80">
+                            <Doughnut data={charitiesSupportedData} options={chartOptions} />
+                          </div>
+                        </div>
                       </div>
-                      <div className="flex flex-col justify-center space-y-4">
+                      <div className="flex flex-col justify-center space-y-3 md:space-y-4">
                         <h4 className="text-lg font-semibold text-gray-900 mb-4">Donation Distribution</h4>
                         {charitiesSupportedData.labels.map((label, index) => (
                           <div key={index} className="flex items-center justify-between transform transition-all duration-300 hover:scale-105">
                             <div className="flex items-center space-x-3">
-                              <div 
+                              <div
                                 className="w-4 h-4 rounded-full"
                                 style={{ backgroundColor: charitiesSupportedData.datasets[0].backgroundColor[index] }}
                               ></div>

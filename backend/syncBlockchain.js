@@ -63,8 +63,14 @@ async function syncToBlockchain() {
           transaction.blockchainTxId = txId;
           transaction.blockchainVerified = true;
           transaction.blockchainTimestamp = new Date();
-          await transaction.save();
-          console.log(`  ✅ Synced: TX ID ${txId}`);
+          
+          // Save with error handling
+          try {
+            await transaction.save();
+            console.log(`  ✅ Synced: TX ID ${txId}`);
+          } catch (saveError) {
+            console.error(`  ❌ Failed to save to MongoDB: ${saveError.message}`);
+          }
         } else {
           console.log(`  ⚠️  Blockchain returned null (may be silently failing)`);
         }

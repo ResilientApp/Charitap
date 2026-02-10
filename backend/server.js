@@ -19,7 +19,11 @@ mongoose.connect(process.env.MONGODB_URI)
 app.use(cors());
 app.use(express.json());
 
-// Stripe setup
+// Geo-blocking middleware - US only
+const geoBlock = require('./middleware/geoblock');
+app.use(geoBlock);
+
+// Stripe setup - USD only
 const stripe = stripeLib(process.env.STRIPE_SECRET_KEY);
 
 // Import routes - make sure the paths are correct

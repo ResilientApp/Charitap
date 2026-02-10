@@ -456,4 +456,78 @@ router.get('/dashboard/blockchain-stats', authenticateToken, async (req, res) =>
   }
 });
 
+// NEW: Verify a transaction on the blockchain
+router.get('/verify-blockchain/:transactionId', authenticateToken, async (req, res) => {
+  try {
+    const { transactionId } = req.params;
+
+    console.log(`[Charitap] Verifying blockchain transaction: ${transactionId}`);
+
+    // First check if transaction exists in database
+    const transaction = await Transaction.findOne({
+      _id: transactionId,
+      userEmail: req.user.email
+    });
+
+    if (!transaction) {
+      return res.status(404).json({ 
+        error: 'Transaction not found',
+        verified: false
+      });
+    }
+
+    // Check if we have blockchain reference
+    if (!transaction.blockchainTxId) {
+      return res.status(200).json({
+        verified: false,
+        reason: 'Transaction not yet on blockchain',
+        transaction: {
+          id: transaction._id,
+          amount: transaction.amount,
+          createdAt: transaction.createdAt
+        }
+      });
+    }
+
+    // Verify on blockchain using GET method
+    const isVerified = await resilientDB.verify(transaction.blockchainTxId);
+
+    if (isVerified) {
+      // Optionally get full transaction data
+      const blockchainData = await resilientDB.get(transaction.blockchainTxId);
+
+      return res.status(200).json({
+        verified: true,
+        blockchainTxId: transaction.blockchainTxId,
+        blockchainTxKey: transaction.blockchainTxKey,
+        transaction: {
+          id: transaction._id,
+          amount: transaction.amount,
+          createdAt: transaction.createdAt,
+          blockchainTimestamp: transaction.blockchainTimestamp
+        },
+        blockchainData: blockchainData
+      });
+    } else {
+      return res.status(200).json({
+        verified: false,
+        reason: 'Transaction not found on blockchain',
+        blockchainTxId: transaction.blockchainTxId,
+        transaction: {
+          id: transaction._id,
+          amount: transaction.amount,
+          createdAt: transaction.createdAt
+        }
+      });
+    }
+
+  } catch (error) {
+    console.error('[Charitap] Blockchain verification error:', error);
+    res.status(500).json({ 
+      error: 'Error verifying blockchain transaction',
+      details: error.message
+    });
+  }
+});
+
 module.exports = router;

@@ -64,8 +64,8 @@ chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => 
     });
   }
 
-// Indicate asynchronous response
-return true;
+  // Indicate asynchronous response
+  return true;
 });
 
 // Listen for internal messages from content scripts
@@ -86,7 +86,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
     
     // Call backend API to create roundup
-    const API_BASE_URL = 'https://charitap-backend.onrender.com/api';
+    const API_BASE_URL = 'http://localhost:3001/api';
     
     fetch(`${API_BASE_URL}/roundup/create-roundup`, {
       method: 'POST',

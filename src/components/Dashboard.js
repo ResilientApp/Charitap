@@ -7,7 +7,7 @@ import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Toolti
 import { Bar, Doughnut } from 'react-chartjs-2';
 import { dashboardAPI, roundUpAPI } from '../services/api';
 import { useCountUp, formatCounterValue } from '../utils/counterAnimation';
-import Confetti from './Confetti';
+// Confetti removed - only shown in extension popup
 import { SkeletonStat, SkeletonCard } from './Skeleton';
 
 // Register Chart.js components
@@ -29,7 +29,7 @@ const Dashboard = () => {
   ]);
   const [monthlyData, setMonthlyData] = useState([]);
   const [charityBreakdown, setCharityBreakdown] = useState([]);
-  const [showConfetti, setShowConfetti] = useState(false);
+  // Confetti state removed - only in extension
   const [loading, setLoading] = useState(true);
 
   // Animated counter values
@@ -124,10 +124,7 @@ const Dashboard = () => {
           totalTransactions: parseInt(totalTransactions)
         });
 
-        // Trigger confetti if milestones reached
-        if (parseFloat(totalDonated.totalDonated || 0) >= 50) {
-          setTimeout(() => setShowConfetti(true), 500);
-        }
+        // Confetti removed - only shown in extension popup
 
         // Update monthly data
         const monthlyDonationsData = monthlyDonations.monthlyDonations || [];
@@ -245,7 +242,7 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Confetti trigger={showConfetti} duration={3000} />
+      {/* Confetti removed - only shown in extension popup */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Breadcrumb />
         

@@ -3,6 +3,16 @@
 // Universal E-Commerce Checkout Detection & Donation Widget
 // ===================================================================
 
+// Don't run on Charitap's own website
+const currentUrl = window.location.href;
+if (currentUrl.includes('localhost:3000') || 
+    currentUrl.includes('127.0.0.1:3000') ||
+    (window.location.hostname === 'localhost' && window.location.port === '3000')) {
+  console.log('[Charitap] Skipping - running on Charitap website');
+  // Exit script completely
+  throw new Error('[Charitap] Script should not run on Charitap website');
+}
+
 console.log('[Charitap] Content script loaded');
 
 // Global variables
@@ -20,6 +30,11 @@ const DECLINE_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour
 // ===================================================================
 
 async function hasDeclinedRecently() {
+  // Check if session storage is available
+  if (!chrome.storage || !chrome.storage.session) {
+    return false; // Silently skip if not available
+  }
+  
   try {
     const result = await chrome.storage.session.get(['lastDeclineTimestamp']);
     const lastDecline = result.lastDeclineTimestamp;
@@ -27,17 +42,22 @@ async function hasDeclinedRecently() {
     const timeSinceDecline = Date.now() - lastDecline;
     return timeSinceDecline < DECLINE_COOLDOWN_MS;
   } catch (error) {
-    console.error('[Charitap] Error checking decline status:', error);
+    // Silently handle - decline tracking is non-critical
     return false;
   }
 }
 
 async function recordDecline() {
+  // Check if session storage is available
+  if (!chrome.storage || !chrome.storage.session) {
+    return; // Silently skip if not available
+  }
+  
   try {
     await chrome.storage.session.set({ lastDeclineTimestamp: Date.now() });
     console.log('[Charitap] Decline recorded - 1 hour cooldown started');
   } catch (error) {
-    console.error('[Charitap] Error recording decline:', error);
+    // Silently handle - decline tracking is non-critical
   }
 }
 
@@ -255,7 +275,7 @@ function showWidget() {
   const roundUpAmount = Math.ceil(total) - total;
   console.log('[Charitap] Round up amount:', roundUpAmount.toFixed(2));
   
-  // Create widget
+  // Create widget (USD only - US market)
   createWidget(roundUpAmount);
 }
 
@@ -286,11 +306,12 @@ function createWidget(roundUpAmount) {
   `;
   
   // Add charity icon
-  const icon = document.createElement('span');
+  const icon = document.createElement('img');
   icon.className = 'charitap-icon';
-  icon.innerHTML = '❤️';
+  icon.src = chrome.runtime.getURL('icons/icon128.png');
   icon.style.cssText = `
-    font-size: 30px;
+    width: 32px;
+    height: 32px;
     filter: drop-shadow(0 2px 6px rgba(0,0,0,0.15));
     transition: all 0.3s ease;
     animation: heartbeat 2s ease-in-out infinite;
@@ -827,3 +848,4 @@ function removeWidget() {
     console.log('[Charitap] Widget removed');
   }
 }
+

@@ -67,4 +67,86 @@ chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => 
 // Indicate asynchronous response
 return true;
 });
+
+// Listen for internal messages from content scripts
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  console.log('Service Worker: Received internal message:', message);
+  
+  if (message.action === 'createRoundUp') {
+    // Extract data from message
+    const { userEmail, amount, merchantName } = message.data;
+    
+    console.log(`Service Worker: Creating roundup for ${userEmail}, amount: $${amount}`);
+    
+    // Check if we have a token
+    if (!currentUserToken) {
+      console.error('Service Worker: No auth token available');
+      sendResponse({ success: false, error: 'Not authenticated' });
+      return true;
+    }
+    
+    // Call backend API to create roundup
+    const API_BASE_URL = 'https://charitap-backend.onrender.com/api';
+    
+    fetch(`${API_BASE_URL}/roundup/create-roundup`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${currentUserToken}`
+      },
+      body: JSON.stringify({
+        purchaseAmount: amount,
+        roundUpAmount: amount,
+        merchantName: merchantName || 'Unknown Merchant'
+      })
+    })
+    .then(response => response.json())
+    .then(data => {
+      console.log('Service Worker: Roundup created successfully:', data);
+      
+      // Broadcast wallet update to all tabs
+      chrome.tabs.query({}, (tabs) => {
+        tabs.forEach(tab => {
+          chrome.tabs.sendMessage(tab.id, {
+            type: 'CHARITAP_WALLET_UPDATE'
+          }).catch(() => {}); // Ignore errors for tabs that don't have content script
+        });
+      });
+      
+      sendResponse({ success: true, data: data });
+    })
+    .catch(error => {
+      console.error('Service Worker: Error creating roundup:', error);
+      sendResponse({ success: false, error: error.message });
+    });
+    
+    // Return true to indicate async response
+    return true;
+  }
+  
+  if (message.action === 'walletUpdated') {
+    console.log('Service Worker: Wallet updated, broadcasting to tabs');
+    
+    // Broadcast to all tabs including the website
+    chrome.tabs.query({}, (tabs) => {
+      tabs.forEach(tab => {
+        // Send to content scripts
+        chrome.tabs.sendMessage(tab.id, {
+          type: 'CHARITAP_WALLET_UPDATE'
+        }).catch(() => {});
+        
+        // Also try to send to the page directly via postMessage
+        chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          func: () => {
+            window.postMessage({ type: 'CHARITAP_WALLET_UPDATE' }, '*');
+          }
+        }).catch(() => {});
+      });
+    });
+    
+    sendResponse({ success: true });
+    return true;
+  }
+});
   

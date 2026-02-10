@@ -165,13 +165,22 @@ const Dashboard = () => {
     };
   }, [isAuthenticated]);
 
-  // Chart data - dynamically generated from backend data
+  // Chart data - dynamically generated from backend data (YTD only)
+  const currentYear = new Date().getFullYear();
+  const ytdMonthlyData = monthlyData.filter(m => !m.year || m.year === currentYear);
+  
   const monthlySpendingData = {
-    labels: monthlyData.map(m => m.month?.substring(0, 3) || 'N/A'),
+    labels: ytdMonthlyData.map(m => {
+      // If month has year property, show "Month Year", otherwise just month name
+      if (m.year) {
+        return `${m.month} ${m.year}`;
+      }
+      return m.month?.substring(0, 3) || 'N/A';
+    }),
     datasets: [
       {
         label: 'Monthly Donations',
-        data: monthlyData.map(m => parseFloat(m.amount || 0)),
+        data: ytdMonthlyData.map(m => parseFloat(m.amount || 0)),
         backgroundColor: 'rgba(251, 191, 36, 0.8)',
         borderColor: 'rgba(251, 191, 36, 1)',
         borderWidth: 2,

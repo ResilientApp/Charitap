@@ -388,10 +388,11 @@ function expandWidget(button, roundUpAmount) {
     }
     
     // Icon
-    const iconDiv = document.createElement('div');
-    iconDiv.innerHTML = '❤️';
+    const iconDiv = document.createElement('img');
+    iconDiv.src = chrome.runtime.getURL('icons/icon128.png');
     iconDiv.style.cssText = `
-      font-size: 36px;
+      width: 40px;
+      height: 40px;
       filter: drop-shadow(0 2px 6px rgba(98, 111, 71, 0.25));
       cursor: pointer;
       transition: transform 0.2s ease;
@@ -490,11 +491,12 @@ function collapseWidget(button) {
     // Restore icon
     setTimeout(() => {
       button.innerHTML = '';
-      const icon = document.createElement('span');
+      const icon = document.createElement('img');
       icon.className = 'charitap-icon';
-      icon.innerHTML = '❤️';
+      icon.src = chrome.runtime.getURL('icons/icon128.png');
       icon.style.cssText = `
-        font-size: 28px;
+        width: 32px;
+        height: 32px;
         filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
       `;
       button.appendChild(icon);

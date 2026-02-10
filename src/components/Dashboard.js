@@ -329,7 +329,7 @@ const Dashboard = () => {
                 }
               >
                 <div className="p-4 md:p-6">
-                  {loading || charityBreakdown.length === 0 ? (
+                  {loading ? (
                     <SkeletonCard />
                   ) : charityBreakdown && charityBreakdown.length > 0 ? (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

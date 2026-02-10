@@ -1,11 +1,17 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import HeroGrid from './HeroGrid';
 import RippleButton from './RippleButton';
 import useScrollAnimation from '../hooks/useScrollAnimation';
+import { motion } from 'framer-motion';
+import { loadStripe } from '@stripe/stripe-js';
+
+const stripePromise = loadStripe(process.env.REACT_APP_STRIPE_PUBLIC_KEY);
 
 const Home = () => {
   const { isAuthenticated, user } = useAuth();
+  const [paymentRequest, setPaymentRequest] = useState(null);
+  const [canMakePayment, setCanMakePayment] = useState(false);
   
   // Get display name from user data (firstName + lastName or displayName)
   const displayName = user ? (user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : user.displayName || 'User') : 'User';
@@ -16,72 +22,191 @@ const Home = () => {
   const howItWorksRef = useScrollAnimation(0.2);
   const ctaRef = useScrollAnimation(0.3);
 
+  // Initialize Apple Pay / Google Pay
+  useEffect(() => {
+    const initializePaymentRequest = async () => {
+      const stripe = await stripePromise;
+      if (!stripe) return;
+
+      const pr = stripe.paymentRequest({
+        country: 'US',
+        currency: 'usd',
+        total: {
+          label: 'Quick Donation',
+          amount: 500, // $5.00 minimum
+        },
+        requestPayerName: true,
+        requestPayerEmail: true,
+      });
+
+      // Check if browser supports Apple Pay / Google Pay
+      pr.canMakePayment().then(result => {
+        if (result) {
+          setPaymentRequest(pr);
+          setCanMakePayment(true);
+        }
+      });
+
+      // Handle payment method event
+      pr.on('paymentmethod', async (ev) => {
+        try {
+          // Send payment method to backend
+          const response = await fetch(`${process.env.REACT_APP_SERVER_URL || 'http://localhost:3001'}/api/stripe/save-payment-method`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${localStorage.getItem('charitap_auth') ? JSON.parse(localStorage.getItem('charitap_auth')).token : ''}`
+            },
+            body: JSON.stringify({
+            })
+          });
+
+          const data = await response.json();
+
+          if (data.success) {
+            ev.complete('success');
+            const pmType = data.paymentMethod?.type === 'apple_pay' ? 'Apple Pay' : data.paymentMethod?.type === 'google_pay' ? 'Google Pay' : 'Payment Method';
+            alert(`✅ ${pmType} saved!\n\nAutomatic donations enabled:\n• Monthly on the 1st\n• OR when roundups reach $25\n\nManage in Settings.`);
+            window.location.reload();
+          } else {
+            ev.complete('fail');
+            alert('Payment failed. Please try again.');
+          }
+        } catch (error) {
+          console.error('Payment error:', error);
+          ev.complete('fail');
+        }
+      });
+    };
+
+    if (isAuthenticated) {
+      initializePaymentRequest();
+    }
+  }, [isAuthenticated]);
+
   const handleLogin = () => {
     window.location.href = '/signin';
+  };
+
+  // Feature card animation variants
+  const cardVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: (i) => ({
+      opacity: 1,
+      y: 0,
+      transition: {
+        delay: i * 0.1,
+        duration: 0.5,
+        ease: "easeOut"
+      }
+    })
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-yellow-50 via-orange-50 to-red-50">
       {/* Hero Section */}
-      <section 
+      <motion.section
         ref={heroRef}
-        className="scroll-animate relative overflow-hidden py-20 px-4 sm:px-6 lg:px-8"
+        className="scroll-animate relative overflow-hidden py-24 sm:py-28 lg:py-32 px-4 sm:px-6 lg:px-8"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.6 }}
       >
-        {/* Parallax background */}
-        <div className="pointer-events-none absolute inset-0 -z-10" aria-hidden="true" style={{ background: 'radial-gradient(1200px 600px at 50% -200px, rgba(253,230,138,0.35), transparent)', transform: 'translateZ(0)' }} />
+        {/* Parallax background - pushed further down */}
+        <div className="pointer-events-none absolute inset-0 -z-10" aria-hidden="true" style={{ background: 'radial-gradient(1200px 600px at 50% -150px, rgba(253,230,138,0.35), transparent)', transform: 'translateZ(0)' }} />
         <div className="max-w-7xl mx-auto">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
+          <div className="grid lg:grid-cols-2 gap-16 lg:gap-20 items-center">
             {/* Left side - Text content */}
-            <div className="text-center lg:text-left">
-              <h1 className="text-display text-gray-900 mb-6">
+            <motion.div
+              className="text-center lg:text-left relative z-20 mb-8 lg:mb-0"
+              initial={{ x: -50, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              transition={{ delay: 0.2, duration: 0.6 }}
+            >
+              <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-gray-900 mb-6">
                 Make a Difference
                 <span className="block text-yellow-600">One Click at a Time</span>
               </h1>
-              <p className="text-body text-gray-700 mb-8 max-w-2xl lg:max-w-none">
-                Join thousands of people making micro-donations to causes that matter. 
+              <p className="text-base md:text-lg text-gray-700 mb-8 max-w-2xl lg:max-w-none">
+                Join thousands of people making micro-donations to causes that matter.
                 Every penny counts, every click makes a difference.
               </p>
-              <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start items-center">
+              <div className="flex flex-col sm:flex-row gap-3 md:gap-4 justify-center lg:justify-start items-stretch sm:items-center relative z-30">
                 <RippleButton
                   onClick={() => window.open('https://chrome.google.com', '_blank')}
-                  className="bg-yellow-400 hover:bg-yellow-500 text-black px-8 py-4 rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
+                  className="bg-yellow-400 hover:bg-yellow-500 text-black px-8 py-4 rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl transition-all duration-300 relative z-30"
                 >
                   Add to Chrome
                 </RippleButton>
+
+                {/* Payment Buttons - Show for authenticated users */}
+                {isAuthenticated && (
+                  <>
+                    {/* Apple Pay / Google Pay Button (mobile/Safari) */}
+                    {canMakePayment && paymentRequest && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ delay: 0.4, duration: 0.3 }}
+                      >
+                        <button
+                          onClick={() => paymentRequest.show()}
+                          className="bg-black hover:bg-gray-800 text-white px-8 py-4 rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl transition-all duration-300 flex items-center gap-2"
+                        >
+                          <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
+                          </svg>
+                          Setup Payment Method
+                        </button>
+                      </motion.div>
+                    )}
+                  </>
+                )}
               </div>
               {!isAuthenticated && (
                 <p className="text-caption mt-4">
                   Already have an account? <button onClick={handleLogin} className="text-yellow-600 hover:text-yellow-700 font-medium">Log in</button>
                 </p>
               )}
-            </div>
+            </motion.div>
             
             {/* Right side - HeroGrid */}
-            <div className="flex justify-center lg:justify-end">
-              <div className="w-full max-w-md h-96">
+            <motion.div
+              className="flex justify-center lg:justify-end relative"
+              initial={{ x: 50, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              transition={{ delay: 0.4, duration: 0.6 }}
+            >
+              <div className="w-full max-w-md h-96 relative z-10">
                 <HeroGrid />
               </div>
-            </div>
+            </motion.div>
           </div>
         </div>
-      </section>
+      </motion.section>
 
-      {/* Features Section */}
-      <section 
+      {/* Features Section - Enhanced with Motion */}
+      <section
         ref={featuresRef}
         className="scroll-animate py-20 px-4 sm:px-6 lg:px-8 bg-white"
       >
         <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16">
+          <motion.div
+            className="text-center mb-16"
+            initial={{ opacity: 0, y: -20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+          >
             <h2 className="text-headline text-gray-900 mb-4">
               Why Choose Charitap?
             </h2>
             <p className="text-body text-gray-600 max-w-2xl mx-auto">
               We make giving effortless and impactful with our innovative micro-donation platform.
             </p>
-          </div>
+          </motion.div>
           
-          <div className="grid md:grid-cols-3 gap-8">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
             {[
               {
                 icon: (
@@ -109,19 +234,33 @@ const Home = () => {
                 ),
                 title: "Secure & Trusted",
                 description: "Donations protected through secure transactions and verified charities."
+              },
+              {
+                icon: (
+                  <svg className="w-12 h-12 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                  </svg>
+                ),
+                title: "Blockchain Verified",
+                description: "Every donation permanently recorded on ResilientDB blockchain for immutable transparency."
               }
             ].map((feature, index) => (
-              <div 
+              <motion.div
                 key={index}
-                className="text-center p-8 rounded-2xl bg-gradient-to-br from-yellow-50 to-orange-50 hover:shadow-lg transition-all duration-500 transform hover:scale-105"
-                style={{ animationDelay: `${index * 0.2}s` }}
+                custom={index}
+                variants={cardVariants}
+                initial="hidden"
+                whileInView="visible"
+                viewport={{ once: true }}
+                whileHover={{ scale: 1.05, y: -5 }}
+                className="text-center p-8 rounded-2xl bg-gradient-to-br from-yellow-50 to-orange-50 shadow-md hover:shadow-xl transition-shadow duration-300 cursor-pointer"
               >
-                <div className="inline-flex items-center justify-center w-16 h-16 bg-white rounded-full shadow-md mb-6 transition-all duration-300 hover:shadow-lg hover:scale-110">
+                <div className="inline-flex items-center justify-center w-16 h-16 bg-white rounded-full shadow-md mb-6">
                   {feature.icon}
                 </div>
-                <h3 className="text-title text-gray-900 mb-4 transition-colors duration-300 hover:text-yellow-600">{feature.title}</h3>
-                <p className="text-body text-gray-600 transition-colors duration-300 hover:text-gray-700">{feature.description}</p>
-              </div>
+                <h3 className="text-title text-gray-900 mb-4">{feature.title}</h3>
+                <p className="text-body text-gray-600">{feature.description}</p>
+              </motion.div>
             ))}
           </div>
         </div>
@@ -229,39 +368,45 @@ const Home = () => {
         ref={ctaRef}
         className="scroll-animate py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-r from-yellow-400 to-orange-500"
       >
-        <div className="max-w-4xl mx-auto text-center">
-              {isAuthenticated ? (
+        <motion.div
+          className="max-w-4xl mx-auto text-center"
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6 }}
+        >
+          {isAuthenticated ? (
             <>
-              <h2 className="text-headline text-white mb-6 transition-all duration-300 hover:scale-105">
+              <h2 className="text-headline text-white mb-6">
                 Welcome back, {displayName || 'User'}! 👋
               </h2>
-              <p className="text-body text-yellow-100 mb-8 transition-colors duration-300 hover:text-white">
+              <p className="text-body text-yellow-100 mb-8">
                 Ready to continue making a difference? Check your dashboard to see your impact.
               </p>
               <RippleButton
                 onClick={() => window.location.href = '/dashboard'}
-                className="bg-white text-yellow-600 px-8 py-4 rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl transition-all duration-500 transform hover:scale-110"
+                className="bg-white text-yellow-600 px-8 py-4 rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl"
               >
                 Go to Dashboard
               </RippleButton>
             </>
           ) : (
             <>
-              <h2 className="text-headline text-white mb-6 transition-all duration-300 hover:scale-105">
+              <h2 className="text-headline text-white mb-6">
                 Ready to Start Making a Difference?
               </h2>
-              <p className="text-body text-yellow-100 mb-8 transition-colors duration-300 hover:text-white">
+              <p className="text-body text-yellow-100 mb-8">
                 Join thousands of people who are already making micro-donations and creating real change.
               </p>
-               <RippleButton
-                  onClick={() => window.location.href = '/signup'}
-                  className="bg-white text-yellow-600 px-8 py-4 rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl transition-all duration-500 transform hover:scale-110"
-                >
-                  Join Now
-                </RippleButton>
+              <RippleButton
+                onClick={() => window.location.href = '/signup'}
+                className="bg-white text-yellow-600 px-8 py-4 rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl"
+              >
+                Join Now
+              </RippleButton>
             </>
           )}
-        </div>
+        </motion.div>
       </section>
     </div>
   );

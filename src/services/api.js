@@ -126,6 +126,11 @@ export const dashboardAPI = {
   getCharityBreakdown: async () => {
     return apiCall('/api/roundup/dashboard/charity-breakdown');
   },
+  
+  // Get blockchain security stats
+  getBlockchainStats: async () => {
+    return apiCall('/api/roundup/dashboard/blockchain-stats');
+  },
 };
 
 // Activity APIs

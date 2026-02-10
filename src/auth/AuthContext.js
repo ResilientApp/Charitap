@@ -14,17 +14,18 @@ export function AuthProvider({ children}) {
   const [token, setToken] = useState(null);
 
   // Function to update user state from API response
-  const updateUserState = (userData, token) => {
+  const updateUserState = (userData, tokenParam) => {
     if (userData) {
       const { id, email, displayName, firstName, lastName, profilePicture, authProvider, paymentPreference, selectedCharities } = userData;
       const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000; // 7 days expiration
-      const storedData = { id, email, displayName, firstName, lastName, profilePicture, authProvider, paymentPreference, selectedCharities, token, expiresAt };
+      const storedData = { id, email, displayName, firstName, lastName, profilePicture, authProvider, paymentPreference, selectedCharities, token: tokenParam, expiresAt };
       localStorage.setItem('charitap_auth', JSON.stringify(storedData));
 
       setUser({ id, email, displayName, firstName, lastName, profilePicture, authProvider, paymentPreference, selectedCharities });
       setProfile({ email, firstName, lastName });
       setAuthProvider(authProvider);
       setEmailVerified(true);
+      setToken(tokenParam);
     } else {
       localStorage.removeItem('charitap_auth');
       setUser(null);

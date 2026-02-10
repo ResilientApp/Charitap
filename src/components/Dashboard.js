@@ -65,13 +65,13 @@ const Dashboard = () => {
         console.log('Dashboard: Fetching data from backend...');
 
         // Fetch all dashboard metrics in parallel
-        const [totalDonated, pendingData, uniqueCharities, monthlyDonations, charityBreakdownData, historyData] = await Promise.all([
+        const [totalDonated, pendingData, uniqueCharities, monthlyDonations, charityBreakdownData, blockchainStats] = await Promise.all([
           dashboardAPI.getTotalDonated().catch(err => { console.error('getTotalDonated error:', err); return { totalDonated: '0.00', transactionCount: 0 }; }),
           roundUpAPI.getPending().catch(err => { console.error('getPending error:', err); return { totalAmount: '0.00', count: 0 }; }),
           dashboardAPI.getUniqueCharities().catch(err => { console.error('getUniqueCharities error:', err); return { uniqueCharities: 0 }; }),
           dashboardAPI.getMonthlyDonations().catch(err => { console.error('getMonthlyDonations error:', err); return { monthlyDonations: [] }; }),
           dashboardAPI.getCharityBreakdown().catch(err => { console.error('getCharityBreakdown error:', err); return { charities: [], totalDonated: 0 }; }),
-          roundUpAPI.getHistory().catch(err => { console.error('getHistory error:', err); return { roundups: [] }; })
+          dashboardAPI.getBlockchainStats().catch(err => { console.error('getBlockchainStats error:', err); return { totalTransactions: 0, blockchainSecured: 0 }; })
         ]);
 
         console.log('Dashboard: Data received:', {
@@ -80,17 +80,28 @@ const Dashboard = () => {
           uniqueCharities,
           monthlyDonations,
           charityBreakdownData,
-          historyData
+          blockchainStats
         });
 
-        // Update stats
-        const lastMonthAmount = monthlyDonations.monthlyDonations && monthlyDonations.monthlyDonations.length > 1
-          ? monthlyDonations.monthlyDonations[1].amount || 0
-          : 0;
+        // Calculate Last Month amount - get previous month's donations
+        const now = new Date();
+        const currentMonth = now.getMonth(); // 0-indexed
+        const currentYear = now.getFullYear();
+        
+        // For February 2026, last month would be January 2026 (month index 0)
+        let lastMonthAmount = 0;
+        if (monthlyDonations.monthlyDonations && monthlyDonations.monthlyDonations.length > 0) {
+          // Find previous month's data
+          const lastMonthData = monthlyDonations.monthlyDonations.find(m => {
+            // Current month is February (1), so last month is January (0)
+            return m.monthNumber === currentMonth; // Previous month
+          });
+          lastMonthAmount = lastMonthData?.amount || 0;
+        }
 
         // Calculate blockchain stats
-        const totalTransactions = historyData.roundups?.length || 0;
-        const blockchainSecured = historyData.roundups?.filter(r => r.blockchainVerified).length || 0;
+        const totalTransactions = blockchainStats.totalTransactions || 0;
+        const blockchainSecured = blockchainStats.blockchainSecured || 0;
 
         const newStats = [
           { label: 'Total Donations', value: `$${parseFloat(totalDonated.totalDonated || 0).toFixed(2)}` },
@@ -138,6 +149,20 @@ const Dashboard = () => {
     };
 
     fetchDashboardData();
+    
+    // Listen for real-time wallet updates from extension
+    const handleWalletUpdate = (event) => {
+      if (event.data && event.data.type === 'CHARITAP_WALLET_UPDATE') {
+        console.log('Dashboard: Received wallet update message, refetching data...');
+        fetchDashboardData();
+      }
+    };
+    
+    window.addEventListener('message', handleWalletUpdate);
+    
+    return () => {
+      window.removeEventListener('message', handleWalletUpdate);
+    };
   }, [isAuthenticated]);
 
   // Chart data - dynamically generated from backend data

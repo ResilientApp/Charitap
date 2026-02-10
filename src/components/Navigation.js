@@ -35,19 +35,24 @@ export default function Navigation() {
       try {
         console.log('Navigation: Fetching data from backend...');
         
-        const [totalData, collectedData] = await Promise.all([
+        // Import roundUpAPI for pending data
+        const { roundUpAPI } = await import('../services/api');
+        
+        const [totalData, walletData] = await Promise.all([
           dashboardAPI.getTotalDonated().catch(err => { console.error('getTotalDonated error:', err); return { totalDonated: '0.00' }; }),
-          dashboardAPI.getCollectedThisMonth().catch(err => { console.error('getCollectedThisMonth error:', err); return { collectedThisMonth: '0.00' }; })
+          roundUpAPI.getPending().catch(err => { console.error('getPending error:', err); return { totalAmount: '0.00' }; })
         ]);
         
-        console.log('Navigation: Data received:', { totalData, collectedData });
+        console.log('Navigation: Data received:', { totalData, walletData });
         
+        // Total = Total Donations (matches Dashboard)
         setTotalDonations(parseFloat(totalData.totalDonated || 0));
-        setCollectedAmount(parseFloat(collectedData.collectedThisMonth || 0));  // FIXED: was totalAmount
+        // Collected = Wallet Balance (matches Dashboard)
+        setCollectedAmount(parseFloat(walletData.totalAmount || 0));
         
         console.log('Navigation: Updated values:', {
           total: parseFloat(totalData.totalDonated || 0),
-          collected: parseFloat(collectedData.collectedThisMonth || 0)
+          collected: parseFloat(walletData.totalAmount || 0)
         });
       } catch (error) {
         console.error('Navigation: Error fetching navigation data:', error);
@@ -55,6 +60,20 @@ export default function Navigation() {
     };
 
     fetchNavData();
+    
+    // Listen for real-time wallet updates from extension
+    const handleWalletUpdate = (event) => {
+      if (event.data && event.data.type === 'CHARITAP_WALLET_UPDATE') {
+        console.log('Navigation: Received wallet update message, refetching data...');
+        fetchNavData();
+      }
+    };
+    
+    window.addEventListener('message', handleWalletUpdate);
+    
+    return () => {
+      window.removeEventListener('message', handleWalletUpdate);
+    };
   }, [isAuthenticated]);
 
   const totalStr = totalDonations.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });

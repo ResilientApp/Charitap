@@ -21,7 +21,7 @@ export default function SignUp() {
     const minLen = pwd.length >= 8;
     const hasLetter = /[A-Za-z]/.test(pwd);
     const hasNumber = /\d/.test(pwd);
-    const hasSymbol = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pwd);
+    const hasSymbol = /[!@#$%^&*()_+=[\]{};':"\\|,.<>/?]/.test(pwd);
     
     const checks = { minLen, hasLetter, hasNumber, hasSymbol };
     const passedChecks = Object.values(checks).filter(Boolean).length;

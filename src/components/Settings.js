@@ -137,9 +137,7 @@ export default function Settings() {
     }
   };
 
-  const handleLogout = () => {
-    logout();
-  };
+
 
   const handleNameSave = async () => {
     try {
@@ -181,7 +179,7 @@ export default function Settings() {
     const minLen = pwd.length >= 8;
     const hasLetter = /[A-Za-z]/.test(pwd);
     const hasNumber = /\d/.test(pwd);
-    const hasSymbol = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pwd);
+    const hasSymbol = /[!@#$%^&*()_+=[\]{};':"\\|,.<>/?]/.test(pwd);
     
     const checks = { minLen, hasLetter, hasNumber, hasSymbol };
     const passedChecks = Object.values(checks).filter(Boolean).length;
@@ -207,7 +205,7 @@ export default function Settings() {
     const minLen = newPassword.length >= 8;
     const hasLetter = /[A-Za-z]/.test(newPassword);
     const hasNumber = /\d/.test(newPassword);
-    const hasSymbol = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(newPassword);
+    const hasSymbol = /[!@#$%^&*()_+=[\]{};':"\\|,.<>/?]/.test(newPassword);
     const matches = newPassword === confirmPassword;
     const notCurrent = newPassword !== currentPassword;
     const ok = minLen && hasLetter && hasNumber && hasSymbol && matches && notCurrent;
@@ -752,7 +750,7 @@ function StripePaymentSection({ userEmail, displayName }) {
 
   const validateInputs = () => {
     // Validate cardholder name (2-50 characters, letters, spaces, hyphens only)
-    const nameRegex = /^[a-zA-Z\s\-]{2,50}$/;
+    const nameRegex = /^[a-zA-Z\s-]{2,50}$/;
     if (!cardholderName || !nameRegex.test(cardholderName.trim())) {
       setStatus('❌ Please enter a valid cardholder name (2-50 characters, letters only)');
       return false;
@@ -782,7 +780,7 @@ function StripePaymentSection({ userEmail, displayName }) {
 
   // Real-time validation functions
   const validateName = (value) => {
-    const nameRegex = /^[a-zA-Z\s\-]{2,50}$/;
+    const nameRegex = /^[a-zA-Z\s-]{2,50}$/;
     return nameRegex.test(value.trim());
   };
 
@@ -902,7 +900,7 @@ function StripePaymentSection({ userEmail, displayName }) {
                   onChange={(e) => {
                     const value = e.target.value;
                     // Only allow letters, spaces, and hyphens
-                    if (/^[a-zA-Z\s\-]*$/.test(value) || value === '') {
+                    if (/^[a-zA-Z\s-]*$/.test(value) || value === '') {
                       setCardholderName(value);
                       setNameValid(validateName(value));
                     }

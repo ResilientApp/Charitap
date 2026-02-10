@@ -1,284 +1,827 @@
-// == Content Script =========================================================
+// ===================================================================
+// Charitap Chrome Extension Content Script
+// Universal E-Commerce Checkout Detection & Donation Widget
+// ===================================================================
 
+console.log('[Charitap] Content script loaded');
+
+// Global variables
 var userId = null;
 var userEmail = null;
 var userToken = null;
+var patterns = null;
+var detectedPlatform = null;
 
-function onGot(item) {
-  console.log('Retrieved user data:', {
-    userId: item.userId,
-    userEmail: item.userEmail,
-    userToken: item.userToken ? 'Present' : 'Missing'
-  });
-  userId = item.userId;
-  userEmail = item.userEmail;
-  userToken = item.userToken;
-}
+// Session decline tracking
+const DECLINE_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour
 
-function onError(error) {
-  console.log(`Error: ${error}`);
-  userId = null;
-  userEmail = null;
-  userToken = null;
-}
+// ===================================================================
+// INITIALIZATION
+// ===================================================================
 
-// 1) Simple heuristic: look for forms/buttons with payment keywords
-function looksLikePaymentPage() {
-    var pattern = ['checkout', 'billing', 'purchase'];
-
-    for (const word of pattern) {
-      if (window.location.href.toLowerCase().includes(word)) {
-        return true;
-    }
-    }
+async function hasDeclinedRecently() {
+  try {
+    const result = await chrome.storage.session.get(['lastDeclineTimestamp']);
+    const lastDecline = result.lastDeclineTimestamp;
+    if (!lastDecline) return false;
+    const timeSinceDecline = Date.now() - lastDecline;
+    return timeSinceDecline < DECLINE_COOLDOWN_MS;
+  } catch (error) {
+    console.error('[Charitap] Error checking decline status:', error);
     return false;
   }
-  
-  // contentScript.js
+}
 
-// 2) Inject a round button with transitions enabled
-function injectButton(totalCheckoutAmount) {
-    if (document.getElementById("roundUpCharityBtn")) return;
-  
-    const btn = document.createElement("div");
-    btn.id = "roundUpCharityBtn";
-    Object.assign(btn.style, {
-      position: "fixed",
-      bottom: "20px",
-      right: "20px",
-      width: "60px",
-      height: "60px",
-      borderRadius: "50%",
-      background: "#e0e0e0",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      cursor: "pointer",
-      boxShadow: "0 2px 6px rgba(0,0,0,0.2)",
-      zIndex: "999999",
-      transition: "width 0.4s ease, border-radius 0.4s ease, padding 0.4s ease"
-    });
-  
-    const img = document.createElement("img");
-    img.src = chrome.runtime.getURL("assets/charity.png");
-    img.alt = "Donate";
-    Object.assign(img.style, {
-      width: "42px",
-      height: "42px",
-      objectFit: "contain",
-      transition: "opacity 0.3s ease"
-    });
-    btn.appendChild(img);
-    img.addEventListener("click", () => {
-      transformToBar(totalCheckoutAmount);
-      img.removeEventListener("click", transformToBar);
-      img.addEventListener("click", () => {
-        console.log("Click once")
-        btn.remove();
-        injectButton(totalCheckoutAmount);
-        //revertToCircle(btn);
-      });
-    });
-    //btn.addEventListener("click", () => {transformToBar(totalCheckoutAmount);
-      //btn.insertAdjacentText('beforeend', ` Total: ${totalCheckoutAmount ? totalCheckoutAmount : 0}`);
-    //});
-    document.body.appendChild(btn);
+async function recordDecline() {
+  try {
+    await chrome.storage.session.set({ lastDeclineTimestamp: Date.now() });
+    console.log('[Charitap] Decline recorded - 1 hour cooldown started');
+  } catch (error) {
+    console.error('[Charitap] Error recording decline:', error);
   }
-  
-  
-  // 2a) Morph the circle into a bar, then fade in the actions
-  function transformToBar(totalCheckoutAmount) {
-    const btn = document.getElementById("roundUpCharityBtn");
-    if (!btn) return;
-  
-    // 1) Prepare for morph
-    //btn.removeEventListener("click", transformToBar);
-    btn.style.justifyContent = "flex-end";
-    btn.style.padding = "0 15px";
-    btn.style.width = "200px";
-    btn.style.borderRadius = "30px";
-  
-    // 2) Once the width transition finishes, swap in the buttons
-    const onEnd = e => {
-      if (e.propertyName !== "width") return;
-      btn.removeEventListener("transitionend", onEnd);
-  
-      // Amount Field
+}
 
-      // create ✓
-      const tick = document.createElement("button");
-      tick.innerText = "✓";
-      Object.assign(tick.style, {
-        width: "40px", height: "40px",
-        borderRadius: "20px", border: "none",
-        background: "#e0e0e0", color: "#4CAF50",
-        fontSize: "20px", cursor: "pointer",
-        marginRight: "10px",
-        opacity: "0", transition: "opacity 0.3s ease"
-      });
-  
-      // wire up actions
-      // btn.addEventListener("click", () => {
-      //   console.log("Click once")
-      //   btn.remove();
-      //   injectButton(totalCheckoutAmount);
-      //   //revertToCircle(btn);
-      // });
-      tick.addEventListener("click", async () => {
-        // donation logic...
-        updateResource(totalCheckoutAmount);
-        // data = chrome.storage.local.get({userId: null});
-        btn.remove();
-        injectButton(totalCheckoutAmount);
-      });
-  
-      // append in order
-      btn.append(tick);
-      btn.insertAdjacentText('beforeend', ` Total: $${totalCheckoutAmount ? totalCheckoutAmount : 0}`);
-      // trigger fade‑in
-      requestAnimationFrame(() => {
-        tick.style.opacity = "1";
-      });
-    };
-  
-    btn.addEventListener("transitionend", onEnd);
+// Load patterns and initialize
+async function initialize() {
+  try {
+    // Load e-commerce patterns
+    const response = await fetch(chrome.runtime.getURL('patterns.json'));
+    patterns = await response.json();
+
+    // Load user data
+    const userData = await chrome.storage.local.get(['userId', 'userEmail', 'userToken']);
+    userId = userData.userId;
+    userEmail = userData.userEmail;
+    userToken = userData.userToken;
+
+    console.log('[Charitap] Initialized', { userId: userId ? 'Present' : 'Missing' });
+
+    // Check decline cooldown
+    if (await hasDeclinedRecently()) {
+      console.log('[Charitap] User in decline cooldown, skipping');
+      return;
+    }
+
+    // Start detection
+    if (userId && userEmail) {
+      initDetection();
+    }
+  } catch (error) {
+    console.error('[Charitap] Initialization failed:', error);
   }
+}
+
+// Check if user is logged in
+chrome.storage.local.get(['userId', 'userEmail', 'userToken'], function(data) {
+  console.log('[Charitap] User data from storage:', data);
   
-  function findCheckoutTotal() {
-    // 1. Define the currency regex (add symbols as you like)
-    const currencyRegex = /[$€£₹¥]\s?\d{1,3}(?:[,.\d{3}])*(?:\.\d{2})?/g;
-  
-    // 2. Walk all text nodes in the body
-    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-    const matches = [];
-    while (walker.nextNode()) {
-      const text = walker.currentNode.nodeValue;
-      let m;
-      while ((m = currencyRegex.exec(text))) {
-        // parseFloat after stripping non‑digits except the dot
-        const num = parseFloat(m[0].replace(/[^0-9.]/g, ''));
-        matches.push({ value: num, raw: m[0], node: walker.currentNode });
+  if (data.userId && data.userEmail && data.userToken) {
+    userId = data.userId;
+    userEmail = data.userEmail;
+    userToken = data.userToken;
+    console.log('[Charitap] User logged in, initializing...');
+    initialize();
+  } else {
+    console.log('[Charitap] No user data found in storage');
+  }
+});
+
+// Listen for login/logout events
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === 'userLoggedIn') {
+    console.log('[Charitap] User logged in event received');
+    userId = request.userId;
+    userEmail = request.userEmail;
+    userToken = request.userToken;
+    initialize();
+  } else if (request.action === 'userLoggedOut') {
+    console.log('[Charitap] User logged out event received');
+    userId = null;
+    userEmail = null;
+    userToken = null;
+    removeWidget();
+  } else if (request.action === 'walletUpdated') {
+    console.log('[Charitap] Wallet updated, broadcasting to page');
+    // Send message to page to update wallet balance
+    window.postMessage({ type: 'CHARITAP_WALLET_UPDATE' }, '*');
+  }
+  sendResponse({status: 'ok'});
+  return true;
+});
+
+// ===================================================================
+// PLATFORM DETECTION
+// ===================================================================
+
+function detectPlatform() {
+  if (!patterns) return null;
+
+  const html = document.documentElement.innerHTML;
+  const url = window.location.href;
+
+  // Check exclusion patterns first
+  if (patterns.excludePatterns) {
+    for (const excludePattern of patterns.excludePatterns) {
+      if (url.includes(excludePattern)) {
+        console.log(`[Charitap] Site excluded: ${excludePattern}`);
+        return null;
       }
     }
-  
-    if (!matches.length) {
-      return -1;
+  }
+
+  // Check each platform
+  for (const [platformName, platformData] of Object.entries(patterns.platforms)) {
+    // Check URL patterns
+    if (platformData.urlPatterns) {
+      for (const urlPattern of platformData.urlPatterns) {
+        if (url.includes(urlPattern)) {
+          console.log(`[Charitap] Platform detected: ${platformName} (URL match)`);
+          return platformName;
+        }
+      }
     }
-  
-    // 3. Filter by “total”‑like keywords in the element’s context
-    const totalKeywords = /total|amount due|grand total|order total|payable/i;
-    const totalMatches = matches.filter(({node}) => {
-      const ctx = node.parentElement.innerText || "";
-      return totalKeywords.test(ctx);
-    });
-  
-    // 4. Decide which value to report
-    const chosen = (totalMatches.length ? totalMatches : matches)
-      .reduce((best, cur) => cur.value > best.value ? cur : best, { value: -Infinity })
-      .value;
-  
-    return chosen;
-  }
-  
-  function roundToTwo(num) {
-    return Math.round((num + Number.EPSILON) * 100) / 100;
+
+    // Check HTML patterns
+    if (platformData.htmlPatterns) {
+      for (const htmlPattern of platformData.htmlPatterns) {
+        if (html.includes(htmlPattern)) {
+          console.log(`[Charitap] Platform detected: ${platformName} (HTML match)`);
+          return platformName;
+        }
+      }
+    }
   }
 
-// bar → circle
-function revertToCircle(btn) {
-  // 1) fade out children
-  Array.from(btn.children).forEach(ch => ch.style.opacity = "0");
+  return null;
+}
 
-  // 2) once fade completes, morph back
-  btn.addEventListener("transitionend", function onFade(e) {
-    if (e.propertyName !== "opacity") return;
-    btn.removeEventListener("transitionend", onFade);
+function isCheckoutPage() {
+  const url = window.location.href.toLowerCase();
+  
+  // Use patterns if available
+  if (patterns && detectedPlatform && patterns.platforms[detectedPlatform]) {
+    const platformData = patterns.platforms[detectedPlatform];
+    
+    // Check checkout URL patterns
+    if (platformData.checkoutPatterns) {
+      for (const pattern of platformData.checkoutPatterns) {
+        if (url.includes(pattern.toLowerCase())) {
+          console.log('[Charitap] Checkout page detected via pattern');
+          return true;
+        }
+      }
+    }
+  }
 
-    // clear out children
-    btn.innerHTML = "";
-    btn.classList.remove("is-bar");
+  // Fallback to generic keywords
+  const checkoutKeywords = [
+    'checkout', 'cart', 'basket', 'bag', 'payment',
+    'pay', 'order', 'purchase', 'shipping', 'billing'
+  ];
+  
+  return checkoutKeywords.some(keyword => url.includes(keyword));
+}
 
-    // 3) morph styles back
-    btn.style.justifyContent = "center";
-    btn.style.padding      = "0";
-    btn.style.width        = "60px";
-    btn.style.borderRadius = "50%";
+function initDetection() {
+  console.log('[Charitap] Starting detection...');
+  
+  // Detect platform
+  detectedPlatform = detectPlatform();
+  
+  // Check if on checkout page
+  if (isCheckoutPage()) {
+    console.log('[Charitap] Checkout page detected');
+    
+    // Wait for page to be fully loaded
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', showWidget);
+    } else {
+      showWidget();
+    }
+  } else {
+    console.log('[Charitap] Not a checkout page');
+  }
+}
 
-    // 4) after shape morph, re-insert single icon
-    btn.addEventListener("transitionend", function onMorphBack(e2) {
-      if (e2.propertyName !== "width") return;
-      btn.removeEventListener("transitionend", onMorphBack);
+// ===================================================================
+// CART TOTAL DETECTION
+// ===================================================================
 
-      // insert the single charity image, start hidden
-      const img = document.createElement("img");
-      img.src    = chrome.runtime.getURL("assets/charity.png");
-      img.alt    = "Donate";
-      Object.assign(img.style, {
-        width: "70%", height: "70%", objectFit: "contain",
-        opacity: "0", transition: "opacity 0.3s ease"
-      });
-      btn.appendChild(img);
+function getCartTotal() {
+  // Try to find cart total on the page
+  const selectors = [
+    '.order-total', '.cart-total', '.grand-total', '.total-price',
+    '[class*="total"]', '[class*="price"]', '[id*="total"]',
+    '[data-test*="total"]', '[data-testid*="total"]'
+  ];
+  
+  for (const selector of selectors) {
+    const elements = document.querySelectorAll(selector);
+    for (const element of elements) {
+      const text = element.textContent;
+      const match = text.match(/[\$£€]?\s*(\d+[\.,]\d{2})/);
+      if (match) {
+        const value = parseFloat(match[1].replace(',', '.'));
+        if (value > 0 && value < 10000) {
+          return value;
+        }
+      }
+    }
+  }
+  
+  return null;
+}
 
-      // fade it back in
-      requestAnimationFrame(() => img.style.opacity = "1");
+// ===================================================================
+// WIDGET CREATION
+// ===================================================================
 
-      // restore click handler
-      btn.addEventListener("click", transformToBar);
+function showWidget() {
+  console.log('[Charitap] Showing widget...');
+  
+  // Remove existing widget
+  removeWidget();
+  
+  // Get cart total
+  const total = getCartTotal();
+  console.log('[Charitap] Cart total:', total);
+  
+  if (total === null) {
+    console.log('[Charitap] Could not detect cart total');
+    return;
+  }
+  
+  // Calculate roundup amount
+  const roundUpAmount = Math.ceil(total) - total;
+  console.log('[Charitap] Round up amount:', roundUpAmount.toFixed(2));
+  
+  // Create widget
+  createWidget(roundUpAmount);
+}
+
+function createWidget(roundUpAmount) {
+  console.log('[Charitap] Creating widget...');
+  
+  // Create the circular button
+  const button = document.createElement('div');
+  button.id = 'charitap-widget';
+  button.className = 'charitap-widget-collapsed';
+  button.style.cssText = `
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    width: 64px;
+    height: 64px;
+    background: linear-gradient(135deg, #626F47 0%, #8A9A5B 100%);
+    border-radius: 50%;
+    cursor: pointer;
+    z-index: 999999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 20px rgba(98, 111, 71, 0.35), 0 2px 8px rgba(0, 0, 0, 0.1);
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+    border: 3px solid rgba(252, 248, 241, 0.4);
+  `;
+  
+  // Add charity icon
+  const icon = document.createElement('span');
+  icon.className = 'charitap-icon';
+  icon.innerHTML = '❤️';
+  icon.style.cssText = `
+    font-size: 30px;
+    filter: drop-shadow(0 2px 6px rgba(0,0,0,0.15));
+    transition: all 0.3s ease;
+    animation: heartbeat 2s ease-in-out infinite;
+  `;
+  button.appendChild(icon);
+  
+  // Add heartbeat animation
+  if (!document.getElementById('charitap-heartbeat')) {
+    const style = document.createElement('style');
+    style.id = 'charitap-heartbeat';
+    style.textContent = `
+      @keyframes heartbeat {
+        0%, 100% { transform: scale(1); }
+        10% { transform: scale(1.1); }
+        20% { transform: scale(1); }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+  
+  // Hover effect
+  button.addEventListener('mouseenter', () => {
+    if (button.classList.contains('charitap-widget-collapsed')) {
+      button.style.transform = 'scale(1.12)';
+      button.style.boxShadow = '0 8px 28px rgba(98, 111, 71, 0.45), 0 4px 12px rgba(0, 0, 0, 0.15)';
+    }
+  });
+  
+  button.addEventListener('mouseleave', () => {
+    if (button.classList.contains('charitap-widget-collapsed')) {
+      button.style.transform = 'scale(1)';
+      button.style.boxShadow = '0 4px 20px rgba(98, 111, 71, 0.35), 0 2px 8px rgba(0, 0, 0, 0.1)';
+    }
+  });
+  
+  // Click handler
+  let isExpanded = false;
+  button.addEventListener('click', () => {
+    if (!isExpanded) {
+      expandWidget(button, roundUpAmount);
+      isExpanded = true;
+    } else {
+      collapseWidget(button);
+      isExpanded = false;
+      recordDecline();
+    }
+  });
+  
+  document.body.appendChild(button);
+  console.log('[Charitap] Widget created successfully');
+}
+
+function expandWidget(button, roundUpAmount) {
+  console.log('[Charitap] Expanding widget...');
+  
+  button.classList.remove('charitap-widget-collapsed');
+  button.classList.add('charitap-widget-expanded');
+  
+  // Animate expansion
+  button.style.width = '360px';
+  button.style.height = '80px';
+  button.style.borderRadius = '40px';
+  button.style.boxShadow = '0 12px 32px rgba(98, 111, 71, 0.4), 0 4px 16px rgba(0, 0, 0, 0.12)';
+  button.style.background = 'linear-gradient(135deg, rgba(252, 248, 241, 0.98) 0%, rgba(245, 236, 213, 0.98) 100%)';
+  button.style.backdropFilter = 'blur(12px)';
+  button.style.border = '3px solid rgba(98, 111, 71, 0.3)';
+  
+  // Wait for animation, then show content
+  setTimeout(() => {
+    button.innerHTML = '';
+    
+    // Create expanded content
+    const content = document.createElement('div');
+    content.style.cssText = `
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      padding: 0 28px;
+      opacity: 0;
+      animation: charitapFadeIn 0.4s ease forwards;
+    `;
+    
+    // Add animation keyframes
+    if (!document.getElementById('charitap-animations')) {
+      const style = document.createElement('style');
+      style.id = 'charitap-animations';
+      style.textContent = `
+        @keyframes charitapFadeIn {
+          from { opacity: 0; transform: translateX(-12px); }
+          to { opacity: 1; transform: translateX(0); }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+    
+    // Icon
+    const iconDiv = document.createElement('div');
+    iconDiv.innerHTML = '❤️';
+    iconDiv.style.cssText = `
+      font-size: 36px;
+      filter: drop-shadow(0 2px 6px rgba(98, 111, 71, 0.25));
+      cursor: pointer;
+      transition: transform 0.2s ease;
+    `;
+    iconDiv.title = 'Close';
+    iconDiv.addEventListener('mouseenter', () => {
+      iconDiv.style.transform = 'scale(1.1) rotate(-10deg)';
     });
+    iconDiv.addEventListener('mouseleave', () => {
+      iconDiv.style.transform = 'scale(1) rotate(0deg)';
+    });
+    iconDiv.addEventListener('click', (e) => {
+      e.stopPropagation();
+      collapseWidget(button);
+      recordDecline();
+    });
+    content.appendChild(iconDiv);
+    
+    // Amount
+    const amountDiv = document.createElement('div');
+    amountDiv.textContent = `$${roundUpAmount.toFixed(2)}`;
+    amountDiv.style.cssText = `
+      color: #626F47;
+      font-size: 28px;
+      font-weight: 800;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+      flex: 1;
+      text-align: center;
+      letter-spacing: 0.5px;
+      text-shadow: 0 2px 4px rgba(98, 111, 71, 0.1);
+    `;
+    content.appendChild(amountDiv);
+    
+    // Tick button
+    const tickButton = document.createElement('div');
+    tickButton.innerHTML = '✓';
+    tickButton.style.cssText = `
+      width: 50px;
+      height: 50px;
+      background: linear-gradient(135deg, #626F47 0%, #8A9A5B 100%);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      font-weight: bold;
+      color: #FCF8F1;
+      cursor: pointer;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      border: 3px solid rgba(98, 111, 71, 0.2);
+      box-shadow: 0 4px 12px rgba(98, 111, 71, 0.3);
+    `;
+    
+    tickButton.addEventListener('mouseenter', () => {
+      tickButton.style.transform = 'scale(1.15) rotate(5deg)';
+      tickButton.style.boxShadow = '0 6px 16px rgba(98, 111, 71, 0.45)';
+      tickButton.style.borderColor = 'rgba(240, 187, 120, 0.5)';
+    });
+    
+    tickButton.addEventListener('mouseleave', () => {
+      tickButton.style.transform = 'scale(1) rotate(0deg)';
+      tickButton.style.boxShadow = '0 4px 12px rgba(98, 111, 71, 0.3)';
+      tickButton.style.borderColor = 'rgba(98, 111, 71, 0.2)';
+    });
+    
+    tickButton.addEventListener('click', (e) => {
+      e.stopPropagation();
+      console.log('[Charitap] Tick button clicked');
+      handleDonation(roundUpAmount);
+    });
+    
+    content.appendChild(tickButton);
+    button.appendChild(content);
+  }, 250);
+}
+
+function collapseWidget(button) {
+  console.log('[Charitap] Collapsing widget...');
+  
+  button.classList.remove('charitap-widget-expanded');
+  button.classList.add('charitap-widget-collapsed');
+  
+  // Fade out content
+  const content = button.querySelector('div');
+  if (content) {
+    content.style.opacity = '0';
+  }
+  
+  // Animate back to circle
+  setTimeout(() => {
+    button.style.width = '60px';
+    button.style.height = '60px';
+    button.style.borderRadius = '50%';
+    button.style.boxShadow = '0 4px 16px rgba(98, 111, 71, 0.3)';
+    
+    // Restore icon
+    setTimeout(() => {
+      button.innerHTML = '';
+      const icon = document.createElement('span');
+      icon.className = 'charitap-icon';
+      icon.innerHTML = '❤️';
+      icon.style.cssText = `
+        font-size: 28px;
+        filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
+      `;
+      button.appendChild(icon);
+    }, 200);
+  }, 100);
+}
+
+// ===================================================================
+// DONATION HANDLING
+// ===================================================================
+
+function handleDonation(amount) {
+  console.log('[Charitap] Processing donation:', amount);
+  
+  if (!userId || !userEmail) {
+    console.error('[Charitap] User not logged in');
+    showMessage('Please log in to Charitap to donate', 'error');
+    return;
+  }
+  
+  // Send message to background script to create roundup
+  chrome.runtime.sendMessage({
+    action: 'createRoundUp',
+    data: {
+      userEmail: userEmail,
+      amount: amount,
+      merchantName: window.location.hostname
+    }
+  }, (response) => {
+    console.log('[Charitap] Response from background:', response);
+    
+    if (response && response.success) {
+      showSuccessPopup(amount);
+      removeWidget();
+      
+      // Broadcast wallet update
+      chrome.runtime.sendMessage({ action: 'walletUpdated' });
+    } else {
+      showMessage('Failed to add donation', 'error');
+    }
   });
 }
 
-  // 5) Kick off
-if (looksLikePaymentPage()) {
-  let gettingItem = chrome.storage.local.get(["userId", "userEmail", "userToken"]);
-  gettingItem.then(onGot, onError);
-  var checkoutTotal = findCheckoutTotal();
-  if (checkoutTotal !== -1) {
-    var donation = Math.ceil(checkoutTotal) - checkoutTotal;
-    if (donation == 0) {
-      donation = 1.00;
-    }
-    injectButton(roundToTwo(donation));
-  } else {
-    // console.log(checkoutTotal);
-    injectButton();
+// ===================================================================
+// SUCCESS POPUP WITH CONFETTI
+// ===================================================================
+
+function showSuccessPopup(amount) {
+  // Create confetti
+  createConfetti();
+  
+  // Create success popup
+  const popup = document.createElement('div');
+  popup.id = 'charitap-success-popup';
+  popup.style.cssText = `
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.85);
+    background: linear-gradient(135deg, rgba(252, 248, 241, 0.98) 0%, rgba(245, 236, 213, 0.98) 100%);
+    backdrop-filter: blur(20px);
+    border-radius: 24px;
+    padding: 48px 40px;
+    box-shadow: 0 20px 60px rgba(98, 111, 71, 0.3), 0 8px 24px rgba(0, 0, 0, 0.12);
+    z-index: 10000000;
+    min-width: 360px;
+    text-align: center;
+    border: 3px solid rgba(98, 111, 71, 0.25);
+    opacity: 0;
+    transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  `;
+  
+  // Success icon
+  const icon = document.createElement('div');
+  icon.innerHTML = '🎉';
+  icon.style.cssText = `
+    font-size: 72px;
+    margin-bottom: 24px;
+    animation: charitapBounce 0.8s ease;
+    filter: drop-shadow(0 4px 8px rgba(98, 111, 71, 0.15));
+  `;
+  
+  // Success text
+  const title = document.createElement('div');
+  title.textContent = 'Donation Successful!';
+  title.style.cssText = `
+    font-size: 28px;
+    font-weight: 800;
+    color: #626F47;
+    margin-bottom: 14px;
+    letter-spacing: -0.5px;
+    text-shadow: 0 2px 4px rgba(98, 111, 71, 0.1);
+  `;
+  
+  // Amount text
+  const amountText = document.createElement('div');
+  amountText.textContent = `$${amount.toFixed(2)} added to your wallet`;
+  amountText.style.cssText = `
+    font-size: 19px;
+    color: #8A9A5B;
+    margin-bottom: 28px;
+    font-weight: 600;
+  `;
+  
+  // Close button (initially hidden)
+  const closeBtn = document.createElement('div');
+  closeBtn.innerHTML = '×';
+  closeBtn.style.cssText = `
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(98, 111, 71, 0.12);
+    color: #626F47;
+    font-size: 32px;
+    line-height: 32px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: all 0.3s ease;
+    font-weight: 300;
+  `;
+  
+  closeBtn.addEventListener('mouseenter', () => {
+    closeBtn.style.background = 'rgba(98, 111, 71, 0.2)';
+    closeBtn.style.transform = 'scale(1.1) rotate(90deg)';
+  });
+  
+  closeBtn.addEventListener('mouseleave', () => {
+    closeBtn.style.background = 'rgba(98, 111, 71, 0.12)';
+    closeBtn.style.transform = 'scale(1) rotate(0deg)';
+  });
+  
+  closeBtn.addEventListener('click', () => {
+    removeSuccessPopup();
+  });
+  
+  // Progress bar
+  const progressBar = document.createElement('div');
+  progressBar.style.cssText = `
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    height: 5px;
+    background: linear-gradient(90deg, #626F47 0%, #8A9A5B 50%, #F0BB78 100%);
+    border-radius: 0 0 22px 22px;
+    width: 100%;
+    animation: charitapProgress 2s linear forwards;
+    box-shadow: 0 -2px 8px rgba(98, 111, 71, 0.2);
+  `;
+  
+  // Add animations
+  if (!document.getElementById('charitap-success-animations')) {
+    const style = document.createElement('style');
+    style.id = 'charitap-success-animations';
+    style.textContent = `
+      @keyframes charitapBounce {
+        0%, 100% { transform: translateY(0) scale(1); }
+        30% { transform: translateY(-12px) scale(1.1); }
+        50% { transform: translateY(0) scale(1); }
+      }
+      @keyframes charitapProgress {
+        from { width: 100%; }
+        to { width: 0%; }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+  
+  // Show close button on hover
+  popup.addEventListener('mouseenter', () => {
+    closeBtn.style.opacity = '1';
+  });
+  
+  popup.addEventListener('mouseleave', () => {
+    closeBtn.style.opacity = '0';
+  });
+  
+  // Assemble popup
+  popup.appendChild(closeBtn);
+  popup.appendChild(icon);
+  popup.appendChild(title);
+  popup.appendChild(amountText);
+  popup.appendChild(progressBar);
+  
+  document.body.appendChild(popup);
+  
+  // Animate in
+  setTimeout(() => {
+    popup.style.opacity = '1';
+    popup.style.transform = 'translate(-50%, -50%) scale(1)';
+  }, 10);
+  
+  // Auto-dismiss after 2 seconds
+  setTimeout(() => {
+    removeSuccessPopup();
+  }, 2000);
+}
+
+function removeSuccessPopup() {
+  const popup = document.getElementById('charitap-success-popup');
+  if (popup) {
+    popup.style.opacity = '0';
+    popup.style.transform = 'translate(-50%, -50%) scale(0.8)';
+    setTimeout(() => popup.remove(), 400);
+  }
+  
+  // Remove confetti
+  const confetti = document.getElementById('charitap-confetti');
+  if (confetti) {
+    confetti.remove();
   }
 }
-  
 
-async function updateResource(totalCheckoutAmount) {
-  try {
-    var user = userId;
-    const bodyJson = { "user": user, "purchaseAmount": checkoutTotal, "roundUpAmount": totalCheckoutAmount };
-    console.log('Sending request with body:', bodyJson);
-    console.log('Using JWT token:', userToken ? 'Present' : 'Missing');
+function createConfetti() {
+  const canvas = document.createElement('canvas');
+  canvas.id = 'charitap-confetti';
+  canvas.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 9999999;
+  `;
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  
+  document.body.appendChild(canvas);
+  
+  const ctx = canvas.getContext('2d');
+  const pieces = [];
+  const numberOfPieces = 100;
+  const colors = ['#626F47', '#8A9A5B', '#F0BB78', '#FCF8F1', '#E8DCC4'];
+  
+  // Create confetti pieces
+  for (let i = 0; i < numberOfPieces; i++) {
+    pieces.push({
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height - canvas.height,
+      rotation: Math.random() * 360,
+      speed: 2 + Math.random() * 3,
+      size: 5 + Math.random() * 5,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      rotationSpeed: (Math.random() - 0.5) * 10
+    });
+  }
+  
+  // Animate confetti
+  function animate() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     
-    const headers = {
-      'Content-Type': 'application/json'
-    };
-    
-    // Add Authorization header if token is available
-    if (userToken) {
-      headers['Authorization'] = `Bearer ${userToken}`;
-    }
-    
-    const res = await fetch(`http://localhost:3001/api/roundup/create-roundup`, {
-      method: 'POST',
-      headers: headers,
-      body: JSON.stringify(bodyJson)
+    pieces.forEach((piece, index) => {
+      ctx.save();
+      ctx.translate(piece.x, piece.y);
+      ctx.rotate((piece.rotation * Math.PI) / 180);
+      ctx.fillStyle = piece.color;
+      ctx.fillRect(-piece.size / 2, -piece.size / 2, piece.size, piece.size);
+      ctx.restore();
+      
+      piece.y += piece.speed;
+      piece.rotation += piece.rotationSpeed;
+      
+      if (piece.y > canvas.height) {
+        pieces.splice(index, 1);
+      }
     });
     
-    if (!res.ok) {
-      const errorText = await res.text();
-      console.error(`HTTP ${res.status}: ${errorText}`);
-      throw new Error(`HTTP ${res.status}: ${errorText}`);
+    if (pieces.length > 0) {
+      requestAnimationFrame(animate);
+    } else {
+      canvas.remove();
     }
-    
-    const data = await res.json();
-    console.log('Server replied:', data);
-    return data;
-  } catch (err) {
-    console.error('API call failed:', err);
-    throw err;
+  }
+  
+  animate();
+}
+
+// ===================================================================
+// UTILITY FUNCTIONS
+// ===================================================================
+
+function showMessage(text, type) {
+  const toast = document.createElement('div');
+  toast.style.cssText = `
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: ${type === 'success' ? '#4CAF50' : '#f44336'};
+    color: white;
+    padding: 16px 24px;
+    border-radius: 12px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+    z-index: 1000000;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    opacity: 0;
+    transform: translateY(-20px);
+    transition: all 0.3s ease;
+  `;
+  toast.textContent = text;
+  
+  document.body.appendChild(toast);
+  
+  setTimeout(() => {
+    toast.style.opacity = '1';
+    toast.style.transform = 'translateY(0)';
+  }, 10);
+  
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateY(-20px)';
+    setTimeout(() => toast.remove(), 300);
+  }, 3000);
+}
+
+function removeWidget() {
+  const existing = document.getElementById('charitap-widget');
+  if (existing) {
+    existing.remove();
+    console.log('[Charitap] Widget removed');
   }
 }

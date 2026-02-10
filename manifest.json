@@ -26,9 +26,10 @@
     ],
     "web_accessible_resources": [
     {
-      "resources": ["assets/charity.png"],
+      "resources": ["assets/charity.png", "patterns.json", "widget.css"],
       "matches": ["http://localhost:3000/*", "<all_urls>"]
     }
   ]
   }
+
   

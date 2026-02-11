@@ -3,15 +3,15 @@ import { useAuth } from '../auth/AuthContext';
 import Breadcrumb from './Breadcrumb';
 import CollapsibleSection from './CollapsibleSection';
 import RippleButton from './RippleButton';
-import {loadStripe} from '@stripe/stripe-js';
-import {Elements, CardNumberElement, CardExpiryElement, CardCvcElement, useStripe, useElements} from '@stripe/react-stripe-js';
+import { loadStripe } from '@stripe/stripe-js';
+import { Elements, CardNumberElement, CardExpiryElement, CardCvcElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { settingsAPI } from '../services/api';
 import { toast } from 'react-toastify';
 
 const stripePromise = loadStripe(process.env.REACT_APP_STRIPE_PUBLIC_KEY);
 
 export default function Settings() {
-  const { user, profile, email, saveName, changePassword, logout, authProvider, isAuthenticated } = useAuth();
+  const { user, profile, email, saveName, changePassword, logout, authProvider, isAuthenticated, updateSelectedCharities } = useAuth();
   const [displayName, setDisplayName] = useState(() => {
     const saved = localStorage.getItem('userDisplayName');
     const initial = saved || (profile ? `${profile.firstName || ''} ${profile.lastName || ''}`.trim() : (user?.displayName || 'User'));
@@ -66,21 +66,21 @@ export default function Settings() {
   useEffect(() => {
     const fetchCharities = async () => {
       if (!isAuthenticated) return;
-      
+
       try {
         const response = await settingsAPI.getCharities();
-        
+
         // Map backend charities to frontend format
         // User's selectedCharities are in user.selectedCharities
-        const userSelectedCharities = user?.selectedCharities || [];
-        
+        const userSelectedCharities = (user?.selectedCharities || []).map(id => id.toString());
+
         const mappedCharities = (response.charities || []).map(charity => ({
           id: charity._id,
           name: charity.name,
-          category: charity.category || 'General',
-          active: userSelectedCharities.includes(charity._id) // Only active if user has selected it
+          category: charity.category || charity.type || 'General',
+          active: userSelectedCharities.includes(charity._id.toString()) // Compare as strings
         }));
-        
+
         setCharities(mappedCharities);
       } catch (error) {
         console.error('Error fetching charities:', error);
@@ -114,22 +114,27 @@ export default function Settings() {
   const handleCharityToggle = async (id) => {
     try {
       // Optimistic update
-      setCharities(prev => 
-        prev.map(charity => 
-          charity.id === id 
+      setCharities(prev =>
+        prev.map(charity =>
+          charity.id === id
             ? { ...charity, active: !charity.active }
             : charity
         )
       );
-      
+
       // Call backend
-      await settingsAPI.toggleCharity(id);
+      const response = await settingsAPI.toggleCharity(id);
+
+      // Update auth context & localStorage with new selectedCharities from backend
+      if (response.selectedCharities) {
+        updateSelectedCharities(response.selectedCharities);
+      }
     } catch (error) {
       console.error('Error toggling charity:', error);
       // Revert on error
-      setCharities(prev => 
-        prev.map(charity => 
-          charity.id === id 
+      setCharities(prev =>
+        prev.map(charity =>
+          charity.id === id
             ? { ...charity, active: !charity.active }
             : charity
         )
@@ -145,7 +150,7 @@ export default function Settings() {
       setDisplayName(finalDisplay || 'User');
       localStorage.setItem('userDisplayName', finalDisplay);
       await saveName(firstNameEdit, lastNameEdit);
-      
+
       // Show success toast
       toast.success('✅ Name updated successfully!', {
         position: 'top-right',
@@ -180,10 +185,10 @@ export default function Settings() {
     const hasLetter = /[A-Za-z]/.test(pwd);
     const hasNumber = /\d/.test(pwd);
     const hasSymbol = /[!@#$%^&*()_+=[\]{};':"\\|,.<>/?]/.test(pwd);
-    
+
     const checks = { minLen, hasLetter, hasNumber, hasSymbol };
     const passedChecks = Object.values(checks).filter(Boolean).length;
-    
+
     let strength = 'weak';
     let color = 'red';
     if (passedChecks === 4) {
@@ -193,7 +198,7 @@ export default function Settings() {
       strength = 'medium';
       color = 'yellow';
     }
-    
+
     return { checks, strength, color, passedChecks, totalChecks: 4 };
   };
 
@@ -209,7 +214,7 @@ export default function Settings() {
     const matches = newPassword === confirmPassword;
     const notCurrent = newPassword !== currentPassword;
     const ok = minLen && hasLetter && hasNumber && hasSymbol && matches && notCurrent;
-    
+
     let errorMsg = '';
     if (!minLen) errorMsg = 'Minimum 8 characters required';
     else if (!hasLetter) errorMsg = 'Must contain at least one letter';
@@ -217,7 +222,7 @@ export default function Settings() {
     else if (!hasSymbol) errorMsg = 'Must contain at least one symbol (!@#$%^&*...)';
     else if (!matches) errorMsg = 'Passwords do not match';
     else if (!notCurrent) errorMsg = 'New password must be different from current password';
-    
+
     setPasswordError(errorMsg);
     return ok;
   }, [newPassword, confirmPassword, currentPassword]);
@@ -226,7 +231,7 @@ export default function Settings() {
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Breadcrumb />
-        
+
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-headline text-gray-900 mb-2">Settings</h1>
@@ -255,8 +260,8 @@ export default function Settings() {
             </div>
           )}
           {/* Profile Section (form style) */}
-          <CollapsibleSection 
-            title="Profile Information" 
+          <CollapsibleSection
+            title="Profile Information"
             defaultOpen={false}
             persistKey="settings:profile"
             icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>}
@@ -265,9 +270,9 @@ export default function Settings() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">First name</label>
-                  <input 
-                    type="text" 
-                    value={firstNameEdit} 
+                  <input
+                    type="text"
+                    value={firstNameEdit}
                     onChange={(e) => {
                       const value = e.target.value;
                       // Only allow letters, spaces, hyphens, and apostrophes
@@ -276,16 +281,16 @@ export default function Settings() {
                       }
                     }}
                     maxLength={50}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent" 
-                    placeholder="First name" 
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
+                    placeholder="First name"
                   />
                   <p className="text-xs text-gray-500 mt-1">Letters only (2-50 characters)</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Last name</label>
-                  <input 
-                    type="text" 
-                    value={lastNameEdit} 
+                  <input
+                    type="text"
+                    value={lastNameEdit}
                     onChange={(e) => {
                       const value = e.target.value;
                       // Only allow letters, spaces, hyphens, and apostrophes
@@ -294,8 +299,8 @@ export default function Settings() {
                       }
                     }}
                     maxLength={50}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent" 
-                    placeholder="Last name" 
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
+                    placeholder="Last name"
                   />
                   <p className="text-xs text-gray-500 mt-1">Letters only (2-50 characters)</p>
                 </div>
@@ -306,8 +311,8 @@ export default function Settings() {
                   <input type="email" value={email} readOnly className="w-full px-3 py-2 border border-gray-200 bg-gray-100 text-gray-600 rounded-lg" />
                   <div className="absolute right-3 top-1/2 -translate-y-1/2 text-yellow-500" title="Email verified">
                     <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M12 2c-1.1 0-2 .9-2 2H6a2 2 0 00-2 2v5c0 5.55 3.84 10.74 8 12 4.16-1.26 8-6.45 8-12V6a2 2 0 00-2-2h-4c0-1.1-.9-2-2-2z"/>
-                      <path fill="#fff" d="M10.5 13.5l-2-2 1.4-1.4 0.6 0.6 3-3 1.4 1.4-4.4 4.4z"/>
+                      <path d="M12 2c-1.1 0-2 .9-2 2H6a2 2 0 00-2 2v5c0 5.55 3.84 10.74 8 12 4.16-1.26 8-6.45 8-12V6a2 2 0 00-2-2h-4c0-1.1-.9-2-2-2z" />
+                      <path fill="#fff" d="M10.5 13.5l-2-2 1.4-1.4 0.6 0.6 3-3 1.4 1.4-4.4 4.4z" />
                     </svg>
                   </div>
                 </div>
@@ -320,165 +325,162 @@ export default function Settings() {
 
           {/* Password Change Section */}
           {authProvider !== 'google' && (
-          <CollapsibleSection 
-            title="Password"
-            defaultOpen={false}
-            persistKey="settings:password"
-            icon={
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-              </svg>
-            }
-          >
-            <div className="space-y-4 max-w-2xl">
-              <div className="grid grid-cols-1 gap-4">
-                <div className="relative">
-                  <input
-                    type={showCurrent ? 'text' : 'password'}
-                    value={currentPassword}
-                    onChange={(e) => setCurrentPassword(e.target.value)}
-                    placeholder="Current password"
-                    className="w-full px-3 py-3 pr-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
-                  />
-                  <button type="button" onClick={() => setShowCurrent(v => !v)} className="absolute right-3 top-3 md:top-3.5 text-sm text-gray-500">
-                    {showCurrent ? 'Hide' : 'Show'}
-                  </button>
-                </div>
-                <div className="space-y-2">
+            <CollapsibleSection
+              title="Password"
+              defaultOpen={false}
+              persistKey="settings:password"
+              icon={
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+              }
+            >
+              <div className="space-y-4 max-w-2xl">
+                <div className="grid grid-cols-1 gap-4">
                   <div className="relative">
                     <input
-                      type={showNew ? 'text' : 'password'}
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      placeholder="New password (min 8, letters, numbers & symbols)"
+                      type={showCurrent ? 'text' : 'password'}
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      placeholder="Current password"
                       className="w-full px-3 py-3 pr-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
                     />
-                    <button type="button" onClick={() => setShowNew(v => !v)} className="absolute right-3 top-3 md:top-3.5 text-sm text-gray-500">
-                      {showNew ? 'Hide' : 'Show'}
+                    <button type="button" onClick={() => setShowCurrent(v => !v)} className="absolute right-3 top-3 md:top-3.5 text-sm text-gray-500">
+                      {showCurrent ? 'Hide' : 'Show'}
                     </button>
                   </div>
-                  
-                  {/* Password Strength Indicator */}
-                  {newPassword && (
-                    <div className="mt-2">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs text-gray-600">Password strength:</span>
-                        <span className={`text-xs font-semibold ${
-                          passwordStrength.color === 'green' ? 'text-green-600' :
-                          passwordStrength.color === 'yellow' ? 'text-yellow-600' : 'text-red-600'
-                        }`}>
-                          {passwordStrength.strength.toUpperCase()}
-                        </span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-1.5">
-                        <div 
-                          className={`h-1.5 rounded-full transition-all duration-300 ${
-                            passwordStrength.color === 'green' ? 'bg-green-500' :
-                            passwordStrength.color === 'yellow' ? 'bg-yellow-500' : 'bg-red-500'
-                          }`}
-                          style={{ width: `${(passwordStrength.passedChecks / passwordStrength.totalChecks) * 100}%` }}
-                        ></div>
-                      </div>
+                  <div className="space-y-2">
+                    <div className="relative">
+                      <input
+                        type={showNew ? 'text' : 'password'}
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        placeholder="New password (min 8, letters, numbers & symbols)"
+                        className="w-full px-3 py-3 pr-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
+                      />
+                      <button type="button" onClick={() => setShowNew(v => !v)} className="absolute right-3 top-3 md:top-3.5 text-sm text-gray-500">
+                        {showNew ? 'Hide' : 'Show'}
+                      </button>
                     </div>
-                  )}
-                  
-                  {/* Password Requirements Checklist */}
-                  {newPassword && (
-                    <div className="mt-2 space-y-1">
-                      <div className="flex items-center text-xs">
-                        <span className={`mr-2 ${passwordStrength.checks.minLen ? 'text-green-600' : 'text-gray-400'}`}>
-                          {passwordStrength.checks.minLen ? '✓' : '○'}
-                        </span>
-                        <span className={passwordStrength.checks.minLen ? 'text-green-600' : 'text-gray-600'}>
-                          At least 8 characters
-                        </span>
+
+                    {/* Password Strength Indicator */}
+                    {newPassword && (
+                      <div className="mt-2">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs text-gray-600">Password strength:</span>
+                          <span className={`text-xs font-semibold ${passwordStrength.color === 'green' ? 'text-green-600' :
+                            passwordStrength.color === 'yellow' ? 'text-yellow-600' : 'text-red-600'
+                            }`}>
+                            {passwordStrength.strength.toUpperCase()}
+                          </span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-1.5">
+                          <div
+                            className={`h-1.5 rounded-full transition-all duration-300 ${passwordStrength.color === 'green' ? 'bg-green-500' :
+                              passwordStrength.color === 'yellow' ? 'bg-yellow-500' : 'bg-red-500'
+                              }`}
+                            style={{ width: `${(passwordStrength.passedChecks / passwordStrength.totalChecks) * 100}%` }}
+                          ></div>
+                        </div>
                       </div>
-                      <div className="flex items-center text-xs">
-                        <span className={`mr-2 ${passwordStrength.checks.hasLetter ? 'text-green-600' : 'text-gray-400'}`}>
-                          {passwordStrength.checks.hasLetter ? '✓' : '○'}
-                        </span>
-                        <span className={passwordStrength.checks.hasLetter ? 'text-green-600' : 'text-gray-600'}>
-                          At least one letter
-                        </span>
+                    )}
+
+                    {/* Password Requirements Checklist */}
+                    {newPassword && (
+                      <div className="mt-2 space-y-1">
+                        <div className="flex items-center text-xs">
+                          <span className={`mr-2 ${passwordStrength.checks.minLen ? 'text-green-600' : 'text-gray-400'}`}>
+                            {passwordStrength.checks.minLen ? '✓' : '○'}
+                          </span>
+                          <span className={passwordStrength.checks.minLen ? 'text-green-600' : 'text-gray-600'}>
+                            At least 8 characters
+                          </span>
+                        </div>
+                        <div className="flex items-center text-xs">
+                          <span className={`mr-2 ${passwordStrength.checks.hasLetter ? 'text-green-600' : 'text-gray-400'}`}>
+                            {passwordStrength.checks.hasLetter ? '✓' : '○'}
+                          </span>
+                          <span className={passwordStrength.checks.hasLetter ? 'text-green-600' : 'text-gray-600'}>
+                            At least one letter
+                          </span>
+                        </div>
+                        <div className="flex items-center text-xs">
+                          <span className={`mr-2 ${passwordStrength.checks.hasNumber ? 'text-green-600' : 'text-gray-400'}`}>
+                            {passwordStrength.checks.hasNumber ? '✓' : '○'}
+                          </span>
+                          <span className={passwordStrength.checks.hasNumber ? 'text-green-600' : 'text-gray-600'}>
+                            At least one number
+                          </span>
+                        </div>
+                        <div className="flex items-center text-xs">
+                          <span className={`mr-2 ${passwordStrength.checks.hasSymbol ? 'text-green-600' : 'text-gray-400'}`}>
+                            {passwordStrength.checks.hasSymbol ? '✓' : '○'}
+                          </span>
+                          <span className={passwordStrength.checks.hasSymbol ? 'text-green-600' : 'text-gray-600'}>
+                            At least one symbol (!@#$%^&*...)
+                          </span>
+                        </div>
+                        <div className="flex items-center text-xs">
+                          <span className={`mr-2 ${!isCurrentPassword ? 'text-green-600' : 'text-red-400'}`}>
+                            {!isCurrentPassword ? '✓' : '○'}
+                          </span>
+                          <span className={!isCurrentPassword ? 'text-green-600' : 'text-red-600'}>
+                            Different from current password
+                          </span>
+                        </div>
                       </div>
-                      <div className="flex items-center text-xs">
-                        <span className={`mr-2 ${passwordStrength.checks.hasNumber ? 'text-green-600' : 'text-gray-400'}`}>
-                          {passwordStrength.checks.hasNumber ? '✓' : '○'}
-                        </span>
-                        <span className={passwordStrength.checks.hasNumber ? 'text-green-600' : 'text-gray-600'}>
-                          At least one number
-                        </span>
-                      </div>
-                      <div className="flex items-center text-xs">
-                        <span className={`mr-2 ${passwordStrength.checks.hasSymbol ? 'text-green-600' : 'text-gray-400'}`}>
-                          {passwordStrength.checks.hasSymbol ? '✓' : '○'}
-                        </span>
-                        <span className={passwordStrength.checks.hasSymbol ? 'text-green-600' : 'text-gray-600'}>
-                          At least one symbol (!@#$%^&*...)
-                        </span>
-                      </div>
-                      <div className="flex items-center text-xs">
-                        <span className={`mr-2 ${!isCurrentPassword ? 'text-green-600' : 'text-red-400'}`}>
-                          {!isCurrentPassword ? '✓' : '○'}
-                        </span>
-                        <span className={!isCurrentPassword ? 'text-green-600' : 'text-red-600'}>
-                          Different from current password
-                        </span>
-                      </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
+                  <div className="relative">
+                    <input
+                      type={showConfirm ? 'text' : 'password'}
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="Confirm new password"
+                      className="w-full px-3 py-3 pr-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
+                    />
+                    <button type="button" onClick={() => setShowConfirm(v => !v)} className="absolute right-3 top-3 md:top-3.5 text-sm text-gray-500">
+                      {showConfirm ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
                 </div>
-                <div className="relative">
-                  <input
-                    type={showConfirm ? 'text' : 'password'}
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="Confirm new password"
-                    className="w-full px-3 py-3 pr-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
-                  />
-                  <button type="button" onClick={() => setShowConfirm(v => !v)} className="absolute right-3 top-3 md:top-3.5 text-sm text-gray-500">
-                    {showConfirm ? 'Hide' : 'Show'}
-                  </button>
-                </div>
-              </div>
-              {passwordError && <p className="text-sm text-red-600">{passwordError}</p>}
-              <div className="flex justify-end">
-                <RippleButton
-                  onClick={async () => {
-                    if (!passwordValid) return;
-                    try {
-                      await changePassword(currentPassword, newPassword);
-                      setCurrentPassword('');
-                      setNewPassword('');
-                      setConfirmPassword('');
-                      toast.success('Password updated successfully! 🎉', {
-                        position: 'top-right',
-                        autoClose: 3000,
-                      });
-                    } catch (e) {
-                      toast.error(e.message || 'Failed to update password', {
-                        position: 'top-right',
-                        autoClose: 4000,
-                      });
-                    }
-                  }}
-                  disabled={!passwordValid}
-                  className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-colors ${
-                    passwordValid 
-                      ? 'bg-yellow-400 hover:bg-yellow-500 text-black' 
+                {passwordError && <p className="text-sm text-red-600">{passwordError}</p>}
+                <div className="flex justify-end">
+                  <RippleButton
+                    onClick={async () => {
+                      if (!passwordValid) return;
+                      try {
+                        await changePassword(currentPassword, newPassword);
+                        setCurrentPassword('');
+                        setNewPassword('');
+                        setConfirmPassword('');
+                        toast.success('Password updated successfully! 🎉', {
+                          position: 'top-right',
+                          autoClose: 3000,
+                        });
+                      } catch (e) {
+                        toast.error(e.message || 'Failed to update password', {
+                          position: 'top-right',
+                          autoClose: 4000,
+                        });
+                      }
+                    }}
+                    disabled={!passwordValid}
+                    className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-colors ${passwordValid
+                      ? 'bg-yellow-400 hover:bg-yellow-500 text-black'
                       : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  }`}
-                >
-                  Change Password
-                </RippleButton>
+                      }`}
+                  >
+                    Change Password
+                  </RippleButton>
+                </div>
               </div>
-            </div>
-          </CollapsibleSection>
+            </CollapsibleSection>
           )}
 
           {/* Charities Section */}
-          <CollapsibleSection 
-            title="My Charities" 
+          <CollapsibleSection
+            title="My Charities"
             defaultOpen={false}
             persistKey="settings:charities"
             icon={
@@ -492,38 +494,34 @@ export default function Settings() {
                 Choose which charities you'd like to support with your micro-donations.
                 Toggle them on or off to control your donation preferences.
               </p>
-              
+
               <div className="h-[420px] overflow-y-auto pr-2 space-y-4 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 charities-scroll-container">
                 {charities.map((charity, index) => (
-                  <div 
-                    key={charity.id} 
-                    className={`relative p-4 rounded-xl border-2 transition-all duration-200 cursor-pointer hover:shadow-md overflow-hidden min-h-[96px] ${
-                      charity.active 
-                        ? 'border-green-200 bg-green-50 shadow-sm' 
-                        : 'border-gray-200 bg-gray-50'
-                    }`}
+                  <div
+                    key={charity.id}
+                    className={`relative p-4 rounded-xl border-2 transition-all duration-200 cursor-pointer hover:shadow-md overflow-hidden min-h-[96px] ${charity.active
+                      ? 'border-green-200 bg-green-50 shadow-sm'
+                      : 'border-gray-200 bg-gray-50'
+                      }`}
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-4">
                         {/* Category icon */}
-                        <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 ${
-                          charity.active 
-                            ? 'bg-green-100 text-green-600' 
-                            : 'bg-gray-100 text-gray-500'
-                        }`}>
+                        <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 ${charity.active
+                          ? 'bg-green-100 text-green-600'
+                          : 'bg-gray-100 text-gray-500'
+                          }`}>
                           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                           </svg>
                         </div>
                         <div>
-                          <h4 className={`font-semibold text-lg transition-colors duration-300 ${
-                            charity.active ? 'text-green-800' : 'text-gray-700'
-                          }`}>
+                          <h4 className={`font-semibold text-lg transition-colors duration-300 ${charity.active ? 'text-green-800' : 'text-gray-700'
+                            }`}>
                             {charity.name}
                           </h4>
-                          <p className={`text-sm transition-colors duration-300 ${
-                            charity.active ? 'text-green-600' : 'text-gray-500'
-                          }`}>
+                          <p className={`text-sm transition-colors duration-300 ${charity.active ? 'text-green-600' : 'text-gray-500'
+                            }`}>
                             {charity.category}
                           </p>
                         </div>
@@ -531,23 +529,20 @@ export default function Settings() {
                       {/* Toggle Switch */}
                       <div className="flex items-center space-x-3">
                         <div
-                          className={`relative inline-flex h-8 w-16 items-center rounded-full transition-all duration-300 cursor-pointer ${
-                            charity.active ? 'bg-green-500 shadow-lg' : 'bg-gray-300'
-                          }`}
+                          className={`relative inline-flex h-8 w-16 items-center rounded-full transition-all duration-300 cursor-pointer ${charity.active ? 'bg-green-500 shadow-lg' : 'bg-gray-300'
+                            }`}
                           onClick={() => handleCharityToggle(charity.id)}
                           role="switch"
                           aria-checked={charity.active}
                           tabIndex={0}
                         >
                           <span
-                            className={`inline-block h-6 w-6 transform rounded-full bg-white shadow-md transition-all duration-300 ${
-                              charity.active ? 'translate-x-9' : 'translate-x-1'
-                            }`}
+                            className={`inline-block h-6 w-6 transform rounded-full bg-white shadow-md transition-all duration-300 ${charity.active ? 'translate-x-9' : 'translate-x-1'
+                              }`}
                           />
                         </div>
-                        <span className={`inline-block w-16 text-center text-sm font-medium transition-colors duration-300 ${
-                          charity.active ? 'text-green-700' : 'text-gray-500'
-                        }`}>
+                        <span className={`inline-block w-16 text-center text-sm font-medium transition-colors duration-300 ${charity.active ? 'text-green-700' : 'text-gray-500'
+                          }`}>
                           {charity.active ? 'Active' : 'Inactive'}
                         </span>
                       </div>
@@ -559,8 +554,8 @@ export default function Settings() {
           </CollapsibleSection>
 
           {/* Payment Preferences Section */}
-          <CollapsibleSection 
-            title="Payment Preferences" 
+          <CollapsibleSection
+            title="Payment Preferences"
             defaultOpen={false}
             persistKey="settings:payment-prefs"
             icon={
@@ -577,23 +572,21 @@ export default function Settings() {
               {/* Payment Mode Selection */}
               <div className="space-y-4">
                 <h4 className="text-lg font-semibold text-gray-900">Payment Schedule</h4>
-                
+
                 <div className="grid md:grid-cols-2 gap-4 items-stretch">
                   {/* Monthly Payment Option */}
-                  <div 
-                    className={`p-4 rounded-xl border-2 cursor-pointer transition-all duration-300 transform hover:scale-[1.02] h-full flex flex-col min-h-[176px] ${
-                      paymentMode === 'monthly' 
-                        ? 'border-yellow-400 bg-yellow-50' 
-                        : 'border-gray-200 bg-gray-50 hover:border-gray-300'
-                    }`}
+                  <div
+                    className={`p-4 rounded-xl border-2 cursor-pointer transition-all duration-300 transform hover:scale-[1.02] h-full flex flex-col min-h-[176px] ${paymentMode === 'monthly'
+                      ? 'border-yellow-400 bg-yellow-50'
+                      : 'border-gray-200 bg-gray-50 hover:border-gray-300'
+                      }`}
                     onClick={() => handlePaymentModeChange('monthly')}
                   >
                     <div className="flex items-center space-x-3 mb-3">
-                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-300 ${
-                        paymentMode === 'monthly' 
-                          ? 'border-yellow-500 bg-yellow-500' 
-                          : 'border-gray-400'
-                      }`}>
+                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-300 ${paymentMode === 'monthly'
+                        ? 'border-yellow-500 bg-yellow-500'
+                        : 'border-gray-400'
+                        }`}>
                         {paymentMode === 'monthly' && (
                           <div className="w-2 h-2 bg-white rounded-full transition-all duration-300"></div>
                         )}
@@ -618,20 +611,18 @@ export default function Settings() {
                   </div>
 
                   {/* Threshold Payment Option */}
-                  <div 
-                    className={`p-4 rounded-xl border-2 cursor-pointer transition-all duration-300 transform hover:scale-[1.02] h-full flex flex-col min-h-[176px] ${
-                      paymentMode === 'threshold' 
-                        ? 'border-yellow-400 bg-yellow-50' 
-                        : 'border-gray-200 bg-gray-50 hover:border-gray-300'
-                    }`}
+                  <div
+                    className={`p-4 rounded-xl border-2 cursor-pointer transition-all duration-300 transform hover:scale-[1.02] h-full flex flex-col min-h-[176px] ${paymentMode === 'threshold'
+                      ? 'border-yellow-400 bg-yellow-50'
+                      : 'border-gray-200 bg-gray-50 hover:border-gray-300'
+                      }`}
                     onClick={() => handlePaymentModeChange('threshold')}
                   >
                     <div className="flex items-center space-x-3 mb-3">
-                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-300 ${
-                        paymentMode === 'threshold' 
-                          ? 'border-yellow-500 bg-yellow-500' 
-                          : 'border-gray-400'
-                      }`}>
+                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-300 ${paymentMode === 'threshold'
+                        ? 'border-yellow-500 bg-yellow-500'
+                        : 'border-gray-400'
+                        }`}>
                         {paymentMode === 'threshold' && (
                           <div className="w-2 h-2 bg-white rounded-full transition-all duration-300"></div>
                         )}
@@ -654,7 +645,7 @@ export default function Settings() {
 
               {/* Save Button */}
               <div className="flex justify-end">
-                <RippleButton 
+                <RippleButton
                   onClick={handleSavePaymentSettings}
                   className="bg-yellow-400 hover:bg-yellow-500 text-black px-6 py-3 rounded-lg font-medium transition-colors shadow-lg"
                 >
@@ -665,7 +656,7 @@ export default function Settings() {
           </CollapsibleSection>
 
           {/* Payment Methods (Stripe) */}
-          <CollapsibleSection 
+          <CollapsibleSection
             title="Payment Methods"
             defaultOpen={false}
             persistKey="settings:payment-methods"
@@ -703,7 +694,7 @@ function StripePaymentSection({ userEmail, displayName }) {
         console.log('No auth token found');
         return;
       }
-      
+
       const parsedAuth = JSON.parse(authData);
       const token = parsedAuth.token;
       if (!token) {
@@ -713,17 +704,17 @@ function StripePaymentSection({ userEmail, displayName }) {
 
       const res = await fetch(`${process.env.REACT_APP_SERVER_URL || 'http://localhost:3001'}/api/stripe/list-payment-methods`, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         }
       });
-      
+
       if (!res.ok) {
         console.error('Failed to fetch payment methods');
         return;
       }
-      
+
       const data = await res.json();
       if (data.paymentMethods) {
         setSavedMethods(data.paymentMethods);
@@ -807,7 +798,7 @@ function StripePaymentSection({ userEmail, displayName }) {
 
     try {
       const cardNumberElement = elements.getElement(CardNumberElement);
-      
+
       // Create payment method with Stripe
       const { error, paymentMethod } = await stripe.createPaymentMethod({
         type: 'card',
@@ -830,7 +821,7 @@ function StripePaymentSection({ userEmail, displayName }) {
       if (!authData) {
         throw new Error('Please log in to save payment method');
       }
-      
+
       const parsedAuth = JSON.parse(authData);
       const token = parsedAuth.token;
       if (!token) {
@@ -855,7 +846,7 @@ function StripePaymentSection({ userEmail, displayName }) {
       }
 
       const result = await response.json();
-      
+
       // Clear form
       setCardholderName('');
       setCardholderEmail('');
@@ -866,7 +857,7 @@ function StripePaymentSection({ userEmail, displayName }) {
 
       // Refresh saved methods
       await fetchSavedMethods();
-      
+
       // Show success toast with auto-dismiss
       toast.success(`✅ Card saved successfully! ${result.paymentMethod.brand.toUpperCase()} •••• ${result.paymentMethod.last4}`, {
         position: 'top-right',
@@ -906,11 +897,10 @@ function StripePaymentSection({ userEmail, displayName }) {
                     }
                   }}
                   maxLength={50}
-                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent ${
-                    cardholderName && !nameValid ? 'border-red-300 bg-red-50' : 
-                    cardholderName && nameValid ? 'border-green-300 bg-green-50' : 
-                    'border-gray-300'
-                  }`}
+                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent ${cardholderName && !nameValid ? 'border-red-300 bg-red-50' :
+                    cardholderName && nameValid ? 'border-green-300 bg-green-50' :
+                      'border-gray-300'
+                    }`}
                   placeholder="John Doe"
                   required
                 />
@@ -924,9 +914,8 @@ function StripePaymentSection({ userEmail, displayName }) {
                   </div>
                 )}
               </div>
-              <p className={`text-xs mt-1 ${
-                cardholderName && !nameValid ? 'text-red-500' : 'text-gray-500'
-              }`}>
+              <p className={`text-xs mt-1 ${cardholderName && !nameValid ? 'text-red-500' : 'text-gray-500'
+                }`}>
                 {cardholderName && !nameValid ? 'Invalid name format' : 'Letters, spaces, and hyphens only (2-50 characters)'}
               </p>
             </div>
@@ -940,11 +929,10 @@ function StripePaymentSection({ userEmail, displayName }) {
                     setCardholderEmail(e.target.value);
                     setEmailValid(validateEmail(e.target.value));
                   }}
-                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent ${
-                    cardholderEmail && !emailValid ? 'border-red-300 bg-red-50' : 
-                    cardholderEmail && emailValid ? 'border-green-300 bg-green-50' : 
-                    'border-gray-300'
-                  }`}
+                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent ${cardholderEmail && !emailValid ? 'border-red-300 bg-red-50' :
+                    cardholderEmail && emailValid ? 'border-green-300 bg-green-50' :
+                      'border-gray-300'
+                    }`}
                   placeholder="you@example.com"
                   required
                 />
@@ -958,9 +946,8 @@ function StripePaymentSection({ userEmail, displayName }) {
                   </div>
                 )}
               </div>
-              <p className={`text-xs mt-1 ${
-                cardholderEmail && !emailValid ? 'text-red-500' : 'text-gray-500'
-              }`}>
+              <p className={`text-xs mt-1 ${cardholderEmail && !emailValid ? 'text-red-500' : 'text-gray-500'
+                }`}>
                 {cardholderEmail && !emailValid ? 'Invalid email format' : 'Valid email address required'}
               </p>
             </div>
@@ -979,11 +966,10 @@ function StripePaymentSection({ userEmail, displayName }) {
                     }
                   }}
                   maxLength={5}
-                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent ${
-                    cardZip && !zipValid ? 'border-red-300 bg-red-50' : 
-                    cardZip && zipValid ? 'border-green-300 bg-green-50' : 
-                    'border-gray-300'
-                  }`}
+                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent ${cardZip && !zipValid ? 'border-red-300 bg-red-50' :
+                    cardZip && zipValid ? 'border-green-300 bg-green-50' :
+                      'border-gray-300'
+                    }`}
                   placeholder="12345"
                   required
                 />
@@ -997,9 +983,8 @@ function StripePaymentSection({ userEmail, displayName }) {
                   </div>
                 )}
               </div>
-              <p className={`text-xs mt-1 ${
-                cardZip && !zipValid ? 'text-red-500' : 'text-gray-500'
-              }`}>
+              <p className={`text-xs mt-1 ${cardZip && !zipValid ? 'text-red-500' : 'text-gray-500'
+                }`}>
                 {cardZip && !zipValid ? 'Must be exactly 5 digits' : '5-digit ZIP code'}
               </p>
             </div>
@@ -1017,14 +1002,13 @@ function StripePaymentSection({ userEmail, displayName }) {
           </div>
         </div>
         <div className="flex justify-end mt-3">
-          <RippleButton 
-            onClick={handleAttachCard} 
+          <RippleButton
+            onClick={handleAttachCard}
             disabled={isLoading}
-            className={`px-6 py-2 rounded-lg text-sm font-medium transition-colors ${
-              isLoading 
-                ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
-                : 'bg-yellow-400 hover:bg-yellow-500 text-black'
-            }`}
+            className={`px-6 py-2 rounded-lg text-sm font-medium transition-colors ${isLoading
+              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              : 'bg-yellow-400 hover:bg-yellow-500 text-black'
+              }`}
           >
             {isLoading ? (
               <span className="flex items-center gap-2">
@@ -1035,9 +1019,8 @@ function StripePaymentSection({ userEmail, displayName }) {
           </RippleButton>
         </div>
         {status && (
-          <p className={`text-sm mt-2 font-medium ${
-            status.includes('✅') ? 'text-green-600' : 'text-red-600'
-          }`}>
+          <p className={`text-sm mt-2 font-medium ${status.includes('✅') ? 'text-green-600' : 'text-red-600'
+            }`}>
             {status}
           </p>
         )}
@@ -1047,7 +1030,7 @@ function StripePaymentSection({ userEmail, displayName }) {
         <div className="flex items-center justify-between mb-3">
           <h4 className="text-lg font-semibold">Saved Payment Methods</h4>
           <div className="flex items-center text-xs text-gray-600">
-            <svg className="w-4 h-4 text-green-600 mr-1" viewBox="0 0 24 24" fill="currentColor"><path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10Zm-1-6h2v2h-2v-2Zm0-8h2v6h-2V8Z"/></svg>
+            <svg className="w-4 h-4 text-green-600 mr-1" viewBox="0 0 24 24" fill="currentColor"><path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10Zm-1-6h2v2h-2v-2Zm0-8h2v6h-2V8Z" /></svg>
             Your payment information is securely processed via Stripe
           </div>
         </div>
@@ -1058,7 +1041,7 @@ function StripePaymentSection({ userEmail, displayName }) {
           {savedMethods.map((pm) => (
             <div key={pm.id} className="flex items-center justify-between p-3 rounded-lg bg-white border border-gray-200">
               <div className="flex items-center gap-3">
-                <img src={`/card-brands/${pm.brand}.svg`} alt={pm.brand} className="w-6 h-6" onError={(e)=>{e.currentTarget.style.display='none'}} />
+                <img src={`/card-brands/${pm.brand}.svg`} alt={pm.brand} className="w-6 h-6" onError={(e) => { e.currentTarget.style.display = 'none' }} />
                 <span className="text-sm text-gray-700">{pm.brand.toUpperCase()} •••• {pm.last4}</span>
                 <span className="text-xs text-gray-500">exp {pm.expMonth}/{pm.expYear}</span>
                 {pm.isDefault && <span className="text-xs text-green-600 font-semibold ml-2">✓ Default</span>}
@@ -1072,23 +1055,23 @@ function StripePaymentSection({ userEmail, displayName }) {
                         toast.error('Please log in to manage payment methods');
                         return;
                       }
-                      
+
                       const parsedAuth = JSON.parse(authData);
                       const token = parsedAuth.token;
                       if (!token) {
                         toast.error('Please log in to manage payment methods');
                         return;
                       }
-                      
+
                       const response = await fetch(`${process.env.REACT_APP_SERVER_URL || 'http://localhost:3001'}/api/stripe/set-default-payment-method`, {
                         method: 'POST',
-                        headers: { 
+                        headers: {
                           'Content-Type': 'application/json',
                           'Authorization': `Bearer ${token}`
                         },
                         body: JSON.stringify({ paymentMethodId: pm.id })
                       });
-                      
+
                       if (response.ok) {
                         setDefaultPmId(pm.id);
                         toast.success('Default payment method updated');
@@ -1113,23 +1096,23 @@ function StripePaymentSection({ userEmail, displayName }) {
                         toast.error('Please log in to manage payment methods');
                         return;
                       }
-                      
+
                       const parsedAuth = JSON.parse(authData);
                       const token = parsedAuth.token;
                       if (!token) {
                         toast.error('Please log in to manage payment methods');
                         return;
                       }
-                      
+
                       const response = await fetch(`${process.env.REACT_APP_SERVER_URL || 'http://localhost:3001'}/api/stripe/detach-payment-method`, {
                         method: 'POST',
-                        headers: { 
+                        headers: {
                           'Content-Type': 'application/json',
                           'Authorization': `Bearer ${token}`
                         },
                         body: JSON.stringify({ paymentMethodId: pm.id })
                       });
-                      
+
                       if (response.ok) {
                         await fetchSavedMethods();
                         toast.success('Payment method removed');

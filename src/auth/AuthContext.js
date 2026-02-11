@@ -5,7 +5,7 @@ import { authAPI } from '../services/api';
 
 const AuthContext = createContext(null);
 
-export function AuthProvider({ children}) {
+export function AuthProvider({ children }) {
   const [user, setUser] = useState(null); // { id, email, displayName, profilePicture }
   const [profile, setProfile] = useState(null); // {firstName, lastName, email}
   const [authProvider, setAuthProvider] = useState(null); // 'google' | 'local' | null
@@ -47,18 +47,23 @@ export function AuthProvider({ children}) {
           setLoading(false);
           return;
         }
-        
+
         setToken(data.token);
-        setUser({ 
-          id: data.id, 
-          email: data.email, 
+        setUser({
+          id: data.id,
+          email: data.email,
           displayName: data.displayName,
-          profilePicture: data.profilePicture 
+          firstName: data.firstName,
+          lastName: data.lastName,
+          profilePicture: data.profilePicture,
+          authProvider: data.provider || null,
+          paymentPreference: data.paymentPreference,
+          selectedCharities: data.selectedCharities || []
         });
-        setProfile({ 
-          email: data.email, 
-          firstName: data.firstName || '', 
-          lastName: data.lastName || '' 
+        setProfile({
+          email: data.email,
+          firstName: data.firstName || '',
+          lastName: data.lastName || ''
         });
         setAuthProvider(data.provider || null);
         setEmailVerified(true);
@@ -79,11 +84,11 @@ export function AuthProvider({ children}) {
       if (typeof window !== 'undefined' && window.chrome && window.chrome.runtime && window.chrome.runtime.sendMessage) {
         window.chrome.runtime.sendMessage(
           process.env.REACT_APP_CHROME_EXTENSION_ID || "hmadgdapmiiiimdhebjchcocnjennahi",
-          { 
-            type: "SAVE_USER_DATA", 
-            email: email, 
+          {
+            type: "SAVE_USER_DATA",
+            email: email,
             userId: userId,
-            token: token 
+            token: token
           },
           (response) => {
             if (window.chrome.runtime.lastError) {
@@ -98,7 +103,7 @@ export function AuthProvider({ children}) {
         console.log("Stored Token:", token ? "Present" : "Missing");
       }
 
-      
+
     }
   }, [user, token]);
 
@@ -112,6 +117,8 @@ export function AuthProvider({ children}) {
       firstName: authData.user.firstName || '',
       lastName: authData.user.lastName || '',
       provider: authData.user.authProvider,
+      paymentPreference: authData.user.paymentPreference,
+      selectedCharities: authData.user.selectedCharities || [],
       token: authData.token,
       verified: true,
       expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000 // 7 days
@@ -140,21 +147,21 @@ export function AuthProvider({ children}) {
         try {
           const response = await authAPI.signup(email, password);
           const session = saveAuthData(response);
-          
-          setUser({ 
-            id: response.user.id, 
-            email: response.user.email, 
-            displayName: response.user.displayName 
+
+          setUser({
+            id: response.user.id,
+            email: response.user.email,
+            displayName: response.user.displayName
           });
-          setProfile({ 
-            email: response.user.email, 
-            firstName: '', 
-            lastName: '' 
+          setProfile({
+            email: response.user.email,
+            firstName: '',
+            lastName: ''
           });
           setAuthProvider('local');
           setToken(response.token);
           setEmailVerified(true);
-          
+
           return session;
         } catch (error) {
           throw new Error(error.message || 'Failed to sign up');
@@ -168,22 +175,27 @@ export function AuthProvider({ children}) {
         try {
           const response = await authAPI.login(email, password);
           const session = saveAuthData(response);
-          
-          setUser({ 
-            id: response.user.id, 
-            email: response.user.email, 
+
+          setUser({
+            id: response.user.id,
+            email: response.user.email,
             displayName: response.user.displayName,
-            profilePicture: response.user.profilePicture 
+            firstName: response.user.firstName,
+            lastName: response.user.lastName,
+            profilePicture: response.user.profilePicture,
+            authProvider: response.user.authProvider,
+            paymentPreference: response.user.paymentPreference,
+            selectedCharities: response.user.selectedCharities
           });
-          setProfile({ 
-            email: response.user.email, 
-            firstName: response.user.firstName || '', 
-            lastName: response.user.lastName || '' 
+          setProfile({
+            email: response.user.email,
+            firstName: response.user.firstName || '',
+            lastName: response.user.lastName || ''
           });
           setAuthProvider('local');
           setToken(response.token);
           setEmailVerified(true);
-          
+
           return session;
         } catch (error) {
           throw new Error(error.message || 'Failed to login');
@@ -196,7 +208,7 @@ export function AuthProvider({ children}) {
         setLoading(true);
         try {
           console.log('AuthContext: Starting Google login with credential:', googleCredential ? 'Present' : 'Missing');
-          
+
           // Decode Google credential JWT
           let googleInfo;
           if (googleCredential) {
@@ -216,14 +228,14 @@ export function AuthProvider({ children}) {
             // Fallback to custom popup flow
             googleInfo = await signInWithGoogleGSI();
           }
-          
+
           console.log('AuthContext: Calling backend with:', {
             googleId: googleInfo.id,
             email: googleInfo.email,
             displayName: googleInfo.fullName,
             profilePicture: googleInfo.picture
           });
-          
+
           // Send to backend
           const response = await authAPI.googleAuth(
             googleInfo.id,
@@ -233,14 +245,14 @@ export function AuthProvider({ children}) {
             googleInfo.firstName,
             googleInfo.lastName
           );
-          
+
           console.log('AuthContext: Backend response:', response);
-          
+
           const session = saveAuthData(response);
-          
-          setUser({ 
-            id: response.user.id, 
-            email: response.user.email, 
+
+          setUser({
+            id: response.user.id,
+            email: response.user.email,
             firstName: response.user.firstName,
             lastName: response.user.lastName,
             displayName: response.user.displayName,
@@ -249,15 +261,15 @@ export function AuthProvider({ children}) {
             paymentPreference: response.user.paymentPreference,
             selectedCharities: response.user.selectedCharities
           });
-          setProfile({ 
-            email: response.user.email, 
-            firstName: response.user.firstName || '', 
-            lastName: response.user.lastName || '' 
+          setProfile({
+            email: response.user.email,
+            firstName: response.user.firstName || '',
+            lastName: response.user.lastName || ''
           });
           setAuthProvider('google');
           setToken(response.token);
           setEmailVerified(true);
-          
+
           return session;
         } catch (error) {
           throw new Error(error.message || 'Failed to login with Google');
@@ -290,9 +302,9 @@ export function AuthProvider({ children}) {
             };
             localStorage.setItem('charitap_auth', JSON.stringify(updatedAuth));
             // Update user state manually since updateUserState is not in scope here
-            setUser({ 
-              id: response.user.id, 
-              email: response.user.email, 
+            setUser({
+              id: response.user.id,
+              email: response.user.email,
               displayName: response.user.displayName,
               firstName: response.user.firstName,
               lastName: response.user.lastName,
@@ -301,10 +313,10 @@ export function AuthProvider({ children}) {
               paymentPreference: response.user.paymentPreference,
               selectedCharities: response.user.selectedCharities
             });
-            setProfile({ 
-              email: response.user.email, 
-              firstName: response.user.firstName, 
-              lastName: response.user.lastName 
+            setProfile({
+              email: response.user.email,
+              firstName: response.user.firstName,
+              lastName: response.user.lastName
             });
             return response.user;
           } else {
@@ -347,6 +359,19 @@ export function AuthProvider({ children}) {
           setEmailVerified(false);
         } catch (error) {
           throw new Error(error.message || 'Failed to delete account');
+        }
+      },
+
+      // Update selected charities in state and localStorage
+      updateSelectedCharities: (newSelectedCharities) => {
+        setUser(prev => ({ ...prev, selectedCharities: newSelectedCharities }));
+        // Also update localStorage so it persists across refreshes
+        try {
+          const currentAuth = JSON.parse(localStorage.getItem('charitap_auth') || '{}');
+          currentAuth.selectedCharities = newSelectedCharities;
+          localStorage.setItem('charitap_auth', JSON.stringify(currentAuth));
+        } catch (e) {
+          console.error('Error updating localStorage:', e);
         }
       },
 

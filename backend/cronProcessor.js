@@ -7,6 +7,8 @@ const RoundUp = require('./models/RoundUp');
 const User = require('./models/User');
 const Charity = require('./models/Charity');
 const Transaction = require('./models/Transaction');
+const resilientDB = require('./services/resilientdb-client');
+const donationValidator = require('./services/donation-validator');
 
 dotenv.config();
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
@@ -16,8 +18,8 @@ mongoose.connect(process.env.MONGODB_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 })
-.then(() => console.log('Connected to MongoDB for cron job'))
-.catch(err => console.error('MongoDB connection error:', err));
+  .then(() => console.log('Connected to MongoDB for cron job'))
+  .catch(err => console.error('MongoDB connection error:', err));
 
 async function processUserRoundups(user) {
   const unpaidRoundUps = await RoundUp.find({ user: user.email, isPaid: false });
@@ -50,7 +52,7 @@ async function processUserRoundups(user) {
   try {
     // STEP 1: Charge the user's card
     console.log(`Charging ${user.email} for $${totalAmount.toFixed(2)}`);
-    
+
     const paymentIntent = await stripe.paymentIntents.create({
       amount: Math.round(totalAmount * 100), // Convert to cents
       currency: 'usd',
@@ -81,7 +83,7 @@ async function processUserRoundups(user) {
           description: `Donation from ${user.email}`,
         });
 
-        await Transaction.create({
+        const transaction = await Transaction.create({
           stripeTransactionId: transfer.id,
           stripePaymentIntentId: paymentIntent.id, // Link to user's charge
           userEmail: user.email,
@@ -90,6 +92,49 @@ async function processUserRoundups(user) {
         });
 
         console.log(`Transferred $${perCharityAmount.toFixed(2)} to ${charity.name}`);
+
+        // Record transaction on ResilientDB blockchain (non-blocking)
+        (async () => {
+          try {
+            const donationData = {
+              amount: perCharityAmount,
+              charities: [charity._id.toString()]
+            };
+            const validationResult = donationValidator.validateDonation(donationData);
+
+            const ledgerKey = resilientDB.generateKey('transaction', transaction._id.toString());
+            const ledgerData = {
+              transactionId: transaction._id.toString(),
+              stripeTransferId: transfer.id,
+              stripePaymentIntentId: paymentIntent.id,
+              userId: resilientDB.hashSensitiveData(user.email),
+              amount: perCharityAmount.toFixed(2),
+              charityId: charity._id.toString(),
+              charityName: charity.name,
+              timestamp: new Date().toISOString(),
+              status: 'completed',
+              validated: validationResult.valid,
+              validationRules: validationResult.appliedRules,
+              blockchainVersion: '2.0'
+            };
+
+            const txId = await resilientDB.set(ledgerKey, ledgerData);
+
+            if (txId) {
+              transaction.blockchainTxKey = ledgerKey;
+              transaction.blockchainTxId = txId;
+              transaction.blockchainVerified = true;
+              transaction.blockchainTimestamp = new Date();
+              await transaction.save();
+              console.log(`[Charitap] OK Transaction recorded on blockchain: ${txId}`);
+            }
+          } catch (blockchainError) {
+            console.error('[Charitap] WARNING Blockchain write failed (non-critical):', blockchainError.message);
+            transaction.blockchainError = blockchainError.message;
+            await transaction.save();
+          }
+        })();
+
       } catch (err) {
         console.error(`Error transferring to ${charity.name}:`, err.message);
       }
@@ -113,7 +158,7 @@ async function processUserRoundups(user) {
 
   } catch (error) {
     console.error(`Error charging ${user.email}:`, error.message);
-    
+
     // If charging fails, don't transfer anything
     // User will be notified about failed payment
     if (error.type === 'StripeCardError') {
@@ -132,7 +177,7 @@ cron.schedule('0 0 * * *', async () => {
     for (const user of users) {
       // Check if user should be processed today
       const today = new Date();
-      const shouldProcess = 
+      const shouldProcess =
         user.paymentPreference === 'threshold' || // Threshold users: process daily
         (user.paymentPreference === 'monthly' && today.getDate() === 1); // Monthly users: process only on 1st
 

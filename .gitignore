@@ -158,7 +158,6 @@ Thumbs.db
 # Test files
 test-*.js
 *-test.js
-verify-*.js
 fix-*.js
 final-*.js
 

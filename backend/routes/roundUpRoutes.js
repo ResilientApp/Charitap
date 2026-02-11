@@ -97,7 +97,7 @@ router.get('/history', authenticateToken, async (req, res) => {
     const roundups = await RoundUp.find({ user: req.user.email })
       .sort({ createdAt: -1 })
       .limit(100);
-    
+
     res.json({ roundups });
   } catch (error) {
     console.error(error);
@@ -108,14 +108,14 @@ router.get('/history', authenticateToken, async (req, res) => {
 // Get user's pending (unpaid) roundups total
 router.get('/pending', authenticateToken, async (req, res) => {
   try {
-    const unpaidRoundUps = await RoundUp.find({ 
-      user: req.user.email, 
-      isPaid: false 
+    const unpaidRoundUps = await RoundUp.find({
+      user: req.user.email,
+      isPaid: false
     });
-    
+
     const totalAmount = unpaidRoundUps.reduce((sum, ru) => sum + ru.roundUpAmount, 0);
-    
-    res.json({ 
+
+    res.json({
       count: unpaidRoundUps.length,
       totalAmount: totalAmount.toFixed(2)
     });
@@ -130,10 +130,10 @@ router.get('/pending', authenticateToken, async (req, res) => {
 router.get('/total-donated', authenticateToken, async (req, res) => {
   try {
     const transactions = await Transaction.find({ userEmail: req.user.email });
-    
+
     const totalDonated = transactions.reduce((sum, transaction) => sum + transaction.amount, 0);
-    
-    res.json({ 
+
+    res.json({
       totalDonated: totalDonated.toFixed(2),
       transactionCount: transactions.length
     });
@@ -151,20 +151,20 @@ router.get('/collected-this-month', authenticateToken, async (req, res) => {
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
-    
+
     // Find unpaid roundups from this month
-    const unpaidRoundUpsThisMonth = await RoundUp.find({ 
-      user: req.user.email, 
+    const unpaidRoundUpsThisMonth = await RoundUp.find({
+      user: req.user.email,
       isPaid: false,
       createdAt: {
         $gte: startOfMonth,
         $lte: endOfMonth
       }
     });
-    
+
     const collectedAmount = unpaidRoundUpsThisMonth.reduce((sum, ru) => sum + ru.roundUpAmount, 0);
-    
-    res.json({ 
+
+    res.json({
       collectedThisMonth: collectedAmount.toFixed(2),
       count: unpaidRoundUpsThisMonth.length,
       month: now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
@@ -180,25 +180,25 @@ router.get('/collected-this-month', authenticateToken, async (req, res) => {
 router.get('/activity/collected', authenticateToken, async (req, res) => {
   try {
     const { limit = 100, offset = 0, startDate, endDate } = req.query;
-    
+
     const query = { user: req.user.email };
-    
+
     // Optional date filtering
     if (startDate || endDate) {
       query.createdAt = {};
       if (startDate) query.createdAt.$gte = new Date(startDate);
       if (endDate) query.createdAt.$lte = new Date(endDate);
     }
-    
+
     const roundups = await RoundUp.find(query)
       .sort({ createdAt: -1 })
       .skip(parseInt(offset))
       .limit(parseInt(limit))
       .lean();
-    
+
     // Get total count for pagination
     const totalCount = await RoundUp.countDocuments(query);
-    
+
     // Format the response
     const formattedRoundups = roundups.map(roundup => ({
       id: roundup._id,
@@ -208,7 +208,7 @@ router.get('/activity/collected', authenticateToken, async (req, res) => {
       isPaid: roundup.isPaid,
       status: roundup.isPaid ? 'Donated' : 'Pending'
     }));
-    
+
     res.json({
       data: formattedRoundups,
       pagination: {
@@ -229,26 +229,26 @@ router.get('/activity/collected', authenticateToken, async (req, res) => {
 router.get('/activity/donated', authenticateToken, async (req, res) => {
   try {
     const { limit = 100, offset = 0, startDate, endDate } = req.query;
-    
+
     const query = { userEmail: req.user.email };
-    
+
     // Optional date filtering
     if (startDate || endDate) {
       query.timestamp = {};
       if (startDate) query.timestamp.$gte = new Date(startDate);
       if (endDate) query.timestamp.$lte = new Date(endDate);
     }
-    
+
     const transactions = await Transaction.find(query)
       .populate('charity', 'name type description')
       .sort({ timestamp: -1 })
       .skip(parseInt(offset))
       .limit(parseInt(limit))
       .lean();
-    
+
     // Get total count for pagination
     const totalCount = await Transaction.countDocuments(query);
-    
+
     // Format the response
     const formattedTransactions = transactions.map(transaction => ({
       id: transaction._id,
@@ -262,7 +262,7 @@ router.get('/activity/donated', authenticateToken, async (req, res) => {
       },
       stripeTransactionId: transaction.stripeTransactionId
     }));
-    
+
     res.json({
       data: formattedTransactions,
       pagination: {
@@ -282,9 +282,9 @@ router.get('/activity/donated', authenticateToken, async (req, res) => {
 router.get('/dashboard/unique-charities', authenticateToken, async (req, res) => {
   try {
     const transactions = await Transaction.find({ userEmail: req.user.email }).distinct('charity');
-    
+
     const uniqueCharitiesCount = transactions.length;
-    
+
     res.json({
       uniqueCharities: uniqueCharitiesCount
     });
@@ -301,20 +301,20 @@ router.get('/dashboard/monthly-donations', authenticateToken, async (req, res) =
     const now = new Date();
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth(); // 0-indexed (0 = January)
-    
+
     // YTD: Start from January 1st of current year
     const startDate = new Date(currentYear, 0, 1); // January 1st of current year
     startDate.setHours(0, 0, 0, 0);
-    
+
     // Fetch all transactions for current year only
     const transactions = await Transaction.find({
       userEmail: req.user.email,
       timestamp: { $gte: startDate, $lte: now }
     }).lean();
-    
+
     // Group transactions by month - only for current year YTD
     const monthlyData = {};
-    
+
     // Initialize all months from January to current month with 0
     for (let i = 0; i <= currentMonth; i++) {
       const date = new Date(currentYear, i, 1);
@@ -327,18 +327,18 @@ router.get('/dashboard/monthly-donations', authenticateToken, async (req, res) =
         monthNumber: i + 1
       };
     }
-    
+
     // Aggregate transaction amounts by month
     transactions.forEach(transaction => {
       const date = new Date(transaction.timestamp);
       const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      
+
       if (monthlyData[monthKey]) {
         monthlyData[monthKey].amount += transaction.amount;
         monthlyData[monthKey].transactionCount += 1;
       }
     });
-    
+
     // Convert to array and sort by month (January to current month)
     const monthlyArray = Object.keys(monthlyData)
       .sort()
@@ -346,7 +346,7 @@ router.get('/dashboard/monthly-donations', authenticateToken, async (req, res) =
         ...monthlyData[key],
         amount: parseFloat(monthlyData[key].amount.toFixed(2))
       }));
-    
+
     res.json({
       monthlyDonations: monthlyArray, // Chronological order (Jan to current)
       totalMonths: currentMonth + 1, // Number of months YTD
@@ -370,7 +370,7 @@ router.get('/dashboard/charity-breakdown', authenticateToken, async (req, res) =
     const transactions = await Transaction.find({ userEmail: req.user.email })
       .populate('charity', 'name type description')
       .lean();
-    
+
     if (transactions.length === 0) {
       return res.json({
         charities: [],
@@ -378,15 +378,15 @@ router.get('/dashboard/charity-breakdown', authenticateToken, async (req, res) =
         message: 'No donations yet'
       });
     }
-    
+
     // Group by charity and calculate totals
     const charityMap = {};
     let totalAmount = 0;
-    
+
     transactions.forEach(transaction => {
       const charityId = transaction.charity._id.toString();
       totalAmount += transaction.amount;
-      
+
       if (!charityMap[charityId]) {
         charityMap[charityId] = {
           id: charityId,
@@ -397,11 +397,11 @@ router.get('/dashboard/charity-breakdown', authenticateToken, async (req, res) =
           donationCount: 0
         };
       }
-      
+
       charityMap[charityId].amount += transaction.amount;
       charityMap[charityId].donationCount += 1;
     });
-    
+
     // Convert to array and calculate percentages
     const charitiesArray = Object.values(charityMap).map(charity => ({
       id: charity.id,
@@ -412,10 +412,10 @@ router.get('/dashboard/charity-breakdown', authenticateToken, async (req, res) =
       percentage: parseFloat(((charity.amount / totalAmount) * 100).toFixed(2)),
       donationCount: charity.donationCount
     }));
-    
+
     // Sort by amount (highest first)
     charitiesArray.sort((a, b) => b.amount - a.amount);
-    
+
     res.json({
       charities: charitiesArray,
       totalDonated: parseFloat(totalAmount.toFixed(2)),
@@ -438,13 +438,12 @@ router.get('/dashboard/blockchain-stats', authenticateToken, async (req, res) =>
   try {
     // Get all transactions for the user
     const transactions = await Transaction.find({ userEmail: req.user.email });
-    
-    // Count how many have been secured on blockchain
-    // Note: Transactions created with stripeTransactionId are real transactions
-    // For mock data, we'll consider all transactions as blockchain-secured
+
+    // Count how many have actually been secured on blockchain
+    // Only count transactions that have a blockchainTxId (verified on-chain)
     const totalTransactions = transactions.length;
-    const blockchainSecured = transactions.length; // All transactions are secured
-    
+    const blockchainSecured = transactions.filter(tx => tx.blockchainTxId || tx.blockchainVerified).length;
+
     res.json({
       totalTransactions,
       blockchainSecured,
@@ -470,7 +469,7 @@ router.get('/verify-blockchain/:transactionId', authenticateToken, async (req, r
     });
 
     if (!transaction) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         error: 'Transaction not found',
         verified: false
       });
@@ -523,7 +522,7 @@ router.get('/verify-blockchain/:transactionId', authenticateToken, async (req, r
 
   } catch (error) {
     console.error('[Charitap] Blockchain verification error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Error verifying blockchain transaction',
       details: error.message
     });

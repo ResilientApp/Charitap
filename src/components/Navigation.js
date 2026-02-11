@@ -1,10 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { toast } from 'react-toastify';
 import { useSwipeable } from 'react-swipeable';
+import { motion, AnimatePresence } from 'framer-motion';
 import CountUp from 'react-countup';
 import { dashboardAPI } from '../services/api';
+import { useWalletSync } from '../hooks/useRealTimeSync';
 
 const pages = [
   { to: '/', label: 'Home', preload: () => import('./Home') },
@@ -24,16 +26,15 @@ export default function Navigation() {
   const bypass = process.env.REACT_APP_AUTH_BYPASS === 'true';
 
   // Fetch real data from backend
-  useEffect(() => {
-    const fetchNavData = async () => {
-      console.log('Navigation: isAuthenticated =', isAuthenticated);
-      if (!isAuthenticated) {
-        console.log('Navigation: Not authenticated, skipping data fetch');
-        return;
-      }
-      
-      try {
-        console.log('Navigation: Fetching data from backend...');
+  const fetchNavData = useCallback(async () => {
+    console.log('Navigation: isAuthenticated =', isAuthenticated);
+    if (!isAuthenticated) {
+      console.log('Navigation: Not authenticated, skipping data fetch');
+      return;
+    }
+    
+    try {
+      console.log('Navigation: Fetching data from backend...');
         
         // Import roundUpAPI for pending data
         const { roundUpAPI } = await import('../services/api');
@@ -57,24 +58,10 @@ export default function Navigation() {
       } catch (error) {
         console.error('Navigation: Error fetching navigation data:', error);
       }
-    };
+    }, [isAuthenticated]);
 
-    fetchNavData();
-    
-    // Listen for real-time wallet updates from extension
-    const handleWalletUpdate = (event) => {
-      if (event.data && event.data.type === 'CHARITAP_WALLET_UPDATE') {
-        console.log('Navigation: Received wallet update message, refetching data...');
-        fetchNavData();
-      }
-    };
-    
-    window.addEventListener('message', handleWalletUpdate);
-    
-    return () => {
-      window.removeEventListener('message', handleWalletUpdate);
-    };
-  }, [isAuthenticated]);
+    // Enable real-time synchronization with 10-second polling for wallet updates
+    useWalletSync(fetchNavData);
 
   const totalStr = totalDonations.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const collectedStr = collectedAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -160,7 +147,7 @@ export default function Navigation() {
       <div className={`flex items-center justify-between ${scrolled ? 'h-14 lg:h-16' : 'h-16 lg:h-20'} w-full px-4 sm:px-6 lg:px-8 transition-all duration-300`}>
           <div className="flex-shrink-0">
             <NavLink to="/" className="flex items-center space-x-2 group" aria-label="Go to home page">
-              <img className="w-auto h-8 sm:h-10" src="/logo.png" alt="Charitap Logo" />
+              <img className="w-auto h-8 sm:h-10" src="/images/extension/icon128.png" alt="Charitap Logo" />
               <span className="font-extrabold text-xl sm:text-2xl text-yellow-400 tracking-tight group-hover:text-yellow-500 transition">Charitap</span>
             </NavLink>
           </div>
@@ -252,42 +239,110 @@ export default function Navigation() {
             )}
           </div>
         </div>
-        {/* Mobile menu - only show when authenticated */}
-        {isAuthenticated && (
-          <div className={`lg:hidden ${menuOpen ? 'block' : 'hidden'} transition-all duration-300 ease-in-out`} id="mobile-menu">
-            <nav className="flex flex-col items-center space-y-4 py-6 bg-white shadow-lg rounded-b-2xl mx-4" aria-label="Mobile navigation">
-              {pages.map(({ to, label }) => (
-                <NavLink
-                  key={to}
-                  to={to}
-                  onClick={e => { guard(e, to); setMenuOpen(false); }}
-                  className={({ isActive }) =>
-                    `text-base text-black transition-all duration-200 hover:text-opacity-80 px-4 py-2 rounded-lg w-full text-center ${isActive ? 'font-bold bg-yellow-100 text-yellow-800' : 'hover:bg-gray-50'}`
-                  }
-                >
-                  {label}
-                </NavLink>
-              ))}
-            <div className="w-full border-t border-gray-200 pt-4 mt-2">
-              {isAuthenticated ? (
-                <button
-                  onClick={() => { logout(); setMenuOpen(false); }}
-                  className="w-full items-center justify-center px-5 py-3 text-base transition-all duration-200 hover:bg-yellow-300 hover:text-black focus:text-black focus:bg-yellow-300 font-semibold text-white bg-black rounded-full hover:scale-105 active:scale-95 transform"
-                >
-                  Sign Out
-                </button>
-              ) : (
-                <button
-                  onClick={() => { nav('/signup'); setMenuOpen(false); }}
-                  className="w-full items-center justify-center px-5 py-3 text-base transition-all duration-200 hover:bg-yellow-300 hover:text-black focus:text-black focus:bg-yellow-300 font-semibold text-white bg-black rounded-full hover:scale-105 active:scale-95 transform"
-                >
-                  Join Now
-                </button>
-              )}
-            </div>
-          </nav>
-        </div>
-        )}
+        {/* Mobile menu - enhanced with Framer Motion */}
+        <AnimatePresence>
+          {isAuthenticated && menuOpen && (
+            <>
+              {/* Backdrop */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                onClick={() => setMenuOpen(false)}
+                className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
+              />
+              {/* Slide-in menu from right */}
+              <motion.div
+                initial={{ x: '100%' }}
+                animate={{ x: 0 }}
+                exit={{ x: '100%' }}
+                transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                className="fixed top-0 right-0 bottom-0 w-72 bg-white shadow-xl z-50 lg:hidden overflow-y-auto"
+                id="mobile-menu"
+              >
+                <div className="p-6">
+                  {/* Close button */}
+                  <div className="flex justify-end mb-6">
+                    <button
+                      onClick={() => setMenuOpen(false)}
+                      className="p-2 rounded-full hover:bg-gray-100 transition-colors"
+                      aria-label="Close menu"
+                    >
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+
+                  {/* Navigation links */}
+                  <nav className="flex flex-col space-y-2" aria-label="Mobile navigation">
+                    {pages.map(({ to, label }, index) => (
+                      <motion.div
+                        key={to}
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: index * 0.05 }}
+                      >
+                        <NavLink
+                          to={to}
+                          onClick={e => { guard(e, to); setMenuOpen(false); }}
+                          className={({ isActive }) =>
+                            `block text-lg px-4 py-3 rounded-lg transition-all duration-200 ${
+                              isActive 
+                                ? 'font-bold bg-yellow-100 text-yellow-800' 
+                                : 'text-gray-700 hover:bg-gray-50'
+                            }`
+                          }
+                        >
+                          {label}
+                        </NavLink>
+                      </motion.div>
+                    ))}
+                  </nav>
+
+                  {/* Divider */}
+                  <div className="border-t border-gray-200 my-6"></div>
+
+                  {/* User info badges */}
+                  <div className="space-y-3 mb-6">
+                    <div className="p-3 rounded-lg bg-green-50 border border-green-200">
+                      <div className="text-xs text-green-600 font-medium mb-1">Total Donated</div>
+                      <div className="text-2xl font-bold text-green-900">${totalStr}</div>
+                    </div>
+                    <div className="p-3 rounded-lg bg-yellow-50 border border-yellow-200">
+                      <div className="text-xs text-yellow-600 font-medium mb-1">Collected</div>
+                      <div className="text-2xl font-bold text-yellow-900">${collectedStr}</div>
+                    </div>
+                  </div>
+
+                  {/* Sign out button */}
+                  {isAuthenticated ? (
+                    <motion.button
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.3 }}
+                      onClick={() => { logout(); setMenuOpen(false); }}
+                      className="w-full px-5 py-3 text-base transition-all duration-200 hover:bg-yellow-300 hover:text-black focus:text-black focus:bg-yellow-300 font-semibold text-white bg-black rounded-full hover:scale-105 active:scale-95 transform"
+                    >
+                      Sign Out
+                    </motion.button>
+                  ) : (
+                    <motion.button
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.3 }}
+                      onClick={() => { nav('/signup'); setMenuOpen(false); }}
+                      className="w-full px-5 py-3 text-base transition-all duration-200 hover:bg-yellow-300 hover:text-black focus:text-black focus:bg-yellow-300 font-semibold text-white bg-black rounded-full hover:scale-105 active:scale-95 transform"
+                    >
+                      Join Now
+                    </motion.button>
+                  )}
+                </div>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
     </header>
   );
 }

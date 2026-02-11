@@ -1,8 +1,13 @@
 {
     "manifest_version": 3,
-    "name": "Round‑Up Charity",
+    "name": "Charitap",
     "version": "1.0",
-    "description": "Round up your online payments and donate the spare change.",
+    "description": "Transform spare change into impact. Charitap automatically rounds up your online purchases and donates the difference to verified charities.",
+    "icons": {
+      "16": "public/images/extension/icon16.png",
+      "48": "public/images/extension/icon48.png",
+      "128": "public/images/extension/icon128.png"
+    },
     "permissions": [
       "storage",
       "scripting",
@@ -27,7 +32,7 @@
     ],
     "web_accessible_resources": [
     {
-      "resources": ["assets/charity.png", "patterns.json", "widget.css", "icons/icon16.png", "icons/icon48.png", "icons/icon128.png"],
+      "resources": ["public/images/icons/charity.png", "patterns.json", "src/styles/extension.css", "public/images/extension/icon16.png", "public/images/extension/icon48.png", "public/images/extension/icon128.png"],
       "matches": ["http://localhost:3000/*", "<all_urls>"]
     }
   ]

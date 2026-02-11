@@ -1,9 +1,9 @@
 import React from 'react';
 
 const kids = [
-  { src: '/img/kid1.jpg', style: 'rounded-full bg-yellow-200 object-cover' }, // smiling boy (first image)
-  { src: '/img/kid2.jpg', style: 'rounded-2xl bg-blue-500 object-cover' }, // twin boys (second image)
-  { src: '/img/kid3.jpg', style: 'rounded-full bg-purple-300 object-cover' }, // group of kids (third image)
+  { src: '/images/hero/kid1.jpg', style: 'rounded-full bg-yellow-200 object-cover' }, // smiling boy (first image)
+  { src: '/images/hero/kid2.jpg', style: 'rounded-2xl bg-blue-500 object-cover' }, // twin boys (second image)
+  { src: '/images/hero/kid3.jpg', style: 'rounded-full bg-purple-300 object-cover' }, // group of kids (third image)
 ];
 
 export default function HeroGrid() {

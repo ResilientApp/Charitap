@@ -5,7 +5,9 @@ import { AuthProvider } from './auth/AuthContext';
 import { ToastContainer, Slide } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import './styles/main.css';
+import './styles/responsive.css';
 import App from './App';
+import reportWebVitals from './reportWebVitals';
 import { BrowserRouter as Router } from 'react-router-dom';
 
 // No Auth0 configuration needed
@@ -33,3 +35,6 @@ root.render(
     </AuthProvider>
   </React.StrictMode>
 );
+
+// Enable performance monitoring
+reportWebVitals(console.log);

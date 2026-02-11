@@ -38,7 +38,7 @@ export default function SignIn() {
     <div className="min-h-screen bg-gradient-to-br from-yellow-50 to-orange-50 flex items-center justify-center px-4">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 md:p-10 border border-yellow-100 space-y-6 animate-fade-in">
         <div className="text-center">
-          <img className="w-12 h-12 mx-auto" src="/logo.png" alt="Charitap" />
+          <img className="w-12 h-12 mx-auto" src="/images/extension/icon128.png" alt="Charitap" />
           <h1 className="text-2xl font-bold text-gray-900 mt-2">Sign in to Charitap</h1>
           <p className="text-gray-600">Join your clicks to a cause — every tap counts.</p>
         </div>

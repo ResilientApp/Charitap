@@ -22,12 +22,77 @@ var userToken = null;
 var patterns = null;
 var detectedPlatform = null;
 
+// Throttling state
+const requestThrottle = {
+  recentRequests: [],
+  maxRequests: 10, // Max 10 roundups per 15 minutes
+  timeWindow: 15 * 60 * 1000, // 15 minutes in milliseconds
+};
+
 // Session decline tracking
 const DECLINE_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour
 
 // ===================================================================
 // INITIALIZATION
 // ===================================================================
+
+// Throttling helpers
+function isThrottled() {
+  const now = Date.now();
+  
+  // Remove old requests outside the time window
+  requestThrottle.recentRequests = requestThrottle.recentRequests.filter(
+    timestamp => now - timestamp < requestThrottle.timeWindow
+  );
+  
+  // Check if we've exceeded the limit
+  if (requestThrottle.recentRequests.length >= requestThrottle.maxRequests) {
+    const oldestRequest = Math.min(...requestThrottle.recentRequests);
+    const timeSinceOldest = now - oldestRequest;
+    
+    if (timeSinceOldest < requestThrottle.timeWindow) {
+      return {
+        throttled: true,
+        retryAfter: Math.ceil((requestThrottle.timeWindow - timeSinceOldest) / 1000)
+      };
+    }
+  }
+  
+  return { throttled: false };
+}
+
+function recordRequest() {
+  requestThrottle.recentRequests.push(Date.now());
+  
+  // Save to session storage if available
+  if (chrome.storage && chrome.storage.session) {
+    try {
+      chrome.storage.session.set({
+        throttleRequests: requestThrottle.recentRequests
+      });
+    } catch (error) {
+      console.log('[Charitap] Could not save throttle state, using in-memory throttle');
+    }
+  }
+}
+
+async function loadThrottleState() {
+  // Check if chrome.storage.session is available
+  if (!chrome.storage || !chrome.storage.session) {
+    console.log('[Charitap] Session storage not available, using in-memory throttle');
+    return;
+  }
+  
+  try {
+    const result = await chrome.storage.session.get(['throttleRequests']);
+    if (result.throttleRequests) {
+      requestThrottle.recentRequests = result.throttleRequests;
+      console.log('[Charitap] Loaded throttle state:', requestThrottle.recentRequests.length, 'recent requests');
+    }
+  } catch (error) {
+    console.log('[Charitap] Could not load throttle state, using in-memory throttle');
+  }
+}
 
 async function hasDeclinedRecently() {
   // Check if session storage is available
@@ -73,6 +138,9 @@ async function initialize() {
     userId = userData.userId;
     userEmail = userData.userEmail;
     userToken = userData.userToken;
+
+    // Load throttle state
+    await loadThrottleState();
 
     console.log('[Charitap] Initialized', { userId: userId ? 'Present' : 'Missing' });
 
@@ -276,10 +344,10 @@ function showWidget() {
   console.log('[Charitap] Round up amount:', roundUpAmount.toFixed(2));
   
   // Create widget (USD only - US market)
-  createWidget(roundUpAmount);
+  createWidget(total, roundUpAmount);
 }
 
-function createWidget(roundUpAmount) {
+function createWidget(purchaseAmount, roundUpAmount) {
   console.log('[Charitap] Creating widget...');
   
   // Create the circular button
@@ -308,7 +376,7 @@ function createWidget(roundUpAmount) {
   // Add charity icon
   const icon = document.createElement('img');
   icon.className = 'charitap-icon';
-  icon.src = chrome.runtime.getURL('icons/icon128.png');
+  icon.src = chrome.runtime.getURL('public/images/extension/icon128.png');
   icon.style.cssText = `
     width: 32px;
     height: 32px;
@@ -351,7 +419,7 @@ function createWidget(roundUpAmount) {
   let isExpanded = false;
   button.addEventListener('click', () => {
     if (!isExpanded) {
-      expandWidget(button, roundUpAmount);
+      expandWidget(button, purchaseAmount, roundUpAmount);
       isExpanded = true;
     } else {
       collapseWidget(button);
@@ -364,7 +432,7 @@ function createWidget(roundUpAmount) {
   console.log('[Charitap] Widget created successfully');
 }
 
-function expandWidget(button, roundUpAmount) {
+function expandWidget(button, purchaseAmount, roundUpAmount) {
   console.log('[Charitap] Expanding widget...');
   
   button.classList.remove('charitap-widget-collapsed');
@@ -410,7 +478,7 @@ function expandWidget(button, roundUpAmount) {
     
     // Icon
     const iconDiv = document.createElement('img');
-    iconDiv.src = chrome.runtime.getURL('icons/icon128.png');
+    iconDiv.src = chrome.runtime.getURL('public/images/extension/icon128.png');
     iconDiv.style.cssText = `
       width: 40px;
       height: 40px;
@@ -482,7 +550,7 @@ function expandWidget(button, roundUpAmount) {
     tickButton.addEventListener('click', (e) => {
       e.stopPropagation();
       console.log('[Charitap] Tick button clicked');
-      handleDonation(roundUpAmount);
+      handleDonation(purchaseAmount, roundUpAmount);
     });
     
     content.appendChild(tickButton);
@@ -514,7 +582,7 @@ function collapseWidget(button) {
       button.innerHTML = '';
       const icon = document.createElement('img');
       icon.className = 'charitap-icon';
-      icon.src = chrome.runtime.getURL('icons/icon128.png');
+      icon.src = chrome.runtime.getURL('public/images/extension/icon128.png');
       icon.style.cssText = `
         width: 32px;
         height: 32px;
@@ -529,8 +597,8 @@ function collapseWidget(button) {
 // DONATION HANDLING
 // ===================================================================
 
-function handleDonation(amount) {
-  console.log('[Charitap] Processing donation:', amount);
+function handleDonation(purchaseAmount, roundUpAmount) {
+  console.log('[Charitap] Processing donation - Purchase:', purchaseAmount, 'RoundUp:', roundUpAmount);
   
   if (!userId || !userEmail) {
     console.error('[Charitap] User not logged in');
@@ -538,25 +606,57 @@ function handleDonation(amount) {
     return;
   }
   
+  // Check throttling
+  const throttleCheck = isThrottled();
+  if (throttleCheck.throttled) {
+    console.warn('[Charitap] Request throttled');
+    showMessage(`Too many requests. Please wait ${Math.ceil(throttleCheck.retryAfter / 60)} minutes`, 'error');
+    return;
+  }
+  
+  // Record this request
+  recordRequest();
+  
   // Send message to background script to create roundup
   chrome.runtime.sendMessage({
     action: 'createRoundUp',
     data: {
       userEmail: userEmail,
-      amount: amount,
+      purchaseAmount: purchaseAmount,
+      roundUpAmount: roundUpAmount,
       merchantName: window.location.hostname
     }
   }, (response) => {
     console.log('[Charitap] Response from background:', response);
     
-    if (response && response.success) {
-      showSuccessPopup(amount);
+    // Check for chrome.runtime.lastError (connection issues)
+    if (chrome.runtime.lastError) {
+      console.error('[Charitap] Runtime error:', chrome.runtime.lastError);
+      showMessage('Connection error. Please try again.', 'error');
+      return;
+    }
+    
+    // Check if response is valid and successful
+    if (response && response.success === true) {
+      console.log('[Charitap] Donation successful!');
+      showSuccessPopup(roundUpAmount);
       removeWidget();
       
       // Broadcast wallet update
       chrome.runtime.sendMessage({ action: 'walletUpdated' });
     } else {
-      showMessage('Failed to add donation', 'error');
+      // Log the actual error for debugging
+      console.error('[Charitap] Donation failed:', response);
+      
+      // If failed due to rate limiting, show appropriate message
+      if (response && response.error && (response.error.includes('Too many') || response.error.includes('rate limit'))) {
+        showMessage('Server rate limit reached. Please try again later', 'error');
+      } else if (response && response.error) {
+        // Show specific error message if available
+        showMessage(`Failed: ${response.error}`, 'error');
+      } else {
+        showMessage('Failed to add donation. Please try again.', 'error');
+      }
     }
   });
 }

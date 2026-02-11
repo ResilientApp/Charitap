@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import Breadcrumb from './Breadcrumb';
 import CollapsibleSection from './CollapsibleSection';
 import useScrollAnimation from '../hooks/useScrollAnimation';
+import { useDashboardSync } from '../hooks/useRealTimeSync';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement } from 'chart.js';
 import { Bar, Doughnut } from 'react-chartjs-2';
 import { dashboardAPI, roundUpAPI } from '../services/api';
@@ -51,18 +52,18 @@ const Dashboard = () => {
   const animatedTotalTransactions = useCountUp(targetValues.totalTransactions, 2000);
 
   // Fetch dashboard data from backend
-  useEffect(() => {
-    const fetchDashboardData = async () => {
-      console.log('Dashboard: isAuthenticated =', isAuthenticated);
-      if (!isAuthenticated) {
-        console.log('Dashboard: Not authenticated, skipping data fetch');
-        setLoading(false);
-        return;
-      }
+  const fetchDashboardData = useCallback(async () => {
+    console.log('Dashboard: isAuthenticated =', isAuthenticated);
+    if (!isAuthenticated) {
+      console.log('Dashboard: Not authenticated, skipping data fetch');
+      setLoading(false);
+      return;
+    }
 
-      setLoading(true);
-      try {
-        console.log('Dashboard: Fetching data from backend...');
+    // Don't show loading spinner on refresh if we already have data
+    setLoading(prevLoading => stats[0].value === '$0.00' ? true : false);
+    try {
+      console.log('Dashboard: Fetching data from backend...');
 
         // Fetch all dashboard metrics in parallel
         const [totalDonated, pendingData, uniqueCharities, monthlyDonations, charityBreakdownData, blockchainStats] = await Promise.all([
@@ -85,16 +86,25 @@ const Dashboard = () => {
 
         // Calculate Last Month amount - get previous month's donations
         const now = new Date();
-        const currentMonth = now.getMonth(); // 0-indexed
+        const currentMonth = now.getMonth(); // 0-indexed (0=Jan, 1=Feb, etc.)
         const currentYear = now.getFullYear();
         
-        // For February 2026, last month would be January 2026 (month index 0)
+        // Previous month calculation
+        let lastMonthIndex = currentMonth - 1;
+        let lastMonthYear = currentYear;
+        
+        // If current month is January (0), last month is December (11) of previous year
+        if (currentMonth === 0) {
+          lastMonthIndex = 11; // December
+          lastMonthYear = currentYear - 1;
+        }
+        
+        // Find previous month's data
         let lastMonthAmount = 0;
         if (monthlyDonations.monthlyDonations && monthlyDonations.monthlyDonations.length > 0) {
-          // Find previous month's data
           const lastMonthData = monthlyDonations.monthlyDonations.find(m => {
-            // Current month is February (1), so last month is January (0)
-            return m.monthNumber === currentMonth; // Previous month
+            // Match by monthNumber (1-indexed) and year
+            return m.monthNumber === lastMonthIndex + 1 && m.year === lastMonthYear;
           });
           lastMonthAmount = lastMonthData?.amount || 0;
         }
@@ -143,24 +153,10 @@ const Dashboard = () => {
         console.error('Dashboard: Error fetching dashboard data:', error);
         setLoading(false);
       }
-    };
+    }, [isAuthenticated]);
 
-    fetchDashboardData();
-    
-    // Listen for real-time wallet updates from extension
-    const handleWalletUpdate = (event) => {
-      if (event.data && event.data.type === 'CHARITAP_WALLET_UPDATE') {
-        console.log('Dashboard: Received wallet update message, refetching data...');
-        fetchDashboardData();
-      }
-    };
-    
-    window.addEventListener('message', handleWalletUpdate);
-    
-    return () => {
-      window.removeEventListener('message', handleWalletUpdate);
-    };
-  }, [isAuthenticated]);
+    // Enable real-time synchronization with 15-second polling
+    useDashboardSync(fetchDashboardData);
 
   // Chart data - dynamically generated from backend data (YTD only)
   const currentYear = new Date().getFullYear();

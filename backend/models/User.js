@@ -1,9 +1,9 @@
 const mongoose = require('mongoose');
 
 const userSchema = new mongoose.Schema({
-  email: { type: String, required: true, unique: true },
+  email: { type: String, required: true },
   password: { type: String }, // Only for traditional auth users
-  googleId: { type: String, unique: true, sparse: true }, // For Google OAuth users
+  googleId: { type: String }, // For Google OAuth users
   authProvider: { type: String, enum: ['local', 'google'], required: true }, // Track auth method
   firstName: { type: String },
   lastName: { type: String },
@@ -13,6 +13,7 @@ const userSchema = new mongoose.Schema({
   // Stripe payment information (FROM GITHUB - CRITICAL FOR PAYMENTS)
   stripeCustomerId: { type: String },
   defaultPaymentMethod: { type: String }, // Stripe payment method ID
+  paymentMethodType: { type: String, enum: ["card", "apple_pay", "google_pay"], default: "card" }, // Payment method type
   paymentMethodLast4: { type: String }, // Last 4 digits for display
   paymentMethodBrand: { type: String }, // Card brand (Visa, Mastercard, etc)
   paymentMethodExpMonth: { type: Number }, // Expiration month
@@ -35,6 +36,9 @@ userSchema.virtual('fullName').get(function() {
   return this.displayName || this.firstName || this.lastName || '';
 });
 
-// Note: Indexes for googleId and email are already created by unique: true in the schema
+// Database Indexes for Performance
+userSchema.index({ email: 1 }, { unique: true });
+userSchema.index({ googleId: 1 }, { sparse: true });
+userSchema.index({ createdAt: -1 });
 
 module.exports = mongoose.model('User', userSchema);

@@ -70,20 +70,22 @@ chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => 
 
 // Listen for internal messages from content scripts
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log('Service Worker: Received internal message:', message);
+  console.log('Service Worker: Received internal message:', JSON.stringify(message));
   
   if (message.action === 'createRoundUp') {
     // Extract data from message
-    const { userEmail, amount, merchantName } = message.data;
+    const { userEmail, purchaseAmount, roundUpAmount, merchantName } = message.data;
     
-    console.log(`Service Worker: Creating roundup for ${userEmail}, amount: $${amount}`);
+    console.log(`Service Worker: Creating roundup for ${userEmail}, purchase: $${purchaseAmount}, roundup: $${roundUpAmount}, merchant: ${merchantName}`);
     
     // Check if we have a token
     if (!currentUserToken) {
       console.error('Service Worker: No auth token available');
-      sendResponse({ success: false, error: 'Not authenticated' });
+      sendResponse({ success: false, error: 'Not authenticated - no token' });
       return true;
     }
+    
+    console.log('Service Worker: Token present, making API call...');
     
     // Call backend API to create roundup
     const API_BASE_URL = 'http://localhost:3001/api';
@@ -95,14 +97,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         'Authorization': `Bearer ${currentUserToken}`
       },
       body: JSON.stringify({
-        purchaseAmount: amount,
-        roundUpAmount: amount,
+        purchaseAmount: purchaseAmount,
+        roundUpAmount: roundUpAmount,
         merchantName: merchantName || 'Unknown Merchant'
       })
     })
-    .then(response => response.json())
+    .then(response => {
+      console.log('Service Worker: Received response, status:', response.status);
+      return response.json();
+    })
     .then(data => {
-      console.log('Service Worker: Roundup created successfully:', data);
+      console.log('Service Worker: Roundup created successfully:', JSON.stringify(data));
       
       // Broadcast wallet update to all tabs
       chrome.tabs.query({}, (tabs) => {
@@ -117,6 +122,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     })
     .catch(error => {
       console.error('Service Worker: Error creating roundup:', error);
+      console.error('Service Worker: Error stack:', error.stack);
       sendResponse({ success: false, error: error.message });
     });
     

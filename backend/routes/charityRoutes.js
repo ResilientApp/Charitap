@@ -2,9 +2,10 @@ const express = require('express');
 const router = express.Router();
 const Charity = require('../models/Charity');
 const { authenticateToken, optionalAuth } = require('../middleware/auth');
+const { cacheMiddleware } = require('../middleware/cache');
 
-// Get all charities (public or authenticated)
-router.get('/', optionalAuth, async (req, res) => {
+// Get all charities (public or authenticated) - with caching
+router.get('/', optionalAuth, cacheMiddleware('charity', 600), async (req, res) => {
   try {
     const charities = await Charity.find()
       .select('name type description createdAt')
@@ -21,8 +22,8 @@ router.get('/', optionalAuth, async (req, res) => {
   }
 });
 
-// Get single charity by ID
-router.get('/:id', async (req, res) => {
+// Get single charity by ID - with caching
+router.get('/:id', cacheMiddleware('charity', 600, (req) => `charity:${req.params.id}`), async (req, res) => {
   try {
     const charity = await Charity.findById(req.params.id)
       .select('name type description createdAt')

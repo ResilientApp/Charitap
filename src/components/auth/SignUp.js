@@ -89,7 +89,7 @@ export default function SignUp() {
     <div className="min-h-screen bg-gradient-to-br from-yellow-50 to-orange-50 flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 md:p-10 border border-yellow-100 space-y-6 animate-fade-in my-8">
         <div className="text-center mb-6">
-          <img className="w-12 h-12 mx-auto" src="/logo.png" alt="Charitap" />
+          <img className="w-12 h-12 mx-auto" src="/images/extension/icon128.png" alt="Charitap" />
           <h1 className="text-2xl font-bold text-gray-900 mt-2">Create your Charitap account</h1>
           <p className="text-gray-600">It takes less than a minute to start giving with every click.</p>
         </div>

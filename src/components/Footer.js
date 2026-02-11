@@ -5,7 +5,7 @@ export default function Footer() {
     <footer className="bg-[#FCF8F1] border-t border-gray-200 py-10 mt-16 w-full" role="contentinfo">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between">
         <div className="flex items-center space-x-3 mb-4 md:mb-0">
-          <img src="/logo.png" alt="Charitap Logo" className="h-8 w-8 rounded-full" />
+          <img src="/images/extension/icon128.png" alt="Charitap Logo" className="h-8 w-8 rounded-full" />
           <span className="font-bold text-lg text-yellow-400">Charitap</span>
           <span className="ml-4 text-gray-700 text-sm italic max-w-xs hidden md:inline-block border-l border-gray-300 pl-4">A micro-donation platform that lets users round up everyday purchases and automatically donate the spare change to a charity of your choice.</span>
         </div>

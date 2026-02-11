@@ -4,11 +4,37 @@ const router = express.Router();
 const RoundUp = require('../models/RoundUp');
 const Transaction = require('../models/Transaction');
 const { authenticateToken } = require('../middleware/auth');
+const { validateRoundup } = require('../middleware/validation');
 const resilientDB = require('../services/resilientdb-client');
 const donationValidator = require('../services/donation-validator');
+const rateLimit = require('express-rate-limit');
+const { ipKeyGenerator } = require('express-rate-limit');
+
+// Rate limiter specifically for roundup creation (extension protection)
+// Uses user email as key instead of IP for better per-user tracking
+const roundupLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 1000, // Limit each user to 1000 roundup requests per 15 minutes (50x)
+  skipSuccessfulRequests: false,
+  message: 'Too many roundup requests, please try again later',
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  // Use user email as key (set by authenticateToken middleware)
+  keyGenerator: (req) => {
+    return req.user?.email || ipKeyGenerator(req);
+  },
+  handler: (req, res) => {
+    console.log(`[Rate Limit] User ${req.user?.email} exceeded roundup limit`);
+    res.status(429).json({ 
+      error: 'Too many roundup requests',
+      message: 'Please wait before making another purchase roundup',
+      retryAfter: 900 // seconds (15 minutes)
+    });
+  }
+});
 
 // API to create a new RoundUp entry
-router.post('/create-roundup', authenticateToken, async (req, res) => {
+router.post('/create-roundup', authenticateToken, roundupLimiter, validateRoundup, async (req, res) => {
   try {
     const { purchaseAmount, roundUpAmount } = req.body;
 

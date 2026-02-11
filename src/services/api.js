@@ -1,6 +1,39 @@
 // API service for backend communication
 const API_BASE_URL = process.env.REACT_APP_SERVER_URL || 'http://localhost:3001';
 
+// Request throttling for frontend
+const requestThrottle = {
+  cache: new Map(), // endpoint -> { timestamp, count }
+  maxRequests: 30, // Max 30 requests per endpoint per minute
+  timeWindow: 60 * 1000, // 1 minute
+};
+
+function isRequestThrottled(endpoint) {
+  const now = Date.now();
+  const key = endpoint;
+  const record = requestThrottle.cache.get(key);
+
+  if (!record) {
+    requestThrottle.cache.set(key, { timestamp: now, count: 1 });
+    return false;
+  }
+
+  // Reset if outside time window
+  if (now - record.timestamp > requestThrottle.timeWindow) {
+    requestThrottle.cache.set(key, { timestamp: now, count: 1 });
+    return false;
+  }
+
+  // Increment count
+  if (record.count >= requestThrottle.maxRequests) {
+    console.warn(`[API Throttle] Too many requests to ${endpoint}`);
+    return true;
+  }
+
+  record.count++;
+  return false;
+}
+
 // Helper function to get auth token
 const getAuthToken = () => {
   const auth = localStorage.getItem('charitap_auth');
@@ -15,8 +48,13 @@ const getAuthToken = () => {
   return null;
 };
 
-// Helper function for API calls
+// Helper function for API calls with throttling
 const apiCall = async (endpoint, options = {}) => {
+  // Check throttle
+  if (isRequestThrottled(endpoint)) {
+    throw new Error('Too many requests. Please wait before retrying.');
+  }
+
   const token = getAuthToken();
   const headers = {
     'Content-Type': 'application/json',
@@ -209,7 +247,14 @@ export const stripeAPI = {
     });
   },
 
-  // List payment methods (Note: Check backend if this endpoint exists)
+  // List payment methods - use GET for proper REST
+  getPaymentMethods: async () => {
+    return apiCall('/api/stripe/payment-methods', {
+      method: 'GET',
+    });
+  },
+
+  // List payment methods (POST for backwards compatibility)
   listPaymentMethods: async (email) => {
     return apiCall('/api/stripe/list-payment-methods', {
       method: 'POST',
@@ -217,15 +262,29 @@ export const stripeAPI = {
     });
   },
 
-  // Set default payment method (Note: Check backend if this endpoint exists)
-  setDefaultPaymentMethod: async (email, paymentMethodId) => {
+  // Delete payment method - use DELETE for proper REST
+  deletePaymentMethod: async (paymentMethodId) => {
+    return apiCall(`/api/stripe/payment-methods/${paymentMethodId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  // Set default payment method - use POST with ID in URL for proper REST
+  setDefaultPaymentMethod: async (paymentMethodId) => {
+    return apiCall(`/api/stripe/payment-methods/${paymentMethodId}/default`, {
+      method: 'POST',
+    });
+  },
+
+  // Set default payment method (POST with body for backwards compatibility)
+  setDefaultPaymentMethodLegacy: async (email, paymentMethodId) => {
     return apiCall('/api/stripe/set-default-payment-method', {
       method: 'POST',
       body: JSON.stringify({ email, paymentMethodId }),
     });
   },
 
-  // Detach payment method (Note: Check backend if this endpoint exists)
+  // Detach payment method (POST for backwards compatibility)
   detachPaymentMethod: async (paymentMethodId) => {
     return apiCall('/api/stripe/detach-payment-method', {
       method: 'POST',

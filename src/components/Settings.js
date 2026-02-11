@@ -7,6 +7,7 @@ import {loadStripe} from '@stripe/stripe-js';
 import {Elements, CardNumberElement, CardExpiryElement, CardCvcElement, useStripe, useElements} from '@stripe/react-stripe-js';
 import { settingsAPI } from '../services/api';
 import { toast } from 'react-toastify';
+import Skeleton from './Skeleton';
 
 const stripePromise = loadStripe(process.env.REACT_APP_STRIPE_PUBLIC_KEY);
 
@@ -33,6 +34,9 @@ export default function Settings() {
   const [paymentMode, setPaymentMode] = useState('monthly'); // 'monthly' or 'threshold'
 
   const [showOnboarding, setShowOnboarding] = useState(() => localStorage.getItem('charitap_onboarding_show') === '1');
+
+  // Loading states
+  const [loadingCharities, setLoadingCharities] = useState(true);
 
   // Update name fields when user data changes
   useEffect(() => {
@@ -65,8 +69,12 @@ export default function Settings() {
   // Fetch charities from backend
   useEffect(() => {
     const fetchCharities = async () => {
-      if (!isAuthenticated) return;
+      if (!isAuthenticated) {
+        setLoadingCharities(false);
+        return;
+      }
       
+      setLoadingCharities(true);
       try {
         const response = await settingsAPI.getCharities();
         
@@ -82,6 +90,7 @@ export default function Settings() {
         }));
         
         setCharities(mappedCharities);
+        setLoadingCharities(false);
       } catch (error) {
         console.error('Error fetching charities:', error);
         // Fallback to mock charities
@@ -98,6 +107,7 @@ export default function Settings() {
           { id: 10, name: 'Greenpeace', active: false, category: 'Environment' }
         ];
         setCharities(mockCharities);
+        setLoadingCharities(false);
       }
     };
 
@@ -494,7 +504,24 @@ export default function Settings() {
               </p>
               
               <div className="h-[420px] overflow-y-auto pr-2 space-y-4 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 charities-scroll-container">
-                {charities.map((charity, index) => (
+                {loadingCharities ? (
+                  // Show skeleton loaders while charities are loading
+                  Array.from({ length: 6 }).map((_, index) => (
+                    <div key={index} className="p-4 rounded-xl border-2 border-gray-200 bg-gray-50 min-h-[96px]">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-4 flex-1">
+                          <Skeleton variant="circle" width="48px" height="48px" />
+                          <div className="flex-1">
+                            <Skeleton variant="text" width="60%" className="mb-2" />
+                            <Skeleton variant="text" width="40%" />
+                          </div>
+                        </div>
+                        <Skeleton variant="rect" width="64px" height="32px" />
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  charities.map((charity, index) => (
                   <div 
                     key={charity.id} 
                     className={`relative p-4 rounded-xl border-2 transition-all duration-200 cursor-pointer hover:shadow-md overflow-hidden min-h-[96px] ${
@@ -553,7 +580,8 @@ export default function Settings() {
                       </div>
                     </div>
                   </div>
-                ))}
+                  ))
+                )}
               </div>
             </div>
           </CollapsibleSection>

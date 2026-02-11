@@ -1,0 +1,80 @@
+version: '3.8'
+
+services:
+  # MongoDB Database
+  mongodb:
+    image: mongo:7
+    container_name: charitap-mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_DATABASE=charitap
+    volumes:
+      - mongodb-data:/data/db
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "mongosh", "--eval", "db.adminCommand('ping')" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: charitap-backend
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - MONGODB_URI=mongodb://mongodb:27017/charitap
+      - JWT_SECRET=${JWT_SECRET}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:3000}
+      - RATE_LIMIT_WINDOW=${RATE_LIMIT_WINDOW:-15}
+      - RATE_LIMIT_MAX=${RATE_LIMIT_MAX:-100}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - CACHE_TTL=${CACHE_TTL:-300}
+      - GEO_BLOCK_COUNTRIES=${GEO_BLOCK_COUNTRIES:-CN,RU,KP}
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "node", "-e", "require('http').get('http://localhost:3001/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Frontend React App
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: charitap-frontend
+    ports:
+      - "3000:80"
+    environment:
+      - REACT_APP_SERVER_URL=${REACT_APP_SERVER_URL:-http://localhost:3001}
+      - REACT_APP_GOOGLE_CLIENT_ID=${REACT_APP_GOOGLE_CLIENT_ID}
+      - REACT_APP_STRIPE_PUBLIC_KEY=${REACT_APP_STRIPE_PUBLIC_KEY}
+    depends_on:
+      - backend
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  mongodb-data:
+    driver: local
+
+networks:
+  default:
+    name: charitap-network

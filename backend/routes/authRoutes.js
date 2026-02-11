@@ -4,6 +4,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const { authenticateToken } = require('../middleware/auth');
+const { validateSignup, validateLogin, validatePasswordChange } = require('../middleware/validation');
 
 // Generate JWT token
 const generateToken = (userId) => {
@@ -13,7 +14,7 @@ const generateToken = (userId) => {
 };
 
 // Traditional signup with email and password
-router.post('/signup', async (req, res) => {
+router.post('/signup', validateSignup, async (req, res) => {
   try {
     const { email, password, displayName } = req.body;
 
@@ -77,7 +78,7 @@ router.post('/signup', async (req, res) => {
 });
 
 // Traditional login with email and password
-router.post('/login', async (req, res) => {
+router.post('/login', validateLogin, async (req, res) => {
   try {
     const { email, password } = req.body;
 

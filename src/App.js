@@ -6,7 +6,9 @@ import Navigation from './components/Navigation';
 import Footer from './components/Footer';
 import ProtectedRoute from './components/ProtectedRoute';
 import ErrorBoundary from './components/ErrorBoundary';
+import { motion, AnimatePresence } from 'framer-motion';
 import './styles/main.css';
+import './styles/responsive.css';
 
 // Lazy load components for better performance
 const Home = lazy(() => import('./components/Home'));
@@ -43,16 +45,26 @@ function App() {
           {!hideChrome && <Navigation />}
           <main className="flex-1">
             <Suspense fallback={<LoadingSpinner />}>
-              <Routes>
-                <Route path="/" element={<Home />} />
-                {/* Public home currently not used */}
-                <Route path="/signin" element={<SignIn />} />
-                <Route path="/signup" element={<SignUp />} />
-                <Route path="/complete-profile" element={<CompleteProfile />} />
-                <Route path="/dashboard" element={<ProtectedRoute element={Dashboard} />} />
-                <Route path="/activity" element={<ProtectedRoute element={Activity} />} />
-                <Route path="/settings" element={<ProtectedRoute element={Settings} />} />
-              </Routes>
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={location.pathname}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 20 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <Routes location={location}>
+                    <Route path="/" element={<Home />} />
+                    {/* Public home currently not used */}
+                    <Route path="/signin" element={<SignIn />} />
+                    <Route path="/signup" element={<SignUp />} />
+                    <Route path="/complete-profile" element={<CompleteProfile />} />
+                    <Route path="/dashboard" element={<ProtectedRoute element={Dashboard} />} />
+                    <Route path="/activity" element={<ProtectedRoute element={Activity} />} />
+                    <Route path="/settings" element={<ProtectedRoute element={Settings} />} />
+                  </Routes>
+                </motion.div>
+              </AnimatePresence>
             </Suspense>
           </main>
           {!hideChrome && <Footer />}

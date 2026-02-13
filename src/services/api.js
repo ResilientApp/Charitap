@@ -189,6 +189,19 @@ export const settingsAPI = {
       body: JSON.stringify({ paymentPreference }),
     });
   },
+
+  // Nominate a charity
+  nominateCharity: async (nominationData) => {
+    return apiCall('/api/charity-nominations/nominate', {
+      method: 'POST',
+      body: JSON.stringify(nominationData),
+    });
+  },
+
+  // Get user's nominations
+  getMyNominations: async () => {
+    return apiCall('/api/charity-nominations/my-nominations');
+  },
 };
 
 // Stripe APIs

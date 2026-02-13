@@ -7,6 +7,8 @@ import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardNumberElement, CardExpiryElement, CardCvcElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { settingsAPI } from '../services/api';
 import { toast } from 'react-toastify';
+import Skeleton from './Skeleton';
+import NominateCharity from './NominateCharity';
 
 const stripePromise = loadStripe(process.env.REACT_APP_STRIPE_PUBLIC_KEY);
 
@@ -669,6 +671,20 @@ export default function Settings() {
             <Elements stripe={stripePromise}>
               <StripePaymentSection userEmail={email} displayName={displayName} />
             </Elements>
+          </CollapsibleSection>
+
+          {/* Nominate Charity */}
+          <CollapsibleSection
+            title="Suggest a Charity"
+            defaultOpen={false}
+            persistKey="settings:nominate-charity"
+            icon={
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+            }
+          >
+            <NominateCharity />
           </CollapsibleSection>
         </div>
       </div>

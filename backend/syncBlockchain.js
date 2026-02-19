@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 const Transaction = require('./models/Transaction');
 const RoundUp = require('./models/RoundUp');
 const resilientDB = require('./services/resilientdb-client');
+const rescontractClient = require('./services/rescontract-client');
 
 const USER_EMAIL = 'hnimonkar@gmail.com';
 
@@ -19,7 +20,7 @@ async function syncToBlockchain() {
 
     // Check if blockchain is enabled
     console.log('Blockchain status:', resilientDB.enabled ? 'ENABLED ✅' : 'DISABLED ❌');
-    
+
     if (!resilientDB.enabled) {
       console.log('\n⚠️  ResilientDB is DISABLED in environment');
       console.log('   Set RESILIENTDB_ENABLED=true in .env file');
@@ -30,7 +31,7 @@ async function syncToBlockchain() {
 
     // Sync Transactions
     console.log('\n📊 Syncing Transactions to Blockchain...');
-    const transactions = await Transaction.find({ 
+    const transactions = await Transaction.find({
       userEmail: USER_EMAIL,
       $or: [
         { blockchainTxKey: { $exists: false } },
@@ -63,7 +64,23 @@ async function syncToBlockchain() {
           transaction.blockchainTxId = txId;
           transaction.blockchainVerified = true;
           transaction.blockchainTimestamp = new Date();
-          
+
+          // Smart Contract: mint an on-chain receipt (runs independently of ledger)
+          try {
+            // Convert MongoDB ObjectId to a numeric hash for Solidity uint256
+            const charityIdStr = transaction.charity?.toString() || '0';
+            const charityNumericId = parseInt(charityIdStr.slice(-8), 16) || 0;
+            const amountCents = Math.round(parseFloat(transaction.amount) * 100);
+
+            const receiptResult = await rescontractClient.mintReceipt(charityNumericId, amountCents);
+            if (receiptResult) {
+              transaction.contractReceiptId = receiptResult;
+              console.log(`  📜 Contract receipt minted: ${receiptResult}`);
+            }
+          } catch (contractError) {
+            console.error(`  ⚠️  Contract receipt failed (non-blocking): ${contractError.message}`);
+          }
+
           // Save with error handling
           try {
             await transaction.save();
@@ -81,7 +98,7 @@ async function syncToBlockchain() {
 
     // Sync RoundUps
     console.log('\n💳 Syncing RoundUps to Blockchain...');
-    const roundups = await RoundUp.find({ 
+    const roundups = await RoundUp.find({
       user: USER_EMAIL,
       $or: [
         { blockchainTxKey: { $exists: false } },
@@ -130,7 +147,7 @@ async function syncToBlockchain() {
 
     const allTransactions = await Transaction.find({ userEmail: USER_EMAIL });
     const allRoundUps = await RoundUp.find({ user: USER_EMAIL });
-    
+
     const transactionsOnBlockchain = allTransactions.filter(t => t.blockchainTxKey).length;
     const roundupsOnBlockchain = allRoundUps.filter(r => r.blockchainTxKey).length;
 

@@ -12,7 +12,9 @@ const transactionSchema = new mongoose.Schema({
   blockchainTxKey: { type: String }, // Ledger key (charitap:transaction:{id})
   blockchainVerified: { type: Boolean, default: false },
   blockchainTimestamp: { type: Date },
-  blockchainError: { type: String } // Store any blockchain errors
+  blockchainError: { type: String }, // Store any blockchain errors
+  // Smart contract receipt (from ResContract DonationReceipt.sol)
+  contractReceiptId: { type: String } // Receipt ID returned by the on-chain contract
 });
 
 module.exports = mongoose.model('Transaction', transactionSchema);

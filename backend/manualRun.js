@@ -1,13 +1,17 @@
 const mongoose = require('mongoose');
 const dotenv = require('dotenv');
+dotenv.config(); // Must be called before requiring services
+
 const Stripe = require('stripe');
 
 const RoundUp = require('./models/RoundUp');
 const User = require('./models/User');
 const Charity = require('./models/Charity');
 const Transaction = require('./models/Transaction');
+const resilientDB = require('./services/resilientdb-client');
+const rescontractClient = require('./services/rescontract-client');
+const donationValidator = require('./services/donation-validator');
 
-dotenv.config();
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 
 async function processUserRoundups(user) {
@@ -39,7 +43,7 @@ async function processUserRoundups(user) {
   try {
     // STEP 1: Charge the user's card
     console.log(`Charging ${user.email} for $${totalAmount.toFixed(2)}`);
-    
+
     const paymentIntent = await stripe.paymentIntents.create({
       amount: Math.round(totalAmount * 100),
       currency: 'usd',
@@ -70,7 +74,7 @@ async function processUserRoundups(user) {
           description: `Donation from ${user.email}`,
         });
 
-        await Transaction.create({
+        const transaction = await Transaction.create({
           stripeTransactionId: transfer.id,
           stripePaymentIntentId: paymentIntent.id,
           userEmail: user.email,
@@ -79,6 +83,60 @@ async function processUserRoundups(user) {
         });
 
         console.log(`Transferred $${perCharityAmount.toFixed(2)} to ${charity.name}`);
+
+        // Record transaction on ResilientDB blockchain & Smart Contract
+        try {
+          const donationData = {
+            amount: perCharityAmount,
+            charities: [charity._id.toString()]
+          };
+          const validationResult = donationValidator.validateDonation(donationData);
+
+          const ledgerKey = resilientDB.generateKey('transaction', transaction._id.toString());
+          const ledgerData = {
+            transactionId: transaction._id.toString(),
+            stripeTransferId: transfer.id,
+            stripePaymentIntentId: paymentIntent.id,
+            userId: resilientDB.hashSensitiveData(user.email),
+            amount: perCharityAmount.toFixed(2),
+            charityId: charity._id.toString(),
+            charityName: charity.name,
+            timestamp: new Date().toISOString(),
+            status: 'completed',
+            validated: validationResult.valid,
+            validationRules: validationResult.appliedRules,
+            blockchainVersion: '2.0'
+          };
+
+          const txId = await resilientDB.set(ledgerKey, ledgerData);
+
+          if (txId) {
+            transaction.blockchainTxKey = ledgerKey;
+            transaction.blockchainTxId = txId;
+            transaction.blockchainVerified = true;
+            transaction.blockchainTimestamp = new Date();
+
+            // Smart Contract Interaction
+            try {
+              const charityNumericId = parseInt(charity._id.toString().slice(-8), 16) || 0;
+              const amountCents = Math.round(perCharityAmount * 100);
+              const receiptResult = await rescontractClient.mintReceipt(charityNumericId, amountCents);
+              if (receiptResult) {
+                transaction.contractReceiptId = receiptResult;
+                console.log(`📜 Contract receipt minted: ${receiptResult}`);
+              }
+            } catch (contractError) {
+              console.error(`⚠️ Contract receipt failed: ${contractError.message}`);
+            }
+
+            await transaction.save();
+            console.log(`✅ Transaction recorded on blockchain: ${txId}`);
+          }
+        } catch (blockchainError) {
+          console.error('⚠️ Blockchain write failed:', blockchainError.message);
+          transaction.blockchainError = blockchainError.message;
+          await transaction.save();
+        }
       } catch (err) {
         console.error(`Error transferring to ${charity.name}:`, err.message);
       }
@@ -112,19 +170,18 @@ mongoose.connect(process.env.MONGODB_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 })
-.then(async () => {
-  console.log('Running manual processor...');
-  const users = await User.find();
+  .then(async () => {
+    console.log('Running manual processor...');
+    const users = await User.find();
 
-  for (const user of users) {
-    const today = new Date();
-    if (user.paymentPreference === 'monthly' && today.getDate() !== 1) continue;
+    for (const user of users) {
+      // For manual run, force process by ignoring date filters:
+      // (Bypassing the daily/monthly logic for testing)
+      await processUserRoundups(user);
+    }
 
-    await processUserRoundups(user);
-  }
-
-  mongoose.disconnect();
-})
-.catch(err => {
-  console.error('MongoDB connection error:', err);
-});
+    mongoose.disconnect();
+  })
+  .catch(err => {
+    console.error('MongoDB connection error:', err);
+  });

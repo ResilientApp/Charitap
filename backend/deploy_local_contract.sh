@@ -63,7 +63,7 @@ EOF
 
 DEP_OUT=$($TOOL -c "$CONFIG" --config_file=/tmp/deploy.json 2>&1)
 echo "DEP_OUT RAW: $DEP_OUT"
-CONTRACT=$(echo "$DEP_OUT" | grep -oP '0x[0-9a-fA-F]+' | head -1)
+CONTRACT=$(echo "$DEP_OUT" | grep -oP '0x[0-9a-fA-F]+' | tail -1)
 
 if [ -z "$CONTRACT" ]; then
     echo "Error: Failed to deploy."

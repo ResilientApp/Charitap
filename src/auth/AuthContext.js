@@ -375,6 +375,18 @@ export function AuthProvider({ children }) {
         }
       },
 
+      // Update payment preference in state and localStorage
+      updatePaymentPreference: (newPreference) => {
+        setUser(prev => ({ ...prev, paymentPreference: newPreference }));
+        try {
+          const currentAuth = JSON.parse(localStorage.getItem('charitap_auth') || '{}');
+          currentAuth.paymentPreference = newPreference;
+          localStorage.setItem('charitap_auth', JSON.stringify(currentAuth));
+        } catch (e) {
+          console.error('Error updating localStorage:', e);
+        }
+      },
+
       authProvider
     };
   }, [user, profile, loading, authProvider, emailVerified, token]);

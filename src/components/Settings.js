@@ -13,7 +13,7 @@ import NominateCharity from './NominateCharity';
 const stripePromise = loadStripe(process.env.REACT_APP_STRIPE_PUBLIC_KEY);
 
 export default function Settings() {
-  const { user, profile, email, saveName, changePassword, logout, authProvider, isAuthenticated, updateSelectedCharities } = useAuth();
+  const { user, profile, email, saveName, changePassword, logout, authProvider, isAuthenticated, updateSelectedCharities, updatePaymentPreference } = useAuth();
   const [displayName, setDisplayName] = useState(() => {
     const saved = localStorage.getItem('userDisplayName');
     const initial = saved || (profile ? `${profile.firstName || ''} ${profile.lastName || ''}`.trim() : (user?.displayName || 'User'));
@@ -173,9 +173,17 @@ export default function Settings() {
   const handleSavePaymentSettings = async () => {
     try {
       await settingsAPI.updatePaymentPreference(paymentMode);
-      console.log('Payment settings saved successfully');
+      updatePaymentPreference(paymentMode); // Update local context and localStorage
+      toast.success('✅ Payment settings saved successfully!', {
+        position: 'top-right',
+        autoClose: 3000,
+      });
     } catch (error) {
       console.error('Error saving payment settings:', error);
+      toast.error('Failed to save payment settings. Please try again.', {
+        position: 'top-right',
+        autoClose: 3000,
+      });
     }
   };
 

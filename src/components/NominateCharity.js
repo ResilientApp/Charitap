@@ -55,13 +55,15 @@ export default function NominateCharity() {
       });
 
       toast.success(response.message || 'Thank you! We\'ve notified the charity.');
-      
+
       // Clear form
       setCharityName('');
       setCharityEmail('');
       setCategory('Other');
     } catch (error) {
-      const errorMessage = error.response?.data?.error || 'Failed to submit nomination. Please try again.';
+      // API call uses fetch and throws an Error containing the backend error string,
+      // so we use error.message. Fallback checks for Axios-style error just in case.
+      const errorMessage = error.message || error.response?.data?.error || 'Failed to submit nomination. Please try again.';
       toast.error(errorMessage);
     } finally {
       setLoading(false);
@@ -132,7 +134,7 @@ export default function NominateCharity() {
           <RippleButton
             type="submit"
             disabled={loading}
-            className="submit-button"
+            className="w-full bg-yellow-400 hover:bg-yellow-500 text-black px-6 py-3.5 rounded-lg font-medium transition-colors shadow-lg disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {loading ? 'Submitting...' : 'Send Invitation'}
           </RippleButton>
@@ -225,29 +227,6 @@ export default function NominateCharity() {
 
         .form-actions {
           margin-top: 24px;
-        }
-
-        .submit-button {
-          width: 100%;
-          padding: 12px 24px;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          color: white;
-          border: none;
-          border-radius: 8px;
-          font-size: 16px;
-          font-weight: 600;
-          cursor: pointer;
-          transition: transform 0.2s, box-shadow 0.2s;
-        }
-
-        .submit-button:hover:not(:disabled) {
-          transform: translateY(-2px);
-          box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-        }
-
-        .submit-button:disabled {
-          opacity: 0.6;
-          cursor: not-allowed;
         }
 
         .nominate-charity-info {

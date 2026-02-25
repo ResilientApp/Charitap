@@ -106,6 +106,11 @@ class ResContractClient {
         const output = this._runContractTool(config);
         if (!output) return null;
 
+        if (output.includes('execute contract fail')) {
+            console.error('[ResContract] Execute failed. Output:', output.trim());
+            return null;
+        }
+
         // Try to extract result from the output
         const resultMatch = output.match(/result:\s*"?([^"\n]+)"?/i);
         return resultMatch ? resultMatch[1].trim() : output.trim();

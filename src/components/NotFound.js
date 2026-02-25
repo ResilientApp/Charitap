@@ -23,7 +23,7 @@ export default function NotFound() {
         {/* Decorative divider */}
         <div className="flex items-center justify-center gap-3 my-8">
           <div className="h-px w-16 bg-yellow-300" />
-          <span className="text-yellow-400 text-xl">🤍</span>
+          <span className="text-yellow-400 text-xl">💛</span>
           <div className="h-px w-16 bg-yellow-300" />
         </div>
 

@@ -213,37 +213,39 @@ This invitation was initiated by a Charitap user (${nominatedBy})
               
               <div class="info-grid">
                 <div class="info-row">
-                  <span class="info-label">Charity Name</span>
+                  <span class="info-label">Charity Name:</span>
                   <span class="info-value">${applicationData.charityName}</span>
                 </div>
                 <div class="info-row">
-                  <span class="info-label">Email</span>
+                  <span class="info-label">Email Address:</span>
                   <span class="info-value">${applicationData.charityEmail}</span>
                 </div>
                 <div class="info-row">
-                  <span class="info-label">Category</span>
+                  <span class="info-label">Category:</span>
                   <span class="info-value">${applicationData.category}</span>
                 </div>
                 <div class="info-row">
-                  <span class="info-label">Nominated By</span>
+                  <span class="info-label">Nominated By:</span>
                   <span class="info-value">${applicationData.nominatedBy}</span>
                 </div>
-                <div class="info-row">
-                  <span class="info-label">Date</span>
-                  <span class="info-value">${new Date().toLocaleString()}</span>
+                <div class="info-row" style="border-bottom: none;">
+                  <span class="info-label">Request Date:</span>
+                  <span class="info-value">${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}</span>
                 </div>
               </div>
               
-              <p class="section-title">Action Required</p>
+              <p class="section-title">Action Items for Admin</p>
               <ol class="steps-list">
-                <li>Wait for charity to reply with their information</li>
-                <li>Verify 501(c)(3) status on <a href="https://www.irs.gov/charities-non-profits/tax-exempt-organization-search" style="color:#FBBF24">IRS.gov</a></li>
-                <li>Create Stripe Express account for them</li>
-                <li>Send Stripe onboarding link to charity</li>
-                <li>Approve in admin dashboard once complete</li>
+                <li>Wait for charity response with official docs</li>
+                <li>Verify <strong>501(c)(3)</strong> status on IRS database</li>
+                <li>Setup <strong>Stripe Express</strong> account for transfers</li>
+                <li>Send final <strong>Stripe Onboarding</strong> link</li>
+                <li>Approve organization in admin portal</li>
               </ol>
               
-              <p class="note">The charity has been sent an email notification.</p>
+              <div style="background: #F3F4F6; padding: 16px; border-radius: 8px; margin-top: 24px;">
+                <p style="font-size: 13px; color: #4B5563; margin: 0;"><strong>Status:</strong> The charity has automatically received their nomination invitation email.</p>
+              </div>
             </div>
             <div class="footer">
               <p>&copy; ${new Date().getFullYear()} Charitap. All rights reserved.</p>

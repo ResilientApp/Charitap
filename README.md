@@ -67,52 +67,6 @@ Charitap employs a robust, microservices-inspired architecture to ensure scalabi
 
 ---
 
-## 🔌 API Documentation
-
-### Authentication (`/api/auth`)
-*   `POST /signup`: Register a new user with email/password.
-*   `POST /login`: Authenticate existing user.
-*   `POST /google`: OAuth login/signup with Google.
-*   `GET /me`: Retrieve current user profile.
-
-### Round-Ups & Donations (`/api/roundup`)
-*   `POST /create-roundup`: Record a new purchase and calculate round-up amount.
-*   `GET /history`: Fetch user's round-up history.
-*   `GET /pending`: Get total unpaid round-ups.
-*   `GET /dashboard/monthly-donations`: Get data for monthly donation charts.
-
-### Payments (`/api/stripe`)
-*   `POST /create-customer`: Initialize Stripe customer for user.
-*   `POST /save-payment-method`: Securely save a card for future recurring charges.
-*   `POST /list-payment-methods`: Retrieve user's saved cards.
-
-### Charity (`/api/charity-nominations`)
-*   `POST /nominate`: Submit a new charity for platform consideration.
-*   `GET /my-nominations`: View status of your submitted nominations.
-
----
-
-## 🗄️ Database Schema
-
-### User Model (`User.js`)
-Stores user identity and preferences.
-*   `email`: User's unique email.
-*   `authProvider`: 'local' or 'google'.
-*   `stripeCustomerId`: Link to Stripe.
-*   `paymentPreference`: 'threshold' or 'monthly'.
-*   `selectedCharities`: Array of references to supported Charity IDs.
-
-### Transaction Model (`Transaction.js`)
-Records completed donations.
-*   `userEmail`: Link to donor.
-*   `amount`: Total amount donated in this transaction.
-*   `charity`: Reference to the recipient Charity.
-*   `stripePaymentIntentId`: ID of the charge on Stripe.
-*   `blockchainTxId`: ID of the immutable record on ResilientDB.
-*   `blockchainVerified`: Boolean flag confirming on-chain verification.
-
----
-
 ## 🛠️ Tech Stack Overview
 
 | Category | Technology | Usage |

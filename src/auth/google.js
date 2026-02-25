@@ -99,5 +99,6 @@ export async function signInWithGoogleGSI() {
 
 // Export the components for use in the app
 export { GoogleOAuthProvider, GoogleLogin };
+export { useGoogleLogin } from '@react-oauth/google';
 
 

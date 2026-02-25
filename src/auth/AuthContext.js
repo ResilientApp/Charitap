@@ -12,6 +12,7 @@ export function AuthProvider({ children }) {
   const [emailVerified, setEmailVerified] = useState(true); // Always true now
   const [loading, setLoading] = useState(true);
   const [token, setToken] = useState(null);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   // Function to update user state from API response
   const updateUserState = (userData, tokenParam) => {
@@ -207,12 +208,14 @@ export function AuthProvider({ children }) {
       loginWithGoogle: async (googleCredential) => {
         setLoading(true);
         try {
-          console.log('AuthContext: Starting Google login with credential:', googleCredential ? 'Present' : 'Missing');
+          console.log('AuthContext: Starting Google login with credentialType:', typeof googleCredential);
 
-          // Decode Google credential JWT
           let googleInfo;
-          if (googleCredential) {
-            // Direct credential from GoogleLogin component
+          // Check if it's a JWT (has 3 parts separated by dots) or an access token
+          const isJWT = typeof googleCredential === 'string' && googleCredential.split('.').length === 3;
+
+          if (isJWT) {
+            console.log('AuthContext: Detected JWT credential');
             const { jwtDecode } = await import('jwt-decode');
             const decoded = jwtDecode(googleCredential);
             googleInfo = {
@@ -223,9 +226,24 @@ export function AuthProvider({ children }) {
               lastName: decoded.family_name || '',
               picture: decoded.picture || ''
             };
-            console.log('AuthContext: Decoded Google info:', googleInfo);
+          } else if (typeof googleCredential === 'string') {
+            console.log('AuthContext: Detected access token, fetching user info...');
+            // Likely an access token from useGoogleLogin custom button
+            const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+              headers: { Authorization: `Bearer ${googleCredential}` }
+            });
+            if (!res.ok) throw new Error('Failed to fetch user info from Google');
+            const decoded = await res.json();
+            googleInfo = {
+              id: decoded.sub,
+              email: decoded.email,
+              fullName: decoded.name || '',
+              firstName: decoded.given_name || '',
+              lastName: decoded.family_name || '',
+              picture: decoded.picture || ''
+            };
           } else {
-            // Fallback to custom popup flow
+            // Fallback to custom popup flow defined in src/auth/google.js
             googleInfo = await signInWithGoogleGSI();
           }
 
@@ -279,12 +297,15 @@ export function AuthProvider({ children }) {
       },
 
       logout: async () => {
+        setIsLoggingOut(true);
         localStorage.removeItem('charitap_auth');
         setUser(null);
         setProfile(null);
         setAuthProvider(null);
         setToken(null);
         setEmailVerified(false);
+        // Reset logging out after a short delay to allow navigation to complete
+        setTimeout(() => setIsLoggingOut(false), 2000);
       },
 
       saveName: async (firstName, lastName) => {
@@ -387,9 +408,10 @@ export function AuthProvider({ children }) {
         }
       },
 
-      authProvider
+      authProvider,
+      isLoggingOut
     };
-  }, [user, profile, loading, authProvider, emailVerified, token]);
+  }, [user, profile, loading, authProvider, emailVerified, token, isLoggingOut]);
 
   return (
     <AuthContext.Provider value={value}>

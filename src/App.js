@@ -16,6 +16,7 @@ const Settings = lazy(() => import('./components/Settings'));
 const SignIn = lazy(() => import('./components/auth/SignIn'));
 const SignUp = lazy(() => import('./components/auth/SignUp'));
 const CompleteProfile = lazy(() => import('./components/auth/CompleteProfile'));
+const NotFound = lazy(() => import('./components/NotFound'));
 
 // Loading component
 const LoadingSpinner = () => (
@@ -52,6 +53,7 @@ function App() {
                 <Route path="/dashboard" element={<ProtectedRoute element={Dashboard} />} />
                 <Route path="/activity" element={<ProtectedRoute element={Activity} />} />
                 <Route path="/settings" element={<ProtectedRoute element={Settings} />} />
+                <Route path="*" element={<NotFound />} />
               </Routes>
             </Suspense>
           </main>

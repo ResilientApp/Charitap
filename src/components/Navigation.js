@@ -14,7 +14,7 @@ const pages = [
 ];
 
 export default function Navigation() {
-  const { isAuthenticated, isLoading, logout } = useAuth();
+  const { isAuthenticated, isLoading, logout, isLoggingOut } = useAuth();
   const nav = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -80,7 +80,7 @@ export default function Navigation() {
   const collectedStr = collectedAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   const guard = (e, to) => {
-    if (bypass) return;
+    if (bypass || isLoggingOut) return;
     if (!isLoading && !isAuthenticated && to !== '/') {
       e.preventDefault();
       toast.info(
@@ -224,7 +224,13 @@ export default function Navigation() {
                 </span>
                 <span className="inline-flex items-center px-4 py-1.5 rounded-full bg-yellow-200 text-yellow-900 font-semibold text-base border border-yellow-300 relative group" title="Your current donation balance">
                   <span className="font-semibold">Collected:</span>
-                  <span className="ml-1 font-bold tracking-tight text-black inline-block text-right w-16" style={{ fontVariantNumeric: 'tabular-nums' }} aria-live="off">${collectedStr}</span>
+                  <span className="ml-1 font-bold tracking-tight text-black inline-block text-right w-16" style={{ fontVariantNumeric: 'tabular-nums' }} aria-live="off">
+                    {animateCounts ? (
+                      <>$<CountUp end={collectedAmount} duration={1.2} separator="," decimals={2} /></>
+                    ) : (
+                      `$${collectedStr}`
+                    )}
+                  </span>
                   <span className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 bg-black text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap">
                     Your current donation balance
                   </span>

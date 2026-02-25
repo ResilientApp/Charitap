@@ -76,10 +76,24 @@ app.use('/api/charities', charityRoutes);
 app.use('/api/charity-nominations', charityNominationRoutes);
 app.use('/api/admin', adminRoutes);
 
-// Start the cron processor for automated payments
-require('./cronProcessor');
-
-// Start the server
-app.listen(PORT, () => {
-  console.log(`Server is running at http://localhost:${PORT}`);
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+// Start the cron processor for automated payments
+// NOTE: In production (Vercel), cron is handled by /api/cron/process-roundups.js
+// The node-cron below runs only in local dev / non-Vercel environments
+if (process.env.NODE_ENV !== 'production') {
+  require('./cronProcessor');
+}
+
+// Start the server (local dev only — Vercel uses the exported app)
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`Server is running at http://localhost:${PORT}`);
+  });
+}
+
+// Export for Vercel serverless (via api/index.js)
+module.exports = app;

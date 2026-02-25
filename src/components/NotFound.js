@@ -42,11 +42,6 @@ export default function NotFound() {
             My Dashboard
           </Link>
         </div>
-
-        {/* Footer note */}
-        <p className="mt-10 text-xs text-gray-400">
-          © {new Date().getFullYear()} Charitap · Made with 💛 under ExpoLab @ UC Davis
-        </p>
       </div>
     </div>
   );

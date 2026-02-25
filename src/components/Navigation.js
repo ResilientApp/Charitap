@@ -210,7 +210,6 @@ export default function Navigation() {
             {(!isLoading && isAuthenticated) && (
               <>
                 <span className="inline-flex items-center px-4 py-1.5 rounded-full bg-green-200 text-green-900 font-semibold text-base border border-green-300 relative group" title="Total donations made">
-                  <span className="w-2 h-2 mr-2 rounded-full bg-green-400 animate-pulse-slow" />
                   <span className="font-semibold">Total:</span>
                   <span className="ml-1 font-bold tracking-tight text-black inline-block text-right w-24" style={{ fontVariantNumeric: 'tabular-nums' }} aria-live="off">
                     {animateCounts ? (
@@ -224,7 +223,6 @@ export default function Navigation() {
                   </span>
                 </span>
                 <span className="inline-flex items-center px-4 py-1.5 rounded-full bg-yellow-200 text-yellow-900 font-semibold text-base border border-yellow-300 relative group" title="Your current donation balance">
-                  <span className="w-2 h-2 mr-2 rounded-full bg-green-400 animate-pulse-slow" />
                   <span className="font-semibold">Collected:</span>
                   <span className="ml-1 font-bold tracking-tight text-black inline-block text-right w-16" style={{ fontVariantNumeric: 'tabular-nums' }} aria-live="off">${collectedStr}</span>
                   <span className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 bg-black text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap">

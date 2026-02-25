@@ -1054,7 +1054,7 @@ function StripePaymentSection({ userEmail, displayName }) {
         <div className="flex items-center justify-between mb-3">
           <h4 className="text-lg font-semibold">Saved Payment Methods</h4>
           <div className="flex items-center text-xs text-gray-600">
-            <svg className="w-4 h-4 text-green-600 mr-1" viewBox="0 0 24 24" fill="currentColor"><path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10Zm-1-6h2v2h-2v-2Zm0-8h2v6h-2V8Z" /></svg>
+            <svg className="w-4 h-4 text-gray-500 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
             Your payment information is securely processed via Stripe
           </div>
         </div>

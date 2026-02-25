@@ -220,15 +220,16 @@ export default function SignUp() {
           <div className="flex-1 h-px bg-gray-200" />
         </div>
 
-        <div className="w-full">
+        <div className="w-full flex justify-center">
           {loading ? (
-            <div className="flex items-center justify-center py-4">
+            <div className="flex items-center justify-center py-4 w-full">
               <div className="flex flex-col items-center space-y-3">
                 <div className="w-8 h-8 border-4 border-yellow-400 border-t-transparent rounded-full animate-spin"></div>
                 <p className="text-sm text-gray-600 font-medium">Signing you up...</p>
               </div>
             </div>
           ) : (
+            <div style={{ width: '100%' }}>
             <GoogleLogin
               onSuccess={async (credentialResponse) => {
                 console.log('Google OAuth Success:', credentialResponse);
@@ -266,6 +267,7 @@ export default function SignUp() {
               shape="pill"
               width="100%"
             />
+            </div>
           )}
         </div>
 

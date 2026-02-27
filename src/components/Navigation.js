@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { toast } from 'react-toastify';
 import { useSwipeable } from 'react-swipeable';
 import CountUp from 'react-countup';
 import { dashboardAPI } from '../services/api';
+import useRealTimeSync from '../hooks/useRealTimeSync';
 
 const pages = [
   { to: '/', label: 'Home', preload: () => import('./Home') },

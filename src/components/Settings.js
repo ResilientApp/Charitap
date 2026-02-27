@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import Breadcrumb from './Breadcrumb';
 import CollapsibleSection from './CollapsibleSection';
@@ -9,6 +9,8 @@ import { settingsAPI } from '../services/api';
 import { toast } from 'react-toastify';
 import Skeleton from './Skeleton';
 import NominateCharity from './NominateCharity';
+import useDebounce from '../hooks/useDebounce';
+import useRealTimeSync from '../hooks/useRealTimeSync';
 
 const stripePromise = loadStripe(process.env.REACT_APP_STRIPE_PUBLIC_KEY);
 
@@ -30,6 +32,9 @@ export default function Settings() {
   const [firstNameEdit, setFirstNameEdit] = useState('');
   const [lastNameEdit, setLastNameEdit] = useState('');
   const [charities, setCharities] = useState([]);
+  // Charity search state — debounced to avoid filtering on every keystroke
+  const [charitySearch, setCharitySearch] = useState('');
+  const debouncedCharitySearch = useDebounce(charitySearch, 150);
 
   // Payment preferences state
   const [paymentMode, setPaymentMode] = useState('monthly'); // 'monthly' or 'threshold'
@@ -64,47 +69,27 @@ export default function Settings() {
     });
   }, []);
 
-  // Fetch charities from backend
-  useEffect(() => {
-    const fetchCharities = async () => {
-      if (!isAuthenticated) return;
-
-      try {
-        const response = await settingsAPI.getCharities();
-
-        // Map backend charities to frontend format
-        // User's selectedCharities are in user.selectedCharities
-        const userSelectedCharities = (user?.selectedCharities || []).map(id => id.toString());
-
-        const mappedCharities = (response.charities || []).map(charity => ({
-          id: charity._id,
-          name: charity.name,
-          category: charity.category || charity.type || 'General',
-          active: userSelectedCharities.includes(charity._id.toString()) // Compare as strings
-        }));
-
-        setCharities(mappedCharities);
-      } catch (error) {
-        console.error('Error fetching charities:', error);
-        // Fallback to mock charities
-        const mockCharities = [
-          { id: 1, name: 'Save the Children', active: false, category: 'Education' },
-          { id: 2, name: 'Doctors Without Borders', active: false, category: 'Healthcare' },
-          { id: 3, name: 'World Wildlife Fund', active: false, category: 'Environment' },
-          { id: 4, name: 'Red Cross', active: false, category: 'Emergency' },
-          { id: 5, name: 'UNICEF', active: false, category: 'Children' },
-          { id: 6, name: 'Amnesty International', active: false, category: 'Human Rights' },
-          { id: 7, name: 'Feeding America', active: false, category: 'Hunger Relief' },
-          { id: 8, name: 'Habitat for Humanity', active: false, category: 'Housing' },
-          { id: 9, name: 'Oxfam', active: false, category: 'Global Development' },
-          { id: 10, name: 'Greenpeace', active: false, category: 'Environment' }
-        ];
-        setCharities(mockCharities);
-      }
-    };
-
-    fetchCharities();
+  // Stable fetch function for charities
+  const fetchCharities = useCallback(async () => {
+    if (!isAuthenticated) return;
+    try {
+      const response = await settingsAPI.getCharities();
+      const userSelectedCharities = (user?.selectedCharities || []).map(id => id.toString());
+      const mappedCharities = (response.charities || []).map(charity => ({
+        id: charity._id,
+        name: charity.name,
+        category: charity.category || charity.type || 'General',
+        active: userSelectedCharities.includes(charity._id.toString())
+      }));
+      setCharities(mappedCharities);
+    } catch (error) {
+      console.error('Error fetching charities:', error);
+    }
   }, [isAuthenticated, user?.selectedCharities]);
+
+  // Auto-refresh charities every 60s
+  useRealTimeSync(fetchCharities, 60000, isAuthenticated);
+
 
   // Fetch payment preference
   useEffect(() => {
@@ -505,8 +490,111 @@ export default function Settings() {
                 Toggle them on or off to control your donation preferences.
               </p>
 
-              <div className="h-[420px] overflow-y-auto pr-2 space-y-4 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 charities-scroll-container">
-                {charities.map((charity, index) => (
+              {/* ── Charity search — regex matching with tag synonyms ── */}
+              <div className="h-[420px] overflow-y-auto pr-2 space-y-4 scrollbar-thin scrollbar-thumb-yellow-200 scrollbar-track-gray-100 charities-scroll-container">
+                <div className="sticky top-0 bg-white z-10 pb-3 pt-1">
+                  <div className="relative">
+                    <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                    <input
+                      id="charity-search"
+                      type="text"
+                      placeholder="Search by name, category, or tag (e.g. health, water, kids)…"
+                      value={charitySearch}
+                      onChange={e => setCharitySearch(e.target.value)}
+                      className="w-full pl-9 pr-9 py-2.5 text-sm border-2 border-yellow-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 bg-yellow-50 placeholder-yellow-600/60 text-gray-800 font-medium transition-all duration-200"
+                    />
+                    {charitySearch && (
+                      <button
+                        onClick={() => setCharitySearch('')}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-yellow-600 hover:text-black transition-colors"
+                        aria-label="Clear search"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                  {/* Tag chips for quick filtering */}
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {['Health', 'Environment', 'Education', 'Animals', 'Human Rights', 'Poverty'].map(tag => (
+                      <button
+                        key={tag}
+                        onClick={() => setCharitySearch(charitySearch === tag ? '' : tag)}
+                        className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border transition-all duration-150 ${
+                          charitySearch === tag
+                            ? 'bg-black text-yellow-400 border-black'
+                            : 'bg-yellow-100 text-yellow-800 border-yellow-300 hover:bg-yellow-200'
+                        }`}
+                      >
+                        {tag}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {(() => {
+                  // ── Tag synonyms so natural language maps to backend categories ──
+                  const TAG_SYNONYMS = {
+                    health: ['Health', 'Healthcare', 'Medical', 'Medicine'],
+                    water: ['Environment', 'Water', 'Clean Water'],
+                    planet: ['Environment', 'Climate', 'Nature'],
+                    green: ['Environment', 'Climate'],
+                    nature: ['Environment', 'Wildlife'],
+                    kids: ['Education', 'Children', 'Youth', 'Child'],
+                    children: ['Education', 'Children', 'Youth'],
+                    school: ['Education', 'Learning'],
+                    learn: ['Education'],
+                    animal: ['Animals', 'Wildlife', 'Pets'],
+                    pet: ['Animals'],
+                    wildlife: ['Animals', 'Environment'],
+                    rights: ['Human Rights', 'Justice', 'Equality'],
+                    justice: ['Human Rights', 'Rights'],
+                    poor: ['Poverty', 'Hunger', 'Homelessness'],
+                    hunger: ['Poverty', 'Food', 'Hunger Relief'],
+                    food: ['Poverty', 'Hunger Relief'],
+                    art: ['Arts & Culture', 'Culture'],
+                    culture: ['Arts & Culture'],
+                    music: ['Arts & Culture'],
+                  };
+
+                  // Build regex from query + any matching synonyms
+                  const buildRegex = (query) => {
+                    if (!query) return null;
+                    const lower = query.toLowerCase().trim();
+                    const extras = [];
+                    Object.entries(TAG_SYNONYMS).forEach(([key, vals]) => {
+                      if (key.includes(lower) || lower.includes(key)) {
+                        extras.push(...vals);
+                      }
+                    });
+                    const terms = [lower, ...extras].map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+                    try {
+                      return new RegExp(terms.join('|'), 'i');
+                    } catch {
+                      return null;
+                    }
+                  };
+
+                  const regex = buildRegex(debouncedCharitySearch);
+                  const filtered = regex
+                    ? charities.filter(c => regex.test(c.name) || regex.test(c.category))
+                    : charities;
+
+                  if (filtered.length === 0 && debouncedCharitySearch) {
+                    return (
+                      <div className="flex flex-col items-center justify-center py-10 text-center">
+                        <svg className="w-10 h-10 text-yellow-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <p className="text-gray-500 text-sm">No charities found for <span className="font-semibold text-black">"{debouncedCharitySearch}"</span></p>
+                        <button onClick={() => setCharitySearch('')} className="mt-2 text-xs text-yellow-600 hover:underline">Clear search</button>
+                      </div>
+                    );
+                  }
+
+                  return filtered.map((charity, index) => (
                   <div
                     key={charity.id}
                     className={`relative p-4 rounded-xl border-2 transition-all duration-200 cursor-pointer hover:shadow-md overflow-hidden min-h-[96px] ${charity.active
@@ -558,7 +646,8 @@ export default function Settings() {
                       </div>
                     </div>
                   </div>
-                ))}
+                  ));
+                })()}
               </div>
             </div>
           </CollapsibleSection>

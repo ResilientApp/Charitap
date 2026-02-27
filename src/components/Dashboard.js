@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import Breadcrumb from './Breadcrumb';
 import CollapsibleSection from './CollapsibleSection';
 import useScrollAnimation from '../hooks/useScrollAnimation';
+import useRealTimeSync from '../hooks/useRealTimeSync';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement } from 'chart.js';
 import { Bar, Doughnut } from 'react-chartjs-2';
 import { dashboardAPI, roundUpAPI } from '../services/api';
@@ -50,117 +51,78 @@ const Dashboard = () => {
   const animatedBlockchainSecured = useCountUp(targetValues.blockchainSecured, 2000);
   const animatedTotalTransactions = useCountUp(targetValues.totalTransactions, 2000);
 
-  // Fetch dashboard data from backend
+  // Stable fetch function consumed by useRealTimeSync
+  const fetchDashboardData = useCallback(async () => {
+    if (!isAuthenticated) {
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Fetch all dashboard metrics in parallel
+      const [totalDonated, pendingData, uniqueCharities, monthlyDonations, charityBreakdownData, blockchainStats] = await Promise.all([
+        dashboardAPI.getTotalDonated().catch(err => { console.error('getTotalDonated error:', err); return { totalDonated: '0.00', transactionCount: 0 }; }),
+        roundUpAPI.getPending().catch(err => { console.error('getPending error:', err); return { totalAmount: '0.00', count: 0 }; }),
+        dashboardAPI.getUniqueCharities().catch(err => { console.error('getUniqueCharities error:', err); return { uniqueCharities: 0 }; }),
+        dashboardAPI.getMonthlyDonations().catch(err => { console.error('getMonthlyDonations error:', err); return { monthlyDonations: [] }; }),
+        dashboardAPI.getCharityBreakdown().catch(err => { console.error('getCharityBreakdown error:', err); return { charities: [], totalDonated: 0 }; }),
+        dashboardAPI.getBlockchainStats().catch(err => { console.error('getBlockchainStats error:', err); return { totalTransactions: 0, blockchainSecured: 0 }; })
+      ]);
+
+      // Calculate Last Month amount
+      const now = new Date();
+      const currentMonth = now.getMonth();
+
+      let lastMonthAmount = 0;
+      if (monthlyDonations.monthlyDonations && monthlyDonations.monthlyDonations.length > 0) {
+        const lastMonthData = monthlyDonations.monthlyDonations.find(m => m.monthNumber === currentMonth);
+        lastMonthAmount = lastMonthData?.amount || 0;
+      }
+
+      const totalTransactions = blockchainStats.totalTransactions || 0;
+      const blockchainSecured = blockchainStats.blockchainSecured || 0;
+
+      const newStats = [
+        { label: 'Total Donations', value: `$${parseFloat(totalDonated.totalDonated || 0).toFixed(2)}` },
+        { label: 'Last Month', value: `$${parseFloat(lastMonthAmount).toFixed(2)}` },
+        { label: 'Charities Supported', value: String(uniqueCharities.uniqueCharities || 0) },
+        { label: 'Wallet Balance', value: `$${parseFloat(pendingData.totalAmount || 0).toFixed(2)}` },
+        { label: 'Blockchain Secured', value: `${blockchainSecured} of ${totalTransactions}`, sublabel: 'Immutable records' }
+      ];
+
+      setStats(newStats);
+      setTargetValues({
+        totalDonations: parseFloat(totalDonated.totalDonated || 0),
+        lastMonth: parseFloat(lastMonthAmount),
+        charitiesSupported: parseInt(uniqueCharities.uniqueCharities || 0),
+        walletBalance: parseFloat(pendingData.totalAmount || 0),
+        blockchainSecured: parseInt(blockchainSecured),
+        totalTransactions: parseInt(totalTransactions)
+      });
+
+      setMonthlyData(monthlyDonations.monthlyDonations || []);
+      setCharityBreakdown(charityBreakdownData.charities || []);
+      setLoading(false);
+    } catch (error) {
+      console.error('Dashboard: Error fetching dashboard data:', error);
+      setLoading(false);
+    }
+  }, [isAuthenticated]);
+
+  // Auto-refresh every 30s – pauses when tab is hidden, re-syncs on return
+  const { refresh: refreshDashboard } = useRealTimeSync(fetchDashboardData, 30000, isAuthenticated);
+
+  // Also react to Chrome extension wallet-update messages
   useEffect(() => {
-    const fetchDashboardData = async () => {
-      console.log('Dashboard: isAuthenticated =', isAuthenticated);
-      if (!isAuthenticated) {
-        console.log('Dashboard: Not authenticated, skipping data fetch');
-        setLoading(false);
-        return;
-      }
-
-      setLoading(true);
-      try {
-        console.log('Dashboard: Fetching data from backend...');
-
-        // Fetch all dashboard metrics in parallel
-        const [totalDonated, pendingData, uniqueCharities, monthlyDonations, charityBreakdownData, blockchainStats] = await Promise.all([
-          dashboardAPI.getTotalDonated().catch(err => { console.error('getTotalDonated error:', err); return { totalDonated: '0.00', transactionCount: 0 }; }),
-          roundUpAPI.getPending().catch(err => { console.error('getPending error:', err); return { totalAmount: '0.00', count: 0 }; }),
-          dashboardAPI.getUniqueCharities().catch(err => { console.error('getUniqueCharities error:', err); return { uniqueCharities: 0 }; }),
-          dashboardAPI.getMonthlyDonations().catch(err => { console.error('getMonthlyDonations error:', err); return { monthlyDonations: [] }; }),
-          dashboardAPI.getCharityBreakdown().catch(err => { console.error('getCharityBreakdown error:', err); return { charities: [], totalDonated: 0 }; }),
-          dashboardAPI.getBlockchainStats().catch(err => { console.error('getBlockchainStats error:', err); return { totalTransactions: 0, blockchainSecured: 0 }; })
-        ]);
-
-        console.log('Dashboard: Data received:', {
-          totalDonated,
-          pendingData,
-          uniqueCharities,
-          monthlyDonations,
-          charityBreakdownData,
-          blockchainStats
-        });
-
-        // Calculate Last Month amount - get previous month's donations
-        const now = new Date();
-        const currentMonth = now.getMonth(); // 0-indexed
-        const currentYear = now.getFullYear();
-        
-        // For February 2026, last month would be January 2026 (month index 0)
-        let lastMonthAmount = 0;
-        if (monthlyDonations.monthlyDonations && monthlyDonations.monthlyDonations.length > 0) {
-          // Find previous month's data
-          const lastMonthData = monthlyDonations.monthlyDonations.find(m => {
-            // Current month is February (1), so last month is January (0)
-            return m.monthNumber === currentMonth; // Previous month
-          });
-          lastMonthAmount = lastMonthData?.amount || 0;
-        }
-
-        // Calculate blockchain stats
-        const totalTransactions = blockchainStats.totalTransactions || 0;
-        const blockchainSecured = blockchainStats.blockchainSecured || 0;
-
-        const newStats = [
-          { label: 'Total Donations', value: `$${parseFloat(totalDonated.totalDonated || 0).toFixed(2)}` },
-          { label: 'Last Month', value: `$${parseFloat(lastMonthAmount).toFixed(2)}` },
-          { label: 'Charities Supported', value: String(uniqueCharities.uniqueCharities || 0) },
-          { label: 'Wallet Balance', value: `$${parseFloat(pendingData.totalAmount || 0).toFixed(2)}` },
-          { label: 'Blockchain Secured', value: `${blockchainSecured} of ${totalTransactions}`, sublabel: 'Immutable records' }
-        ];
-
-        console.log('Dashboard: Setting stats to:', newStats);
-        setStats(newStats);
-
-        // Set target values for animations
-        setTargetValues({
-          totalDonations: parseFloat(totalDonated.totalDonated || 0),
-          lastMonth: parseFloat(lastMonthAmount),
-          charitiesSupported: parseInt(uniqueCharities.uniqueCharities || 0),
-          walletBalance: parseFloat(pendingData.totalAmount || 0),
-          blockchainSecured: parseInt(blockchainSecured),
-          totalTransactions: parseInt(totalTransactions)
-        });
-
-        // Confetti removed - only shown in extension popup
-
-        // Update monthly data
-        const monthlyDonationsData = monthlyDonations.monthlyDonations || [];
-        setMonthlyData(monthlyDonationsData);
-        console.log('Dashboard: Monthly data set:', {
-          length: monthlyDonationsData.length,
-          data: monthlyDonationsData
-        });
-
-        // Update charity breakdown
-        setCharityBreakdown(charityBreakdownData.charities || []); // FIXED: was charityBreakdown
-
-        console.log('Dashboard: Data update complete');
-        setLoading(false);
-      } catch (error) {
-        console.error('Dashboard: Error fetching dashboard data:', error);
-        setLoading(false);
-      }
-    };
-
-    fetchDashboardData();
-    
-    // Listen for real-time wallet updates from extension
     const handleWalletUpdate = (event) => {
       if (event.data && event.data.type === 'CHARITAP_WALLET_UPDATE') {
-        console.log('Dashboard: Received wallet update message, refetching data...');
-        fetchDashboardData();
+        refreshDashboard();
       }
     };
-    
     window.addEventListener('message', handleWalletUpdate);
-    
-    return () => {
-      window.removeEventListener('message', handleWalletUpdate);
-    };
-  }, [isAuthenticated]);
+    return () => window.removeEventListener('message', handleWalletUpdate);
+  }, [refreshDashboard]);
 
   // Chart data - dynamically generated from backend data (YTD only)
   const currentYear = new Date().getFullYear();

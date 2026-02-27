@@ -21,60 +21,52 @@ export default function Navigation() {
   const [animateCounts, setAnimateCounts] = useState(false);
   const [totalDonations, setTotalDonations] = useState(0);
   const [collectedAmount, setCollectedAmount] = useState(0);
+  // Track previous values for smart CountUp animation (animate from prev → new)
+  const prevTotalRef = useRef(0);
+  const prevCollectedRef = useRef(0);
+  const [countUpKey, setCountUpKey] = useState(0); // bump to re-trigger animation
   const bypass = process.env.REACT_APP_AUTH_BYPASS === 'true';
 
-  // Fetch real data from backend
-  useEffect(() => {
-    const fetchNavData = async () => {
-      console.log('Navigation: isAuthenticated =', isAuthenticated);
-      if (!isAuthenticated) {
-        console.log('Navigation: Not authenticated, skipping data fetch');
-        return;
-      }
-      
-      try {
-        console.log('Navigation: Fetching data from backend...');
-        
-        // Import roundUpAPI for pending data
-        const { roundUpAPI } = await import('../services/api');
-        
-        const [totalData, walletData] = await Promise.all([
-          dashboardAPI.getTotalDonated().catch(err => { console.error('getTotalDonated error:', err); return { totalDonated: '0.00' }; }),
-          roundUpAPI.getPending().catch(err => { console.error('getPending error:', err); return { totalAmount: '0.00' }; })
-        ]);
-        
-        console.log('Navigation: Data received:', { totalData, walletData });
-        
-        // Total = Total Donations (matches Dashboard)
-        setTotalDonations(parseFloat(totalData.totalDonated || 0));
-        // Collected = Wallet Balance (matches Dashboard)
-        setCollectedAmount(parseFloat(walletData.totalAmount || 0));
-        
-        console.log('Navigation: Updated values:', {
-          total: parseFloat(totalData.totalDonated || 0),
-          collected: parseFloat(walletData.totalAmount || 0)
-        });
-      } catch (error) {
-        console.error('Navigation: Error fetching navigation data:', error);
-      }
-    };
+  // Stable fetch function for the navbar amounts
+  const fetchNavData = useCallback(async () => {
+    if (!isAuthenticated) return;
+    const { roundUpAPI: rApi } = await import('../services/api');
+    const [totalData, walletData] = await Promise.all([
+      dashboardAPI.getTotalDonated().catch(() => ({ totalDonated: '0.00' })),
+      rApi.getPending().catch(() => ({ totalAmount: '0.00' }))
+    ]);
+    const newTotal = parseFloat(totalData.totalDonated || 0);
+    const newCollected = parseFloat(walletData.totalAmount || 0);
 
-    fetchNavData();
-    
-    // Listen for real-time wallet updates from extension
+    // Only re-animate if values actually changed
+    setTotalDonations(prev => {
+      if (prev !== newTotal) {
+        prevTotalRef.current = prev;
+        setCountUpKey(k => k + 1); // trigger re-render of CountUp
+      }
+      return newTotal;
+    });
+    setCollectedAmount(prev => {
+      if (prev !== newCollected) {
+        prevCollectedRef.current = prev;
+      }
+      return newCollected;
+    });
+  }, [isAuthenticated]);
+
+  // Auto-refresh every 60s
+  const { refresh: refreshNav } = useRealTimeSync(fetchNavData, 60000, isAuthenticated);
+
+  // Also react to Chrome extension wallet updates
+  useEffect(() => {
     const handleWalletUpdate = (event) => {
       if (event.data && event.data.type === 'CHARITAP_WALLET_UPDATE') {
-        console.log('Navigation: Received wallet update message, refetching data...');
-        fetchNavData();
+        refreshNav();
       }
     };
-    
     window.addEventListener('message', handleWalletUpdate);
-    
-    return () => {
-      window.removeEventListener('message', handleWalletUpdate);
-    };
-  }, [isAuthenticated]);
+    return () => window.removeEventListener('message', handleWalletUpdate);
+  }, [refreshNav]);
 
   const totalStr = totalDonations.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const collectedStr = collectedAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -211,12 +203,16 @@ export default function Navigation() {
               <>
                 <span className="inline-flex items-center px-4 py-1.5 rounded-full bg-green-200 text-green-900 font-semibold text-base border border-green-300 relative group" title="Total donations made">
                   <span className="font-semibold">Total:</span>
-                  <span className="ml-1 font-bold tracking-tight text-black inline-block text-right w-24" style={{ fontVariantNumeric: 'tabular-nums' }} aria-live="off">
-                    {animateCounts ? (
-                      <>$<CountUp end={totalDonations} duration={1.2} separator="," decimals={2} /></>
-                    ) : (
-                      `$${totalStr}`
-                    )}
+                  <span className="ml-1 font-bold tracking-tight text-black inline-block text-right w-24" style={{ fontVariantNumeric: 'tabular-nums' }} aria-live="polite">
+                    <CountUp
+                      key={`total-${countUpKey}`}
+                      start={prevTotalRef.current}
+                      end={totalDonations}
+                      duration={1.2}
+                      separator=","
+                      decimals={2}
+                      prefix="$"
+                    />
                   </span>
                   <span className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 bg-black text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap">
                     Total donations made
@@ -224,12 +220,16 @@ export default function Navigation() {
                 </span>
                 <span className="inline-flex items-center px-4 py-1.5 rounded-full bg-yellow-200 text-yellow-900 font-semibold text-base border border-yellow-300 relative group" title="Your current donation balance">
                   <span className="font-semibold">Collected:</span>
-                  <span className="ml-1 font-bold tracking-tight text-black inline-block text-right w-16" style={{ fontVariantNumeric: 'tabular-nums' }} aria-live="off">
-                    {animateCounts ? (
-                      <>$<CountUp end={collectedAmount} duration={1.2} separator="," decimals={2} /></>
-                    ) : (
-                      `$${collectedStr}`
-                    )}
+                  <span className="ml-1 font-bold tracking-tight text-black inline-block text-right w-16" style={{ fontVariantNumeric: 'tabular-nums' }} aria-live="polite">
+                    <CountUp
+                      key={`collected-${countUpKey}`}
+                      start={prevCollectedRef.current}
+                      end={collectedAmount}
+                      duration={1.2}
+                      separator=","
+                      decimals={2}
+                      prefix="$"
+                    />
                   </span>
                   <span className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 bg-black text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap">
                     Your current donation balance

@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import Breadcrumb from './Breadcrumb';
 import useScrollAnimation from '../hooks/useScrollAnimation';
+import useRealTimeSync from '../hooks/useRealTimeSync';
 import { activityAPI } from '../services/api';
 
 export default function Activity() {
@@ -12,69 +13,49 @@ export default function Activity() {
   const { isAuthenticated } = useAuth();
   const [activities, setActivities] = useState([]);
 
-  // Fetch activity data from backend
-  useEffect(() => {
-    const fetchActivityData = async () => {
-      console.log('Activity: isAuthenticated =', isAuthenticated);
-      if (!isAuthenticated) {
-        console.log('Activity: Not authenticated, skipping data fetch');
-        return;
-      }
-      
-      try {
-        console.log('Activity: Fetching data from backend...');
-        
-        // Fetch both collected and donated data
-        const [collected, donated] = await Promise.all([
-          activityAPI.getCollected().catch(err => { console.error('getCollected error:', err); return { data: [] }; }),
-          activityAPI.getDonations().catch(err => { console.error('getDonations error:', err); return { data: [] }; })
-        ]);
+  // Stable fetch function — wrapped in useCallback so the hook gets a stable reference
+  const fetchActivityData = useCallback(async () => {
+    if (!isAuthenticated) return;
+    
+    const [collected, donated] = await Promise.all([
+      activityAPI.getCollected().catch(() => ({ data: [] })),
+      activityAPI.getDonations().catch(() => ({ data: [] }))
+    ]);
 
-        console.log('Activity: Data received:', { collected, donated });
+    const combinedActivities = [];
 
-        // Combine both into activities list for display
-        const combinedActivities = [];
-        
-        // Add donations - FIXED: backend returns 'data' array, not 'transactions'
-        (donated.data || []).forEach((tx, idx) => {
-          combinedActivities.push({
-            id: `donation-${tx.id || idx}`,
-            type: 'donation',
-            charity: tx.charity?.name || 'Unknown Charity',  // FIXED: charity is an object with name
-            amount: `$${parseFloat(tx.amount || 0).toFixed(2)}`,
-            date: tx.date || new Date().toISOString(),
-            category: tx.charity?.type || 'General',  // FIXED: use charity.type
-            status: 'completed'
-          });
-        });
+    (donated.data || []).forEach((tx, idx) => {
+      combinedActivities.push({
+        id: `donation-${tx.id || idx}`,
+        type: 'donation',
+        charity: tx.charity?.name || 'Unknown Charity',
+        amount: `$${parseFloat(tx.amount || 0).toFixed(2)}`,
+        date: tx.date || new Date().toISOString(),
+        category: tx.charity?.type || 'General',
+        status: 'completed'
+      });
+    });
 
-        // Add collected roundups - FIXED: backend returns 'data' array, not 'roundups'
-        (collected.data || []).forEach((ru, idx) => {
-          combinedActivities.push({
-            id: `roundup-${ru.id || idx}`,
-            type: 'roundup',
-            charity: 'Round-Up Collection',
-            amount: `$${parseFloat(ru.roundUpAmount || 0).toFixed(2)}`,
-            date: ru.date || new Date().toISOString(),  // FIXED: backend returns 'date' not 'createdAt'
-            category: 'Collection',
-            status: ru.isPaid ? 'completed' : 'pending',  // FIXED: use isPaid to determine status
-            purchaseAmount: ru.purchaseAmount
-          });
-        });
+    (collected.data || []).forEach((ru, idx) => {
+      combinedActivities.push({
+        id: `roundup-${ru.id || idx}`,
+        type: 'roundup',
+        charity: 'Round-Up Collection',
+        amount: `$${parseFloat(ru.roundUpAmount || 0).toFixed(2)}`,
+        date: ru.date || new Date().toISOString(),
+        category: 'Collection',
+        status: ru.isPaid ? 'completed' : 'pending',
+        purchaseAmount: ru.purchaseAmount
+      });
+    });
 
-        // Sort by date (newest first)
-        combinedActivities.sort((a, b) => new Date(b.date) - new Date(a.date));
-
-        console.log('Activity: Combined activities:', combinedActivities.length, 'items');
-        setActivities(combinedActivities);
-        
-      } catch (error) {
-        console.error('Activity: Error fetching activity data:', error);
-      }
-    };
-
-    fetchActivityData();
+    combinedActivities.sort((a, b) => new Date(b.date) - new Date(a.date));
+    setActivities(combinedActivities);
   }, [isAuthenticated]);
+
+  // Auto-refresh every 45s — pauses on hidden tab, resumes instantly on return
+  useRealTimeSync(fetchActivityData, 45000, isAuthenticated);
+
 
   const getActivityIcon = (type) => {
     switch (type) {

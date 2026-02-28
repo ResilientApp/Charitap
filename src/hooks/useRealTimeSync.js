@@ -21,11 +21,11 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 const useRealTimeSync = (fetchFn, interval = 30000, enabled = true) => {
   const [data, setData] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
 
   // Refs to avoid stale closures in event listeners
   const intervalRef = useRef(null);
+  const abortControllerRef = useRef(null);
   const fetchFnRef = useRef(fetchFn);
   const enabledRef = useRef(enabled);
   const isMountedRef = useRef(true);
@@ -37,22 +37,29 @@ const useRealTimeSync = (fetchFn, interval = 30000, enabled = true) => {
   const runFetch = useCallback(async () => {
     if (!enabledRef.current || !isMountedRef.current) return;
 
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     setIsLoading(true);
     setError(null);
 
     try {
-      const result = await fetchFnRef.current();
-      if (isMountedRef.current) {
+      const result = await fetchFnRef.current({ signal: controller.signal });
+      if (isMountedRef.current && !controller.signal.aborted) {
         setData(result);
         setLastUpdated(new Date());
       }
     } catch (err) {
-      if (isMountedRef.current) {
+      if (err.name === 'AbortError') return;
+      if (isMountedRef.current && !controller.signal.aborted) {
         setError(err.message || 'Sync failed');
         console.error('[useRealTimeSync] Fetch error:', err);
       }
     } finally {
-      if (isMountedRef.current) {
+      if (isMountedRef.current && !controller.signal.aborted) {
         setIsLoading(false);
       }
     }
@@ -102,6 +109,9 @@ const useRealTimeSync = (fetchFn, interval = 30000, enabled = true) => {
     return () => {
       isMountedRef.current = false;
       stopPolling();
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
     };
   }, [enabled, startPolling, stopPolling, runFetch]);
 

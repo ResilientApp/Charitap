@@ -74,7 +74,14 @@ app.use(async (req, res, next) => {
 });
 
 // Stripe setup - USD only
-const stripe = stripeLib(process.env.STRIPE_SECRET_KEY);
+if (!process.env.STRIPE_SECRET_KEY) {
+  console.error("FATAL: STRIPE_SECRET_KEY environment variable is not set");
+  // Don't throw immediately to allow other non-payment routes to work, but warn loudly
+}
+const stripe = process.env.STRIPE_SECRET_KEY ? stripeLib(process.env.STRIPE_SECRET_KEY) : null;
+
+// Export stripe for internal use if needed
+app.locals.stripe = stripe;
 
 // Import routes
 const authRoutes = require("../routes/authRoutes");

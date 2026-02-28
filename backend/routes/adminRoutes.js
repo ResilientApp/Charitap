@@ -105,7 +105,12 @@ router.patch('/charity-applications/:id', authenticateToken, isAdmin, async (req
     }
     
     // Update fields if provided
-    if (status) application.status = status;
+    if (status) {
+      if (status === 'approved') {
+        return res.status(400).json({ error: 'Use the /approve endpoint to approve applications' });
+      }
+      application.status = status;
+    }
     if (stripeAccountId) {
       application.stripeAccountId = stripeAccountId;
       application.stripeOnboardingComplete = true;

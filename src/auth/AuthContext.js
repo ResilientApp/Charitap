@@ -228,7 +228,8 @@ export function AuthProvider({ children }) {
               fullName: decoded.name || '',
               firstName: decoded.given_name || '',
               lastName: decoded.family_name || '',
-              picture: decoded.picture || ''
+              picture: decoded.picture || '',
+              idToken: googleCredential
             };
           } else if (typeof googleCredential === 'string') {
             console.log('AuthContext: Detected access token, fetching user info...');
@@ -244,7 +245,8 @@ export function AuthProvider({ children }) {
               fullName: decoded.name || '',
               firstName: decoded.given_name || '',
               lastName: decoded.family_name || '',
-              picture: decoded.picture || ''
+              picture: decoded.picture || '',
+              idToken: googleCredential
             };
           } else {
             // Fallback to custom popup flow defined in src/auth/google.js
@@ -260,7 +262,8 @@ export function AuthProvider({ children }) {
             googleInfo.fullName || googleInfo.email.split('@')[0],
             googleInfo.picture,
             googleInfo.firstName,
-            googleInfo.lastName
+            googleInfo.lastName,
+            googleInfo.idToken
           );
 
           console.log('AuthContext: Backend response received successfully');

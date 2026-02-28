@@ -195,22 +195,32 @@
     "internationalPlatforms": {
         "rakuten": {
             "identifier": "rakuten.co.jp",
+            "priceSelector": ".price, .total",
+            "submitSelector": "button[type='submit']",
             "description": "Rakuten (Japan)"
         },
         "mercadolibre": {
             "identifier": "mercadolibre.com",
+            "priceSelector": ".price, .total",
+            "submitSelector": "button[type='submit']",
             "description": "MercadoLibre (Latin America)"
         },
         "flipkart": {
             "identifier": "flipkart.com",
+            "priceSelector": ".price, .total",
+            "submitSelector": "button[type='submit']",
             "description": "Flipkart (India)"
         },
         "lazada": {
             "identifier": "lazada.com",
+            "priceSelector": ".price, .total",
+            "submitSelector": "button[type='submit']",
             "description": "Lazada (Southeast Asia)"
         },
         "jd": {
             "identifier": "jd.com",
+            "priceSelector": ".price, .total",
+            "submitSelector": "button[type='submit']",
             "description": "JD.com (China)"
         }
     },

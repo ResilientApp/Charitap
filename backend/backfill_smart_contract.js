@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 require('dotenv').config(); // Load env first
 
 const Transaction = require('./models/Transaction');
+const Charity = require('./models/Charity');
 const resContract = require('./services/rescontract-client');
 
 async function backfillSmartContract() {
@@ -42,7 +43,6 @@ async function backfillSmartContract() {
             try {
                 // 1. Derive charityNumericId - use numericId from Charity model if available,
                 //    otherwise log a skip. The slice/parseInt approach is collision-prone.
-                const Charity = require('./models/Charity');
                 let charityNumericId = 0;
                 if (tx.charity) {
                     const charityDoc = await Charity.findById(tx.charity).select('numericId');
@@ -114,4 +114,7 @@ async function backfillSmartContract() {
     }
 }
 
-backfillSmartContract();
+backfillSmartContract().catch(err => {
+    console.error('Unhandled Rejection:', err);
+    process.exitCode = 1;
+});

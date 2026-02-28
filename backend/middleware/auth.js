@@ -40,6 +40,7 @@ const authenticateToken = async (req, res, next) => {
     if (error.name === 'TokenExpiredError') {
       return res.status(401).json({ error: 'Token expired' });
     }
+    console.error('Auth middleware error:', error);
     return res.status(500).json({ error: 'Authentication failed' });
   }
 };
@@ -60,6 +61,7 @@ const optionalAuth = async (req, res, next) => {
     }
     next();
   } catch (error) {
+    console.error('Optional auth verification error:', error);
     // Continue without authentication
     next();
   }

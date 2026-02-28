@@ -36,10 +36,13 @@ router.get('/', async (req, res) => {
             state: stateMap[mongoState] || 'unknown'
         };
 
-        // Ping database for response time
+        // Ping database for response time with 2-second timeout
         if (mongoState === 1) {
             const startTime = Date.now();
-            await mongoose.connection.db.admin().ping();
+            await Promise.race([
+                mongoose.connection.db.admin().ping(),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Ping timeout')), 2000))
+            ]);
             health.services.mongodb.responseTime = `${Date.now() - startTime}ms`;
         }
     } catch (error) {
@@ -66,9 +69,8 @@ router.get('/', async (req, res) => {
     } catch (error) {
         health.services.cache = {
             status: 'degraded',
-            type: 'in-memory (node-cache)',
-            error: error.message
         };
+        health.status = 'degraded';
     }
 
     // Check ResilientDB

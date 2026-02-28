@@ -93,7 +93,8 @@ export async function signInWithGoogleGSI() {
             firstName: decoded.given_name || '',
             lastName: decoded.family_name || '',
             fullName: decoded.name || '',
-            picture: decoded.picture || ''
+            picture: decoded.picture || '',
+            idToken: event.data.credential
           });
         } catch (e) {
           reject(new Error('Failed to decode Google token'));

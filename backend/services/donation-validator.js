@@ -101,7 +101,7 @@ class DonationValidator {
      */
     validatePercentages(charities) {
         const total = charities.reduce((sum, charity) => {
-            return sum + (charity.percentage || 0);
+            return sum + (Number(charity.percentage) || 0);
         }, 0);
 
         // Allow small floating point errors

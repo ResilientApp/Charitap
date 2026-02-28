@@ -16,7 +16,9 @@ const RoundUp = require('./models/RoundUp');
   try {
     await mongoose.connect(process.env.MONGODB_URI);
 
-    const transactions = await Transaction.find({ userId: user.id });
+    const User = require('./models/User');
+    const user = await User.findOne({ email });
+    const transactions = user ? await Transaction.find({ userId: user._id }) : [];
     const roundups = await RoundUp.find({ user: email });
 
     console.log(`Transactions for ${email}:`, transactions.length);
@@ -32,7 +34,7 @@ const RoundUp = require('./models/RoundUp');
       console.log('\nTransaction details:');
       transactions.forEach(t => {
         const date = t.timestamp ? t.timestamp.toISOString().substring(0, 10) : 'unknown';
-        const blockchain = t.blockchainTxKey ? 'YES ✅' : 'NO ❌';
+        const blockchain = (t.blockchainTxKey || t.blockchainTxId) ? 'YES ✅' : 'NO ❌';
         console.log('  - $' + t.amount.toFixed(2), 'at', date, 'blockchain:', blockchain);
       });
     }

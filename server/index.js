@@ -25,12 +25,20 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
+// Require basic authorization (standalone server)
+const requireAuth = (req, res, next) => {
+  if (!req.headers.authorization) return res.status(401).json({ error: 'Unauthorized' });
+  next();
+};
+
 // Ensure a customer exists for the given email; returns customer id
 async function getOrCreateCustomerByEmail(email, name) {
   if (!email) throw new Error('Email is required');
   // Try to find existing customer
   if (!stripe) throw new Error('Stripe disabled');
-  const matched = await stripe.customers.search({ query: `email:'${email}'` });
+  // Escape email to prevent Stripe query injection
+  const safeEmail = String(email).replace(/'/g, "\\'");
+  const matched = await stripe.customers.search({ query: `email:'${safeEmail}'` });
   if (matched.data && matched.data.length > 0) {
     return matched.data[0].id;
   }
@@ -53,7 +61,7 @@ app.post('/api/create-setup-intent', async (req, res) => {
 });
 
 // List payment methods
-app.post('/api/list-payment-methods', async (req, res) => {
+app.post('/api/list-payment-methods', requireAuth, async (req, res) => {
   try {
     if (!stripe) throw new Error('Stripe secret missing. Set STRIPE_SECRET_KEY in server/.env');
     const { email } = req.body || {};
@@ -81,7 +89,7 @@ app.post('/api/set-default-payment-method', async (req, res) => {
 });
 
 // Detach a payment method
-app.post('/api/detach-payment-method', async (req, res) => {
+app.post('/api/detach-payment-method', requireAuth, async (req, res) => {
   try {
     if (!stripe) throw new Error('Stripe secret missing. Set STRIPE_SECRET_KEY in server/.env');
     const { paymentMethodId } = req.body || {};
@@ -133,6 +141,15 @@ app.post('/api/create-subscription', async (req, res) => {
 
 // Minimal OTP email flow for password reset / verify
 const otpStore = new Map(); // email -> { hash, exp }
+setInterval(() => {
+  const now = Date.now();
+  for (const [email, rec] of otpStore.entries()) {
+    if (now > rec.exp) otpStore.delete(email);
+  }
+}, 60 * 60 * 1000); // 1 hour cleanup
+
+const rateLimitStore = new Map(); // email -> last request timestamp
+
 function sha256(val) { return crypto.createHash('sha256').update(String(val)).digest('hex'); }
 const transporter = nodemailer.createTransport(process.env.SMTP_URL ? process.env.SMTP_URL : {
   service: 'gmail',
@@ -142,6 +159,14 @@ const transporter = nodemailer.createTransport(process.env.SMTP_URL ? process.en
 app.post('/api/password/request-otp', async (req, res) => {
   try {
     const { email } = req.body || {};
+    if (!email) throw new Error('Email required');
+
+    // OTP Rate limiting
+    const lastReq = rateLimitStore.get(email);
+    if (lastReq && Date.now() - lastReq < 60000) {
+      throw new Error('Please wait 60 seconds before requesting another code');
+    }
+    rateLimitStore.set(email, Date.now());
     const code = (Math.floor(100000 + Math.random() * 900000)).toString();
     otpStore.set(email, { hash: sha256(code), exp: Date.now() + 10 * 60 * 1000 });
     const html = `
@@ -165,7 +190,14 @@ app.post('/api/password/verify-otp', async (req, res) => {
     const { email, otp } = req.body || {};
     const rec = otpStore.get(email);
     if (!rec || Date.now() > rec.exp) throw new Error('Code expired');
-    if (rec.hash !== sha256(otp)) throw new Error('Invalid code');
+    
+    // Timing-safe comparison to prevent side-channel timing attacks
+    const providedHash = Buffer.from(sha256(otp));
+    const storedHash = Buffer.from(rec.hash);
+    if (providedHash.length !== storedHash.length || !crypto.timingSafeEqual(providedHash, storedHash)) {
+      throw new Error('Invalid code');
+    }
+
     otpStore.delete(email);
     res.json({ ok: true });
   } catch (err) {

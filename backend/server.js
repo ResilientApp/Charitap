@@ -13,15 +13,21 @@ const xss = require('xss');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Validate critically required env vars
+if (!process.env.STRIPE_SECRET_KEY || !process.env.STRIPE_SECRET_KEY.startsWith('sk_')) {
+  console.error("FATAL: STRIPE_SECRET_KEY is missing or invalid");
+  process.exit(1);
+}
+
 // MongoDB Connection (using MongoDB URI from .env)
-const server = app.listen(0); // placeholder, actual listen below
 mongoose.connect(process.env.MONGODB_URI)
   .then(() => {
     console.log('MongoDB connected');
-    // Only start the HTTP server after a successful DB connection
+    // Start the server (local dev only — Vercel uses the exported app)
     if (require.main === module) {
-      server.listen(PORT, () => console.log(`Server is running at http://localhost:${PORT}`));
-      server.close(); // close placeholder
+      app.listen(PORT, () => {
+        console.log(`Server is running at http://localhost:${PORT}`);
+      });
     }
   })
   .catch(err => {
@@ -41,7 +47,10 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: function(origin, callback) {
-    if (!origin) return callback(null, true); // server-to-server requests
+    if (!origin) {
+      if (process.env.NODE_ENV === 'development') return callback(null, true);
+      return callback(new Error('Not allowed by CORS: Origin is null'));
+    }
     if (allowedOrigins.includes(origin)) return callback(null, true);
     return callback(new Error('Not allowed by CORS'));
   },
@@ -114,13 +123,6 @@ app.get('/api/health', (req, res) => {
 // The node-cron below runs only in local dev / non-Vercel environments
 if (process.env.NODE_ENV !== 'production') {
   require('./cronProcessor');
-}
-
-// Start the server (local dev only — Vercel uses the exported app)
-if (require.main === module) {
-  app.listen(PORT, () => {
-    console.log(`Server is running at http://localhost:${PORT}`);
-  });
 }
 
 // Export for Vercel serverless (via api/index.js)

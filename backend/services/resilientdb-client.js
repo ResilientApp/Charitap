@@ -31,8 +31,8 @@ class ResilientDBClient {
     // Date: 2026-01-19
     // Purpose: Authorized Charitap system keys for all transactions
     return {
-      publicKey: 'AB9qzSf3XDRN1MnPyzHyat8DifbmvLfCn3KwfpiigsXB',
-      privateKey: '89PygFrin8LFshpTPV8YZouyborMahsHhxybgZjwb1He'
+      publicKey: process.env.RESILIENTDB_PUBLIC_KEY || 'AB9qzSf3XDRN1MnPyzHyat8DifbmvLfCn3KwfpiigsXB',
+      privateKey: process.env.RESILIENTDB_PRIVATE_KEY || '89PygFrin8LFshpTPV8YZouyborMahsHhxybgZjwb1He'
     };
   }
 

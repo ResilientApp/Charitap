@@ -307,18 +307,19 @@ The charity has been sent an email notification.
       text
     };
     
+    // Mask email to avoid PII in server logs: show first char + domain only
+    const maskedTo = typeof to === 'string'
+      ? to.replace(/^(.).*?(@.*)$/, '$1***$2')
+      : '[email]';
+
     if (!this.enabled) {
-      // Mask email to avoid PII in server logs: show first char + domain only
-      const maskedTo = typeof to === 'string'
-        ? to.replace(/^(.).*?(@.*)$/, '$1***$2')
-        : '[email]';
       console.log(`[Email] DISABLED - Would send to ${maskedTo}: ${subject}`);
       return { success: true, message: 'Email service disabled - logged only' };
     }
     
     try {
       const info = await this.transporter.sendMail(mailOptions);
-      console.log(`[Email] Sent to ${to}: ${info.messageId}`);
+      console.log(`[Email] Sent to ${maskedTo}: ${info.messageId}`);
       return { success: true, messageId: info.messageId };
     } catch (error) {
       console.error('[Email] Failed to send:', error.message);

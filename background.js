@@ -27,7 +27,17 @@ chrome.storage.local.get(['userId', 'userEmail', 'userToken', 'authOrigin'], (re
   }
 });
 
+const isValidOrigin = (origin) => {
+  if (!origin) return false;
+  return origin.startsWith('http://localhost:') || (origin.includes('charitap') && origin.endsWith('.vercel.app'));
+};
+
 chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => {
+  if (!isValidOrigin(sender.origin)) {
+    console.warn(`Service Worker: Rejected message from unauthorized origin: ${sender.origin}`);
+    sendResponse({ status: "error", message: "Unauthorized origin." });
+    return;
+  }
    
   if (message.type === "SAVE_USER_DATA") {
     const receivedEmail = message.email;
@@ -87,6 +97,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('Service Worker: Received internal message:', JSON.stringify(message));
   
   if (message.action === 'createRoundUp') {
+    if (!message.data || typeof message.data !== 'object') {
+      console.error('Service Worker: Invalid or missing message.data');
+      sendResponse({ success: false, error: 'Invalid message data' });
+      return;
+    }
     // Extract data from message
     const { userEmail, purchaseAmount, roundUpAmount, merchantName } = message.data;
     

@@ -25,7 +25,8 @@ export default function Navigation() {
   // Track previous values for smart CountUp animation (animate from prev → new)
   const prevTotalRef = useRef(0);
   const prevCollectedRef = useRef(0);
-  const [countUpKey, setCountUpKey] = useState(0); // bump to re-trigger animation
+  const [countUpKeyTotal, setCountUpKeyTotal] = useState(0);
+  const [countUpKeyCollected, setCountUpKeyCollected] = useState(0);
   const bypass = process.env.REACT_APP_AUTH_BYPASS === 'true';
 
   // Stable fetch function for the navbar amounts
@@ -43,13 +44,14 @@ export default function Navigation() {
     setTotalDonations(prev => {
       if (prev !== newTotal) {
         prevTotalRef.current = prev;
-        setCountUpKey(k => k + 1); // trigger re-render of CountUp
+        setCountUpKeyTotal(k => k + 1);
       }
       return newTotal;
     });
     setCollectedAmount(prev => {
       if (prev !== newCollected) {
         prevCollectedRef.current = prev;
+        setCountUpKeyCollected(k => k + 1);
       }
       return newCollected;
     });
@@ -209,6 +211,7 @@ export default function Navigation() {
                   <span className="font-semibold">Total:</span>
                   <span className="ml-1 font-bold tracking-tight text-black inline-block text-right w-24" style={{ fontVariantNumeric: 'tabular-nums' }} aria-live="polite">
                     <CountUp
+                      key={`total-${countUpKeyTotal}`}
                       preserveValue={true}
                       end={totalDonations}
                       duration={1.2}
@@ -225,6 +228,7 @@ export default function Navigation() {
                   <span className="font-semibold">Collected:</span>
                   <span className="ml-1 font-bold tracking-tight text-black inline-block text-right w-16" style={{ fontVariantNumeric: 'tabular-nums' }} aria-live="polite">
                     <CountUp
+                      key={`collected-${countUpKeyCollected}`}
                       preserveValue={true}
                       end={collectedAmount}
                       duration={1.2}
@@ -275,21 +279,12 @@ export default function Navigation() {
                 </NavLink>
               ))}
             <div className="w-full border-t border-gray-200 pt-4 mt-2">
-              {isAuthenticated ? (
-                <button
-                  onClick={() => { logout(); setMenuOpen(false); }}
-                  className="w-full items-center justify-center px-5 py-3 text-base transition-all duration-200 hover:bg-yellow-300 hover:text-black focus:text-black focus:bg-yellow-300 font-semibold text-white bg-black rounded-full hover:scale-105 active:scale-95 transform"
-                >
-                  Sign Out
-                </button>
-              ) : (
-                <button
-                  onClick={() => { nav('/signup'); setMenuOpen(false); }}
-                  className="w-full items-center justify-center px-5 py-3 text-base transition-all duration-200 hover:bg-yellow-300 hover:text-black focus:text-black focus:bg-yellow-300 font-semibold text-white bg-black rounded-full hover:scale-105 active:scale-95 transform"
-                >
-                  Join Now
-                </button>
-              )}
+              <button
+                onClick={() => { logout(); setMenuOpen(false); }}
+                className="w-full items-center justify-center px-5 py-3 text-base transition-all duration-200 hover:bg-yellow-300 hover:text-black focus:text-black focus:bg-yellow-300 font-semibold text-white bg-black rounded-full hover:scale-105 active:scale-95 transform"
+              >
+                Sign Out
+              </button>
             </div>
           </nav>
         </div>

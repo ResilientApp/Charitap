@@ -5,7 +5,7 @@ import React from 'react';
  * Provides smooth placeholder UI while content loads
  */
 export default function Skeleton({ variant = 'text', width, height, className = '', count = 1 }) {
-    const baseClass = 'animate-pulse bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 bg-[length:200%_100%] rounded';
+    const baseClass = 'animate-[shimmer_1.5s_infinite] bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 bg-[length:200%_100%] rounded';
 
     const variants = {
         text: 'h-4 w-full rounded',
@@ -18,9 +18,8 @@ export default function Skeleton({ variant = 'text', width, height, className = 
     const variantClass = variants[variant] || variants.text;
 
     const style = {
-        width: width || undefined,
-        height: height || undefined,
-        animation: 'shimmer 1.5s infinite'
+        ...(width && { width }),
+        ...(height && { height })
     };
 
     return (

@@ -51,7 +51,11 @@ const connectDB = async () => {
 };
 
 async function processUserRoundups(user) {
-  const unpaidRoundUps = await RoundUp.find({ user: user.email, isPaid: false });
+  const unpaidRoundUps = await RoundUp.find({ 
+    user: user.email, 
+    isPaid: false,
+    stripePaymentIntentId: { $ne: 'processing' } 
+  });
   const unpaidIds = unpaidRoundUps.map(r => r._id);
   let totalAmount = unpaidRoundUps.reduce((sum, ru) => sum + ru.roundUpAmount, 0);
 
@@ -89,6 +93,20 @@ async function processUserRoundups(user) {
     return;
   }
 
+  // Read/Claim transaction isolation
+  const claimResult = await RoundUp.updateMany(
+    { _id: { $in: unpaidIds }, isPaid: false, stripePaymentIntentId: { $ne: 'processing' } },
+    { $set: { stripePaymentIntentId: 'processing' } }
+  );
+
+  if (claimResult.modifiedCount !== unpaidIds.length) {
+    console.log(`Concurrent processing detected for user ${hashIdentifier(user.email)}. Skipping.`);
+    await RoundUp.updateMany({ _id: { $in: unpaidIds }, stripePaymentIntentId: 'processing' }, { $unset: { stripePaymentIntentId: 1 } });
+    return;
+  }
+
+  let allTransfersSucceeded = false;
+
   try {
     console.log(`Charging user ${hashIdentifier(user.email)} for $${totalAmount.toFixed(2)}`);
 
@@ -119,7 +137,7 @@ async function processUserRoundups(user) {
     const remainder = totalCents % charities.length;
 
     // Track successes and failures separately
-    let allTransfersSucceeded = true;
+    allTransfersSucceeded = true;
     const failedTransfers = [];
     const blockchainPromises = [];
 
@@ -218,6 +236,11 @@ async function processUserRoundups(user) {
     console.error(`Error charging user ${hashIdentifier(user.email)}:`, error.message);
     if (error.type === 'StripeCardError') {
       console.log(`Card declined for user ${hashIdentifier(user.email)} - will retry next cycle`);
+    }
+  } finally {
+    if (!allTransfersSucceeded) {
+      // Rollback claim
+      await RoundUp.updateMany({ _id: { $in: unpaidIds }, stripePaymentIntentId: 'processing' }, { $unset: { stripePaymentIntentId: 1 } });
     }
   }
 }

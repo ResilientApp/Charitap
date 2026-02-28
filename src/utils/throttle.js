@@ -13,6 +13,8 @@ export const throttle = (func, delay = 300) => {
     let lastCall = 0;
     let timeoutId = null;
     let isAsyncWaiting = false;
+    let pendingResolves = [];
+    let pendingRejects = [];
 
     return async function throttled(...args) {
         if (isAsyncWaiting) return;
@@ -28,21 +30,35 @@ export const throttle = (func, delay = 300) => {
             lastCall = now;
             isAsyncWaiting = true;
             try {
-                return await func.apply(this, args);
+                const result = await func.apply(this, args);
+                pendingResolves.forEach(r => r(result));
+                return result;
+            } catch (err) {
+                pendingRejects.forEach(r => r(err));
+                throw err;
             } finally {
+                pendingResolves = [];
+                pendingRejects = [];
                 isAsyncWaiting = false;
             }
         } else {
-            return new Promise((resolve) => {
+            return new Promise((resolve, reject) => {
+                pendingResolves.push(resolve);
+                pendingRejects.push(reject);
                 timeoutId = setTimeout(async () => {
                     lastCall = Date.now();
                     isAsyncWaiting = true;
                     try {
-                        resolve(await func.apply(this, args));
+                        const result = await func.apply(this, args);
+                        pendingResolves.forEach(r => r(result));
+                    } catch (err) {
+                        pendingRejects.forEach(r => r(err));
                     } finally {
+                        pendingResolves = [];
+                        pendingRejects = [];
                         isAsyncWaiting = false;
+                        timeoutId = null;
                     }
-                    timeoutId = null;
                 }, delay - timeSinceLastCall);
             });
         }
@@ -58,19 +74,27 @@ export const throttle = (func, delay = 300) => {
 export const debounce = (func, wait = 300) => {
     let timeoutId = null;
     let pendingResolves = [];
+    let pendingRejects = [];
 
     return function debounced(...args) {
         if (timeoutId) {
             clearTimeout(timeoutId);
         }
 
-        return new Promise((resolve) => {
+        return new Promise((resolve, reject) => {
             pendingResolves.push(resolve);
+            pendingRejects.push(reject);
             timeoutId = setTimeout(async () => {
-                const result = await func.apply(this, args);
-                pendingResolves.forEach(r => r(result));
-                pendingResolves = [];
-                timeoutId = null;
+                try {
+                    const result = await func.apply(this, args);
+                    pendingResolves.forEach(r => r(result));
+                } catch (err) {
+                    pendingRejects.forEach(r => r(err));
+                } finally {
+                    pendingResolves = [];
+                    pendingRejects = [];
+                    timeoutId = null;
+                }
             }, wait);
         });
     };
@@ -85,29 +109,47 @@ export class RateLimiter {
         this.maxCalls = maxCalls;
         this.timeWindow = timeWindow;
         this.calls = [];
+        this.queue = [];
+        this.processing = false;
     }
 
     async execute(func) {
-        const now = Date.now();
+        return new Promise((resolve, reject) => {
+            this.queue.push({ func, resolve, reject });
+            this.process();
+        });
+    }
 
-        // Remove calls outside the time window
-        this.calls = this.calls.filter(time => now - time < this.timeWindow);
+    async process() {
+        if (this.processing) return;
+        this.processing = true;
 
-        while (this.calls.length >= this.maxCalls) {
-            // Wait until oldest call expires
-            const oldestCall = this.calls[0];
-            const waitTime = this.timeWindow - (Date.now() - oldestCall);
+        try {
+            while (this.queue.length > 0) {
+                const now = Date.now();
+                this.calls = this.calls.filter(time => now - time < this.timeWindow);
 
-            if (waitTime > 0) {
-                await new Promise(resolve => setTimeout(resolve, waitTime));
+                if (this.calls.length >= this.maxCalls) {
+                    const oldestCall = this.calls[0];
+                    const waitTime = this.timeWindow - (Date.now() - oldestCall);
+                    if (waitTime > 0) {
+                        await new Promise(resolve => setTimeout(resolve, waitTime));
+                    }
+                    continue; // Re-evaluate after waiting
+                }
+
+                const item = this.queue.shift();
+                this.calls.push(Date.now());
+                
+                try {
+                    Promise.resolve(item.func()).then(item.resolve).catch(item.reject);
+                } catch (e) {
+                    item.reject(e);
+                }
             }
-
-            // Re-check after waiting
-            this.calls = this.calls.filter(time => Date.now() - time < this.timeWindow);
+        } finally {
+            this.processing = false;
         }
-
-        this.calls.push(Date.now());
-        return func();
     }
 }
 
@@ -159,6 +201,9 @@ export class APIBatcher {
 
         try {
             const results = await this.batchFunction(items);
+            if (!Array.isArray(results) || results.length !== batch.length) {
+                throw new Error('Batch function returned mismatched result length');
+            }
 
             batch.forEach((b, index) => {
                 b.resolve(results[index]);

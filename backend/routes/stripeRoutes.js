@@ -59,14 +59,15 @@ router.post('/create-customer', authenticateToken, async (req, res) => {
       return res.json({ customerId: req.user.stripeCustomerId });
     }
 
-    // Create a new Stripe customer
+    // Create a new Stripe customer with idempotency
+    const idempotencyKey = `create_cust_${req.user._id.toString()}`;
     const customer = await stripe.customers.create({
       email: req.user.email,
       name: req.user.displayName,
       metadata: {
         userId: req.user._id.toString()
       }
-    });
+    }, { idempotencyKey });
 
     // Save the customer ID to user record
     req.user.stripeCustomerId = customer.id;
@@ -137,6 +138,12 @@ router.post('/save-payment-method', authenticateToken, async (req, res) => {
       });
       req.user.stripeCustomerId = customer.id;
     } else {
+      // Ownership check: if attaching an existing method, ensure it's not already on another customer
+      const pm = await stripe.paymentMethods.retrieve(paymentMethodId);
+      if (pm.customer && pm.customer !== req.user.stripeCustomerId) {
+        return res.status(403).json({ error: 'Payment method is attached to another customer' });
+      }
+
       // Attach payment method to existing customer
       await stripe.paymentMethods.attach(paymentMethodId, {
         customer: req.user.stripeCustomerId,
@@ -187,6 +194,12 @@ router.post('/set-default-payment-method', authenticateToken, async (req, res) =
 
     if (!req.user.stripeCustomerId) {
       return res.status(400).json({ error: 'No Stripe customer found' });
+    }
+
+    // Ownership check before setting default
+    const pm = await stripe.paymentMethods.retrieve(paymentMethodId);
+    if (!pm || pm.customer !== req.user.stripeCustomerId) {
+      return res.status(403).json({ error: 'Forbidden: payment method does not belong to this user' });
     }
 
     // Set as default payment method

@@ -14,6 +14,11 @@ const Charity = require('./models/Charity');
 const resilientDB = require('./services/resilientdb-client');
 require('dotenv').config();
 
+process.on('unhandledRejection', (err) => {
+  console.error('\n❌ Unhandled Rejection:', err);
+  process.exit(1);
+});
+
 // Read from environment variables to avoid hardcoding PII in source
 const TEST_EMAIL = process.env.TEST_EMAIL || process.argv[2];
 const TEST_NAME = process.env.TEST_NAME || process.argv[3] || TEST_EMAIL;
@@ -121,13 +126,18 @@ async function runTests() {
         purpose: 'System integration test'
       };
       
-      console.log('   Testing blockchain write...');
-      const txId = await resilientDB.set(testKey, testData);
-      
-      if (txId) {
-        console.log(`✅ Blockchain write successful! TX ID: ${txId}`);
+      const isDryRun = process.argv.includes('--dry-run');
+      if (isDryRun) {
+        console.log('   [Dry Run] Skipping blockchain write...');
       } else {
-        console.log('⚠️  Blockchain write returned null (may be disabled)');
+        console.log('   Testing blockchain write...');
+        const txId = await resilientDB.set(testKey, testData);
+        
+        if (txId) {
+          console.log(`✅ Blockchain write successful! TX ID: ${txId}`);
+        } else {
+          console.log('⚠️  Blockchain write returned null (may be disabled)');
+        }
       }
     } else {
       console.log('❌ Blockchain integration is DISABLED');

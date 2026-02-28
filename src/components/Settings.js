@@ -38,9 +38,6 @@ export default function Settings() {
 
   // Payment preferences state
   const [paymentMode, setPaymentMode] = useState('monthly'); // 'monthly' or 'threshold'
-  
-  // Debounce new password to avoid layout trashing/renders on every keystroke
-  const debouncedNewPassword = useDebounce(newPassword, 300);
 
   const [showOnboarding, setShowOnboarding] = useState(() => localStorage.getItem('charitap_onboarding_show') === '1');
 
@@ -207,34 +204,34 @@ export default function Settings() {
     return { checks, strength, color, passedChecks, totalChecks: 4 };
   };
 
-  const passwordStrength = getPasswordStrength(debouncedNewPassword);
-  const isCurrentPassword = debouncedNewPassword === currentPassword;
+  const passwordStrength = getPasswordStrength(newPassword);
+  const isCurrentPassword = newPassword === currentPassword;
 
   // Track validity without calling set state in useMemo
   const passwordValid = useMemo(() => {
-    if (!debouncedNewPassword || !confirmPassword) return false;
-    const minLen = debouncedNewPassword.length >= 8;
-    const hasLetter = /[A-Za-z]/.test(debouncedNewPassword);
-    const hasNumber = /\d/.test(debouncedNewPassword);
-    const hasSymbol = /[!@#$%^&*()_+=[\]{};':"\\|,.<>/?]/.test(debouncedNewPassword);
-    const matches = debouncedNewPassword === confirmPassword;
-    const notCurrent = debouncedNewPassword !== currentPassword;
+    if (!newPassword || !confirmPassword) return false;
+    const minLen = newPassword.length >= 8;
+    const hasLetter = /[A-Za-z]/.test(newPassword);
+    const hasNumber = /\d/.test(newPassword);
+    const hasSymbol = /[!@#$%^&*()_+=[\]{};':"\\|,.<>/?]/.test(newPassword);
+    const matches = newPassword === confirmPassword;
+    const notCurrent = newPassword !== currentPassword;
     return minLen && hasLetter && hasNumber && hasSymbol && matches && notCurrent;
-  }, [debouncedNewPassword, confirmPassword, currentPassword]);
+  }, [newPassword, confirmPassword, currentPassword]);
 
   // Update error message via useEffect based on debounced values
   useEffect(() => {
     let errorMsg = '';
-    if (!debouncedNewPassword) {
+    if (!newPassword) {
       setPasswordError('');
       return;
     }
-    const minLen = debouncedNewPassword.length >= 8;
-    const hasLetter = /[A-Za-z]/.test(debouncedNewPassword);
-    const hasNumber = /\d/.test(debouncedNewPassword);
-    const hasSymbol = /[!@#$%^&*()_+=[\]{};':"\\|,.<>/?]/.test(debouncedNewPassword);
-    const matches = confirmPassword ? debouncedNewPassword === confirmPassword : true; // wait until they type confirm
-    const notCurrent = debouncedNewPassword !== currentPassword;
+    const minLen = newPassword.length >= 8;
+    const hasLetter = /[A-Za-z]/.test(newPassword);
+    const hasNumber = /\d/.test(newPassword);
+    const hasSymbol = /[!@#$%^&*()_+=[\]{};':"\\|,.<>/?]/.test(newPassword);
+    const matches = confirmPassword ? newPassword === confirmPassword : true; // wait until they type confirm
+    const notCurrent = newPassword !== currentPassword;
 
     if (!minLen) errorMsg = 'Minimum 8 characters required';
     else if (!hasLetter) errorMsg = 'Must contain at least one letter';
@@ -244,7 +241,7 @@ export default function Settings() {
     else if (!notCurrent) errorMsg = 'New password must be different from current password';
 
     setPasswordError(errorMsg);
-  }, [debouncedNewPassword, confirmPassword, currentPassword]);
+  }, [newPassword, confirmPassword, currentPassword]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -654,6 +651,12 @@ export default function Settings() {
                           className={`relative inline-flex h-8 w-16 items-center rounded-full transition-all duration-300 cursor-pointer ${charity.active ? 'bg-green-500 shadow-lg' : 'bg-gray-300'
                             }`}
                           onClick={() => handleCharityToggle(charity.id)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              handleCharityToggle(charity.id);
+                            }
+                          }}
                           role="switch"
                           aria-checked={charity.active}
                           tabIndex={0}
@@ -863,6 +866,7 @@ function StripePaymentSection({ userEmail, displayName }) {
 
       if (!res.ok) {
         console.error('Failed to fetch payment methods');
+        toast.error('Failed to load payment methods');
         return;
       }
 
@@ -873,7 +877,7 @@ function StripePaymentSection({ userEmail, displayName }) {
       }
     } catch (error) {
       console.error('Error fetching payment methods:', error);
-      // Silently fail - payment methods may not be set up yet
+      toast.error('Failed to load payment methods');
     }
   };
 
@@ -1225,6 +1229,7 @@ function StripePaymentSection({ userEmail, displayName }) {
 
                       if (response.ok) {
                         setDefaultPmId(pm.id);
+                        setSavedMethods(prev => prev.map(m => ({ ...m, isDefault: m.id === pm.id })));
                         toast.success('Default payment method updated');
                       } else {
                         const error = await response.json();

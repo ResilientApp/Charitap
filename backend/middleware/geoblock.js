@@ -1,7 +1,8 @@
 // Geo-blocking middleware - US only
 const geoBlock = (req, res, next) => {
   // Get country from headers (set by reverse proxy/CDN like Cloudflare)
-  const country = req.headers['cf-ipcountry'] || 
+  const country = req.headers['x-vercel-ip-country'] ||
+                  req.headers['cf-ipcountry'] || 
                   req.headers['x-country-code'] || 
                   req.headers['cloudfront-viewer-country'];
   

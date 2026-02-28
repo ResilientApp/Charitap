@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const axios = require('axios');
 const User = require('../models/User');
 const { authenticateToken } = require('../middleware/auth');
 
@@ -132,11 +133,37 @@ router.post('/login', async (req, res) => {
 // Google OAuth login/signup
 router.post('/google', async (req, res) => {
   try {
-    const { googleId, email, displayName, profilePicture, firstName, lastName } = req.body;
+    const { googleId, email, displayName, profilePicture, firstName, lastName, idToken } = req.body;
 
     // Validate input
     if (!googleId || !email) {
       return res.status(400).json({ error: 'Google ID and email are required' });
+    }
+
+    if (!idToken) {
+      return res.status(401).json({ error: 'Google authentication credential is required for verification' });
+    }
+
+    // Verify Google credential (JWT or access token)
+    try {
+      if (idToken.split('.').length === 3) {
+        // ID Token (JWT)
+        const response = await axios.get(`https://oauth2.googleapis.com/tokeninfo?id_token=${idToken}`);
+        if (response.data.sub !== googleId || response.data.email !== email) {
+          throw new Error('ID Token mismatch');
+        }
+      } else {
+        // Access Token
+        const userInfoRes = await axios.get('https://www.googleapis.com/oauth2/v3/userinfo', {
+          headers: { Authorization: `Bearer ${idToken}` }
+        });
+        if (userInfoRes.data.sub !== googleId || userInfoRes.data.email !== email) {
+          throw new Error('Access Token mismatch');
+        }
+      }
+    } catch (verifyError) {
+      console.error('Google verification failed:', verifyError.message);
+      return res.status(401).json({ error: 'Invalid Google authentication credential' });
     }
 
     // Check if user exists by Google ID
@@ -296,6 +323,11 @@ router.post('/settings/charities/toggle', authenticateToken, async (req, res) =>
 
     if (!charityId) {
       return res.status(400).json({ error: 'Charity ID is required' });
+    }
+
+    const mongoose = require('mongoose');
+    if (!mongoose.Types.ObjectId.isValid(charityId)) {
+      return res.status(400).json({ error: 'Invalid Charity ID' });
     }
 
     // Check if charity exists in selectedCharities

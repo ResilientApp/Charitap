@@ -8,7 +8,7 @@ const charitySchema = new mongoose.Schema({
     enum: ['Environment', 'Education', 'Health', 'Animals', 'Human Rights', 'Poverty', 'Arts & Culture', 'Other'],
     default: 'Other'
   },
-  stripeAccountId: { type: String, required: true },
+  stripeAccountId: { type: String, required: true, unique: true },
   createdAt: { type: Date, default: Date.now }
 });
 

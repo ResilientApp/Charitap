@@ -161,6 +161,9 @@ router.post('/nominate', authenticateToken, async (req, res) => {
     });
 
   } catch (error) {
+    if (error.code === 11000) {
+      return res.status(400).json({ error: 'This charity has already been nominated recently.' });
+    }
     console.error('[Nomination] ERROR:', error.message);
     console.error('[Nomination] Stack:', error.stack);
     res.status(500).json({

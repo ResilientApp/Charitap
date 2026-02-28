@@ -66,10 +66,10 @@ export const authAPI = {
   },
 
   // Google OAuth
-  googleAuth: async (googleId, email, displayName, profilePicture, firstName, lastName) => {
+  googleAuth: async (googleId, email, displayName, profilePicture, firstName, lastName, idToken) => {
     return apiCall('/api/auth/google', {
       method: 'POST',
-      body: JSON.stringify({ googleId, email, displayName, profilePicture, firstName, lastName }),
+      body: JSON.stringify({ googleId, email, displayName, profilePicture, firstName, lastName, idToken }),
     });
   },
 

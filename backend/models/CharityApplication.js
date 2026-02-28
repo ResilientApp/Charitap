@@ -86,7 +86,7 @@ const charityApplicationSchema = new mongoose.Schema({
 });
 
 // Indexes for performance
-charityApplicationSchema.index({ charityEmail: 1 });
+charityApplicationSchema.index({ charityEmail: 1 }, { unique: true });
 charityApplicationSchema.index({ status: 1 });
 charityApplicationSchema.index({ createdAt: -1 });
 charityApplicationSchema.index({ nominatedBy: 1 });

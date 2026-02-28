@@ -12,17 +12,20 @@ router.post('/create-roundup', authenticateToken, async (req, res) => {
   try {
     const { purchaseAmount, roundUpAmount } = req.body;
 
-    // Validate input data
-    if (!purchaseAmount || !roundUpAmount) {
-      return res.status(400).json({ error: 'Purchase amount and roundup amount are required' });
+    // Validate input data and coerce to numbers
+    const parsedPurchase = parseFloat(purchaseAmount);
+    const parsedRoundUp = parseFloat(roundUpAmount);
+
+    if (isNaN(parsedPurchase) || isNaN(parsedRoundUp) || parsedPurchase <= 0 || parsedRoundUp <= 0) {
+      return res.status(400).json({ error: 'Valid purchase amount and roundup amount are required' });
     }
 
     // Create a new RoundUp entry with isPaid set to false by default
     // Use authenticated user's email
     const newRoundUp = new RoundUp({
       user: req.user.email,
-      purchaseAmount,
-      roundUpAmount,
+      purchaseAmount: parsedPurchase,
+      roundUpAmount: parsedRoundUp,
       isPaid: false,
     });
 
@@ -77,8 +80,12 @@ router.post('/create-roundup', authenticateToken, async (req, res) => {
       } catch (blockchainError) {
         console.error('[Charitap] WARNING  Blockchain write failed (non-critical):', blockchainError.message);
         // Store error for debugging
-        newRoundUp.blockchainError = blockchainError.message;
-        await newRoundUp.save();
+        try {
+          newRoundUp.blockchainError = blockchainError.message;
+          await newRoundUp.save();
+        } catch (saveError) {
+          console.error('[Charitap] WARNING Failed to save blockchain error:', saveError.message);
+        }
       }
     })();
 

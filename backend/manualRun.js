@@ -27,7 +27,11 @@ const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
  */
 async function processUserRoundups(user) {
   // Capture exact IDs of unpaid roundups before any state changes
-  const unpaidRoundUps = await RoundUp.find({ user: user.email, isPaid: false });
+  const unpaidRoundUps = await RoundUp.find({ 
+    user: user.email, 
+    isPaid: false,
+    stripePaymentIntentId: { $ne: 'processing' }
+  });
   const unpaidIds = unpaidRoundUps.map(r => r._id);
   let totalAmount = unpaidRoundUps.reduce((sum, ru) => sum + ru.roundUpAmount, 0);
 
@@ -66,6 +70,20 @@ async function processUserRoundups(user) {
     return;
   }
 
+  // Read/Claim transaction isolation
+  const claimResult = await RoundUp.updateMany(
+    { _id: { $in: unpaidIds }, isPaid: false, stripePaymentIntentId: { $ne: 'processing' } },
+    { $set: { stripePaymentIntentId: 'processing' } }
+  );
+
+  if (claimResult.modifiedCount !== unpaidIds.length) {
+    console.log(`Concurrent processing detected for ${user.email}. Skipping.`);
+    await RoundUp.updateMany({ _id: { $in: unpaidIds }, stripePaymentIntentId: 'processing' }, { $unset: { stripePaymentIntentId: 1 } });
+    return;
+  }
+
+  let allTransfersSucceeded = false;
+
   // Open a MongoDB session for atomic DB writes
   const session = await mongoose.startSession();
 
@@ -99,7 +117,7 @@ async function processUserRoundups(user) {
     const baseShare = Math.floor(totalCents / charities.length);
     const remainder = totalCents % charities.length;
 
-    let allTransfersSucceeded = true;
+    allTransfersSucceeded = true;
     const failedTransfers = [];
     const blockchainPromises = [];
 
@@ -181,7 +199,7 @@ async function processUserRoundups(user) {
         } catch (err) {
           console.error(`Error transferring to ${charity.name}:`, err.message);
           allTransfersSucceeded = false;
-          failedTransfers.push({ charityName: charity.name, error: err.message });
+          failedTransfers.push({ charityName: charity.name, error: err.message, amountCents: transferCents });
           // Abort session — Stripe transfer succeeded but DB write failed?
           // We surface this as an error and do NOT mark roundups paid.
           throw err; // This causes withTransaction to abort & retry/rollback
@@ -214,7 +232,7 @@ async function processUserRoundups(user) {
     } else {
       // Some transfers failed — issue refund for undelivered amount
       console.error(`Some transfers failed for ${user.email}:`, failedTransfers);
-      const failedCents = failedTransfers.length * baseShare;
+      const failedCents = failedTransfers.reduce((sum, f) => sum + f.amountCents, 0);
       if (failedCents > 0) {
         try {
           await stripe.refunds.create({
@@ -236,6 +254,9 @@ async function processUserRoundups(user) {
       console.log(`Card declined for ${user.email} - will retry next cycle`);
     }
   } finally {
+    if (!allTransfersSucceeded) {
+      await RoundUp.updateMany({ _id: { $in: unpaidIds }, stripePaymentIntentId: 'processing' }, { $unset: { stripePaymentIntentId: 1 } });
+    }
     await session.endSession();
   }
 }

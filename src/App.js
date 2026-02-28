@@ -54,9 +54,9 @@ function App() {
                 <Route path="/signin" element={<SignIn />} />
                 <Route path="/signup" element={<SignUp />} />
                 <Route path="/complete-profile" element={<CompleteProfile />} />
-                <Route path="/dashboard" element={<ProtectedRoute element={Dashboard} />} />
-                <Route path="/activity" element={<ProtectedRoute element={Activity} />} />
-                <Route path="/settings" element={<ProtectedRoute element={Settings} />} />
+                <Route path="/dashboard" element={<ProtectedRoute component={Dashboard} />} />
+                <Route path="/activity" element={<ProtectedRoute component={Activity} />} />
+                <Route path="/settings" element={<ProtectedRoute component={Settings} />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </Suspense>

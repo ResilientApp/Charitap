@@ -91,20 +91,8 @@ async function initialize() {
   }
 }
 
-// Check if user is logged in
-chrome.storage.local.get(['userId', 'userEmail', 'userToken'], function(data) {
-  console.log('[Charitap] User data from storage:', data);
-  
-  if (data.userId && data.userEmail && data.userToken) {
-    userId = data.userId;
-    userEmail = data.userEmail;
-    userToken = data.userToken;
-    console.log('[Charitap] User logged in, initializing...');
-    initialize();
-  } else {
-    console.log('[Charitap] No user data found in storage');
-  }
-});
+// Initialize script
+initialize();
 
 // Listen for login/logout events
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -138,10 +126,11 @@ function detectPlatform() {
 
   const html = document.documentElement.innerHTML;
   const url = window.location.href;
+  const ensureArray = (v) => Array.isArray(v) ? v : (v ? [v] : []);
 
   // Check exclusion patterns first
   if (patterns.excludePatterns) {
-    for (const excludePattern of patterns.excludePatterns) {
+    for (const excludePattern of ensureArray(patterns.excludePatterns)) {
       if (url.includes(excludePattern)) {
         console.log(`[Charitap] Site excluded: ${excludePattern}`);
         return null;
@@ -153,7 +142,7 @@ function detectPlatform() {
   for (const [platformName, platformData] of Object.entries(patterns.platforms)) {
     // Check URL patterns
     if (platformData.urlPatterns) {
-      for (const urlPattern of platformData.urlPatterns) {
+      for (const urlPattern of ensureArray(platformData.urlPatterns)) {
         if (url.includes(urlPattern)) {
           console.log(`[Charitap] Platform detected: ${platformName} (URL match)`);
           return platformName;
@@ -163,7 +152,7 @@ function detectPlatform() {
 
     // Check HTML patterns
     if (platformData.htmlPatterns) {
-      for (const htmlPattern of platformData.htmlPatterns) {
+      for (const htmlPattern of ensureArray(platformData.htmlPatterns)) {
         if (html.includes(htmlPattern)) {
           console.log(`[Charitap] Platform detected: ${platformName} (HTML match)`);
           return platformName;
@@ -181,10 +170,11 @@ function isCheckoutPage() {
   // Use patterns if available
   if (patterns && detectedPlatform && patterns.platforms[detectedPlatform]) {
     const platformData = patterns.platforms[detectedPlatform];
+    const ensureArray = (v) => Array.isArray(v) ? v : (v ? [v] : []);
     
     // Check checkout URL patterns
     if (platformData.checkoutPatterns) {
-      for (const pattern of platformData.checkoutPatterns) {
+      for (const pattern of ensureArray(platformData.checkoutPatterns)) {
         if (url.includes(pattern.toLowerCase())) {
           console.log('[Charitap] Checkout page detected via pattern');
           return true;
@@ -193,13 +183,14 @@ function isCheckoutPage() {
     }
   }
 
-  // Fallback to generic keywords
+  // Fallback to generic keywords (restrict to pathname to avoid broad matches like ?search=bag)
+  const path = window.location.pathname.toLowerCase();
   const checkoutKeywords = [
-    'checkout', 'cart', 'basket', 'bag', 'payment',
-    'pay', 'order', 'purchase', 'shipping', 'billing'
+    '/checkout', '/cart', '/basket', '/bag', '/payment',
+    '/pay', '/order', '/purchase'
   ];
   
-  return checkoutKeywords.some(keyword => url.includes(keyword));
+  return checkoutKeywords.some(keyword => path.includes(keyword));
 }
 
 function initDetection() {
@@ -239,9 +230,11 @@ function getCartTotal() {
     const elements = document.querySelectorAll(selector);
     for (const element of elements) {
       const text = element.textContent;
-      const match = text.match(/[\$£€]?\s*(\d+[\.,]\d{2})/);
+      const match = text.match(/[\$£€]?\s*(\d{1,3}(?:[.,]\d{3})*[.,]\d{2}|\d+[\.,]\d{2})/);
       if (match) {
-        const value = parseFloat(match[1].replace(',', '.'));
+        // Strip everything but digits to handle 1,000.50 or 1.000,50 safely, then divide by 100
+        const numericOnly = match[1].replace(/[^\d]/g, '');
+        const value = parseInt(numericOnly, 10) / 100;
         if (value > 0 && value < 10000) {
           return value;
         }
@@ -272,7 +265,8 @@ function showWidget() {
   }
   
   // Calculate roundup amount
-  const roundUpAmount = Math.ceil(total) - total;
+  let roundUpAmount = Math.ceil(total) - total;
+  if (roundUpAmount <= 0) roundUpAmount = 1.00; // Force a roundup if it's already a whole number
   console.log('[Charitap] Round up amount:', roundUpAmount.toFixed(2));
   
   // Create widget (USD only - US market)
@@ -552,6 +546,12 @@ function handleDonation(roundUpAmount) {
       merchantName: window.location.hostname
     }
   }, (response) => {
+    if (chrome.runtime.lastError) {
+      console.error('[Charitap] Message error:', chrome.runtime.lastError.message);
+      showMessage('Extension connection error. Please refresh.', 'error');
+      return;
+    }
+    
     console.log('[Charitap] Response from background:', response);
     
     if (response && response.success) {

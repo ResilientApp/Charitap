@@ -136,11 +136,13 @@ async function addMockData() {
     console.log(`   Wallet Balance: $${walletBalance.toFixed(2)}`);
     console.log(`   Blockchain Secured: ${allTransactions.length}/${allTransactions.length} (100%)`);
     console.log(`   User: ${userId}`);
-    await mongoose.connection.close();
     console.log('\n✅ Mock data added successfully!');
   } catch (error) {
     console.error('❌ Error adding mock data:', error);
-    process.exit(1);
+    process.exitCode = 1;
+  } finally {
+    await mongoose.connection.close();
+    console.log('MongoDB connection closed');
   }
 }
 

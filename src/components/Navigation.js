@@ -61,6 +61,9 @@ export default function Navigation() {
   // Also react to Chrome extension wallet updates
   useEffect(() => {
     const handleWalletUpdate = (event) => {
+      // Validate origin 
+      if (event.origin !== window.location.origin && !event.origin.includes('chrome-extension://')) return;
+
       if (event.data && event.data.type === 'CHARITAP_WALLET_UPDATE') {
         refreshNav();
       }
@@ -206,8 +209,7 @@ export default function Navigation() {
                   <span className="font-semibold">Total:</span>
                   <span className="ml-1 font-bold tracking-tight text-black inline-block text-right w-24" style={{ fontVariantNumeric: 'tabular-nums' }} aria-live="polite">
                     <CountUp
-                      key={`total-${countUpKey}`}
-                      start={prevTotalRef.current}
+                      preserveValue={true}
                       end={totalDonations}
                       duration={1.2}
                       separator=","
@@ -223,8 +225,7 @@ export default function Navigation() {
                   <span className="font-semibold">Collected:</span>
                   <span className="ml-1 font-bold tracking-tight text-black inline-block text-right w-16" style={{ fontVariantNumeric: 'tabular-nums' }} aria-live="polite">
                     <CountUp
-                      key={`collected-${countUpKey}`}
-                      start={prevCollectedRef.current}
+                      preserveValue={true}
                       end={collectedAmount}
                       duration={1.2}
                       separator=","

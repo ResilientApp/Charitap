@@ -25,12 +25,7 @@ export default function Skeleton({ variant = 'text', width, height, className = 
 
     return (
         <>
-            <style>{`
-        @keyframes shimmer {
-          0% { background-position: -200% 0; }
-          100% { background-position: 200% 0; }
-        }
-      `}</style>
+
             {Array.from({ length: count }).map((_, index) => (
                 <div
                     key={index}

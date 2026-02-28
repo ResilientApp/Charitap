@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useId } from 'react';
 
 const CollapsibleSection = ({ 
   title, 
@@ -8,7 +8,8 @@ const CollapsibleSection = ({
   icon,
   persistKey,
   ...props 
-}) => {
+  }) => {
+  const contentId = useId();
   const storageKey = persistKey ? `collapsible:${persistKey}` : null;
   const [isOpen, setIsOpen] = useState(() => {
     if (storageKey) {
@@ -30,6 +31,8 @@ const CollapsibleSection = ({
     <div className={`bg-white rounded-xl shadow-sm border border-gray-100 ${className}`} {...props}>
       <button
         onClick={() => setIsOpen(!isOpen)}
+        aria-expanded={isOpen}
+        aria-controls={contentId}
         className="w-full px-6 py-4 flex items-center justify-between text-left hover:bg-gray-50 transition-colors duration-200 rounded-t-xl"
       >
         <div className="flex items-center space-x-3">
@@ -50,7 +53,10 @@ const CollapsibleSection = ({
         </svg>
       </button>
       
-      <div className={`overflow-hidden transition-all duration-300 ease-in-out ${isOpen ? 'max-h-[2000px] opacity-100' : 'max-h-0 opacity-0'}`}>
+      <div 
+        id={contentId}
+        className={`overflow-hidden transition-all duration-300 ease-in-out ${isOpen ? 'max-h-[2000px] opacity-100' : 'max-h-0 opacity-0'}`}
+      >
         <div className="px-6 pt-4 pb-4">
           {children}
         </div>

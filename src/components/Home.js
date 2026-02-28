@@ -50,14 +50,19 @@ const Home = () => {
       // Handle payment method event
       pr.on('paymentmethod', async (ev) => {
         try {
-          // Send payment method to backend
+          let authToken = '';
+          const savedAuth = localStorage.getItem('charitap_auth');
+          if (savedAuth) {
+            try { authToken = JSON.parse(savedAuth).token; } catch(e){}
+          }
           const response = await fetch(`${process.env.REACT_APP_SERVER_URL || 'http://localhost:3001'}/api/stripe/save-payment-method`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${localStorage.getItem('charitap_auth') ? JSON.parse(localStorage.getItem('charitap_auth')).token : ''}`
+              'Authorization': `Bearer ${authToken}`
             },
             body: JSON.stringify({
+              paymentMethodId: ev.paymentMethod?.id
             })
           });
 
@@ -133,7 +138,7 @@ const Home = () => {
               </p>
               <div className="flex flex-col sm:flex-row gap-3 md:gap-4 justify-center lg:justify-start items-stretch sm:items-center relative z-30">
                 <RippleButton
-                  onClick={() => window.open('https://chrome.google.com', '_blank')}
+                  onClick={() => window.open('https://chromewebstore.google.com/detail/hglbfejfbippoeenobopobjbpbcddjjo', '_blank')}
                   className="bg-yellow-400 hover:bg-yellow-500 text-black px-8 py-4 rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl transition-all duration-300 relative z-30"
                 >
                   Add to Chrome

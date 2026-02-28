@@ -38,6 +38,9 @@ export default function Settings() {
 
   // Payment preferences state
   const [paymentMode, setPaymentMode] = useState('monthly'); // 'monthly' or 'threshold'
+  
+  // Debounce new password to avoid layout trashing/renders on every keystroke
+  const debouncedNewPassword = useDebounce(newPassword, 300);
 
   const [showOnboarding, setShowOnboarding] = useState(() => localStorage.getItem('charitap_onboarding_show') === '1');
 
@@ -84,6 +87,10 @@ export default function Settings() {
       setCharities(mappedCharities);
     } catch (error) {
       console.error('Error fetching charities:', error);
+      toast.error('Failed to load charities. Please refresh.', {
+        position: 'top-right',
+        autoClose: 3000,
+      });
     }
   }, [isAuthenticated, user?.selectedCharities]);
 
@@ -132,6 +139,7 @@ export default function Settings() {
 
 
   const handleNameSave = async () => {
+    const prevDisplayName = displayName;
     try {
       const finalDisplay = [firstNameEdit, lastNameEdit].filter(Boolean).join(' ').trim();
       setDisplayName(finalDisplay || 'User');
@@ -144,6 +152,8 @@ export default function Settings() {
         autoClose: 3000,
       });
     } catch (error) {
+      setDisplayName(prevDisplayName);
+      localStorage.setItem('userDisplayName', prevDisplayName);
       toast.error('Failed to update name. Please try again.', {
         position: 'top-right',
         autoClose: 3000,
@@ -197,30 +207,44 @@ export default function Settings() {
     return { checks, strength, color, passedChecks, totalChecks: 4 };
   };
 
-  const passwordStrength = getPasswordStrength(newPassword);
-  const isCurrentPassword = newPassword === currentPassword;
+  const passwordStrength = getPasswordStrength(debouncedNewPassword);
+  const isCurrentPassword = debouncedNewPassword === currentPassword;
 
+  // Track validity without calling set state in useMemo
   const passwordValid = useMemo(() => {
-    if (!newPassword || !confirmPassword) return false;
-    const minLen = newPassword.length >= 8;
-    const hasLetter = /[A-Za-z]/.test(newPassword);
-    const hasNumber = /\d/.test(newPassword);
-    const hasSymbol = /[!@#$%^&*()_+=[\]{};':"\\|,.<>/?]/.test(newPassword);
-    const matches = newPassword === confirmPassword;
-    const notCurrent = newPassword !== currentPassword;
-    const ok = minLen && hasLetter && hasNumber && hasSymbol && matches && notCurrent;
+    if (!debouncedNewPassword || !confirmPassword) return false;
+    const minLen = debouncedNewPassword.length >= 8;
+    const hasLetter = /[A-Za-z]/.test(debouncedNewPassword);
+    const hasNumber = /\d/.test(debouncedNewPassword);
+    const hasSymbol = /[!@#$%^&*()_+=[\]{};':"\\|,.<>/?]/.test(debouncedNewPassword);
+    const matches = debouncedNewPassword === confirmPassword;
+    const notCurrent = debouncedNewPassword !== currentPassword;
+    return minLen && hasLetter && hasNumber && hasSymbol && matches && notCurrent;
+  }, [debouncedNewPassword, confirmPassword, currentPassword]);
 
+  // Update error message via useEffect based on debounced values
+  useEffect(() => {
     let errorMsg = '';
+    if (!debouncedNewPassword) {
+      setPasswordError('');
+      return;
+    }
+    const minLen = debouncedNewPassword.length >= 8;
+    const hasLetter = /[A-Za-z]/.test(debouncedNewPassword);
+    const hasNumber = /\d/.test(debouncedNewPassword);
+    const hasSymbol = /[!@#$%^&*()_+=[\]{};':"\\|,.<>/?]/.test(debouncedNewPassword);
+    const matches = confirmPassword ? debouncedNewPassword === confirmPassword : true; // wait until they type confirm
+    const notCurrent = debouncedNewPassword !== currentPassword;
+
     if (!minLen) errorMsg = 'Minimum 8 characters required';
     else if (!hasLetter) errorMsg = 'Must contain at least one letter';
     else if (!hasNumber) errorMsg = 'Must contain at least one number';
     else if (!hasSymbol) errorMsg = 'Must contain at least one symbol (!@#$%^&*...)';
-    else if (!matches) errorMsg = 'Passwords do not match';
+    else if (confirmPassword && !matches) errorMsg = 'Passwords do not match';
     else if (!notCurrent) errorMsg = 'New password must be different from current password';
 
     setPasswordError(errorMsg);
-    return ok;
-  }, [newPassword, confirmPassword, currentPassword]);
+  }, [debouncedNewPassword, confirmPassword, currentPassword]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -679,7 +703,14 @@ export default function Settings() {
                       ? 'border-yellow-400 bg-yellow-50'
                       : 'border-gray-200 bg-gray-50 hover:border-gray-300'
                       }`}
+                    tabIndex={0}
                     onClick={() => handlePaymentModeChange('monthly')}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        handlePaymentModeChange('monthly');
+                      }
+                    }}
                   >
                     <div className="flex items-center space-x-3 mb-3">
                       <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-300 ${paymentMode === 'monthly'
@@ -715,7 +746,14 @@ export default function Settings() {
                       ? 'border-yellow-400 bg-yellow-50'
                       : 'border-gray-200 bg-gray-50 hover:border-gray-300'
                       }`}
+                    tabIndex={0}
                     onClick={() => handlePaymentModeChange('threshold')}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        handlePaymentModeChange('threshold');
+                      }
+                    }}
                   >
                     <div className="flex items-center space-x-3 mb-3">
                       <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-300 ${paymentMode === 'threshold'

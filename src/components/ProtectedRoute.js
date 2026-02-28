@@ -4,7 +4,7 @@ import { Navigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { toast } from 'react-toastify';
 
-export default function ProtectedRoute({ element: Component }) {
+export default function ProtectedRoute({ element: Element }) {
   const { isAuthenticated, isLoading } = useAuth();
   // Auth bypass is only allowed in non-production environments
   const bypass = process.env.REACT_APP_AUTH_BYPASS === 'true' && process.env.NODE_ENV !== 'production';
@@ -47,7 +47,7 @@ export default function ProtectedRoute({ element: Component }) {
   // 3) Authenticated or bypass → render the page with a fade-in
   return (
     <div className="fade-in">
-      <Component />
+      <Element />
     </div>
   );
 }

@@ -11,9 +11,15 @@ export async function signInWithGoogleGSI() {
   }
 
   return new Promise((resolve, reject) => {
+    // Generate secure state
+    const array = new Uint32Array(4);
+    window.crypto.getRandomValues(array);
+    const stateVal = Array.from(array, dec => ('0' + dec.toString(16)).substr(-2)).join('');
+    sessionStorage.setItem('google_oauth_state', stateVal);
+
     // Create a popup window for Google OAuth
     const popup = window.open(
-      `https://accounts.google.com/oauth/authorize?client_id=${clientId}&response_type=code&scope=openid%20email%20profile&redirect_uri=${encodeURIComponent(window.location.origin)}&state=google_signin`,
+      `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&response_type=code&scope=openid%20email%20profile&redirect_uri=${encodeURIComponent(window.location.origin)}&state=${stateVal}`,
       'google_signin',
       'width=500,height=600,scrollbars=yes,resizable=yes'
     );
@@ -26,6 +32,7 @@ export async function signInWithGoogleGSI() {
 
     let intervalId;
     let messageHandler;
+    let receivedResponse = false;
 
     // Clean up function
     const cleanup = () => {
@@ -41,6 +48,7 @@ export async function signInWithGoogleGSI() {
 
     // Check if popup is closed
     intervalId = setInterval(() => {
+      if (receivedResponse) return; // Prevent reject if success message raced ahead
       try {
         if (popup && popup.closed) {
           cleanup();
@@ -57,7 +65,17 @@ export async function signInWithGoogleGSI() {
     messageHandler = (event) => {
       if (event.origin !== window.location.origin) return;
       
+      const storedState = sessionStorage.getItem('google_oauth_state');
+      if (event.data && event.data.state && event.data.state !== storedState) {
+        sessionStorage.removeItem('google_oauth_state');
+        cleanup();
+        reject(new Error('Invalid State / CSRF mismatch'));
+        return;
+      }
+
       if (event.data && event.data.type === 'GOOGLE_SIGNIN_SUCCESS') {
+        receivedResponse = true;
+        sessionStorage.removeItem('google_oauth_state');
         cleanup();
         try {
           if (popup && !popup.closed) {
@@ -81,6 +99,8 @@ export async function signInWithGoogleGSI() {
           reject(new Error('Failed to decode Google token'));
         }
       } else if (event.data && event.data.type === 'GOOGLE_SIGNIN_ERROR') {
+        receivedResponse = true;
+        sessionStorage.removeItem('google_oauth_state');
         cleanup();
         try {
           if (popup && !popup.closed) {

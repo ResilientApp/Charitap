@@ -58,9 +58,7 @@ const RippleButton = ({
             left: ripple.x,
             top: ripple.y,
             width: ripple.size,
-            height: ripple.size,
-            transform: 'scale(0)',
-            animation: 'ripple 0.6s linear'
+            height: ripple.size
           }}
         />
       ))}

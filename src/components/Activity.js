@@ -60,6 +60,9 @@ export default function Activity() {
   // (fired after every successful round-up via chrome.scripting.executeScript → postMessage)
   useEffect(() => {
     const handleWalletUpdate = (event) => {
+      // Validate origin 
+      if (event.origin !== window.location.origin && !event.origin.includes('chrome-extension://')) return;
+
       if (event.data && event.data.type === 'CHARITAP_WALLET_UPDATE') {
         console.log('[Activity] Wallet update received, refreshing...');
         refreshActivity();

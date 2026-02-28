@@ -2,6 +2,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { signInWithGoogleGSI } from './google';
 import { authAPI } from '../services/api';
+import { jwtDecode } from 'jwt-decode';
 
 const AuthContext = createContext(null);
 
@@ -212,7 +213,7 @@ export function AuthProvider({ children }) {
       loginWithGoogle: async (googleCredential) => {
         setLoading(true);
         try {
-          console.log('AuthContext: Starting Google login with credentialType:', typeof googleCredential);
+          console.log('AuthContext: Starting Google login');
 
           let googleInfo;
           // Check if it's a JWT (has 3 parts separated by dots) or an access token
@@ -220,7 +221,6 @@ export function AuthProvider({ children }) {
 
           if (isJWT) {
             console.log('AuthContext: Detected JWT credential');
-            const { jwtDecode } = await import('jwt-decode');
             const decoded = jwtDecode(googleCredential);
             googleInfo = {
               id: decoded.sub,
@@ -251,12 +251,7 @@ export function AuthProvider({ children }) {
             googleInfo = await signInWithGoogleGSI();
           }
 
-          console.log('AuthContext: Calling backend with:', {
-            googleId: googleInfo.id,
-            email: googleInfo.email,
-            displayName: googleInfo.fullName,
-            profilePicture: googleInfo.picture
-          });
+          console.log('AuthContext: Calling backend with Google profile');
 
           // Send to backend
           const response = await authAPI.googleAuth(
@@ -268,7 +263,7 @@ export function AuthProvider({ children }) {
             googleInfo.lastName
           );
 
-          console.log('AuthContext: Backend response:', response);
+          console.log('AuthContext: Backend response received successfully');
 
           const session = saveAuthData(response);
 

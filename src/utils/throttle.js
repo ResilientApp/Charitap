@@ -12,27 +12,36 @@
 export const throttle = (func, delay = 300) => {
     let lastCall = 0;
     let timeoutId = null;
+    let isAsyncWaiting = false;
 
-    return function throttled(...args) {
+    return async function throttled(...args) {
+        if (isAsyncWaiting) return;
         const now = Date.now();
         const timeSinceLastCall = now - lastCall;
 
-        // Clear any pending timeout
         if (timeoutId) {
             clearTimeout(timeoutId);
             timeoutId = null;
         }
 
         if (timeSinceLastCall >= delay) {
-            // Enough time has passed, execute immediately
             lastCall = now;
-            return func.apply(this, args);
+            isAsyncWaiting = true;
+            try {
+                return await func.apply(this, args);
+            } finally {
+                isAsyncWaiting = false;
+            }
         } else {
-            // Schedule execution for later
             return new Promise((resolve) => {
-                timeoutId = setTimeout(() => {
+                timeoutId = setTimeout(async () => {
                     lastCall = Date.now();
-                    resolve(func.apply(this, args));
+                    isAsyncWaiting = true;
+                    try {
+                        resolve(await func.apply(this, args));
+                    } finally {
+                        isAsyncWaiting = false;
+                    }
                     timeoutId = null;
                 }, delay - timeSinceLastCall);
             });
@@ -48,6 +57,7 @@ export const throttle = (func, delay = 300) => {
  */
 export const debounce = (func, wait = 300) => {
     let timeoutId = null;
+    let pendingResolves = [];
 
     return function debounced(...args) {
         if (timeoutId) {
@@ -55,8 +65,11 @@ export const debounce = (func, wait = 300) => {
         }
 
         return new Promise((resolve) => {
-            timeoutId = setTimeout(() => {
-                resolve(func.apply(this, args));
+            pendingResolves.push(resolve);
+            timeoutId = setTimeout(async () => {
+                const result = await func.apply(this, args);
+                pendingResolves.forEach(r => r(result));
+                pendingResolves = [];
                 timeoutId = null;
             }, wait);
         });

@@ -44,7 +44,7 @@ export default function SignIn() {
         // Actually, our loginWithGoogle expects a credential (JWT).
         // Let's check how loginWithGoogle is implemented.
         await loginWithGoogle(tokenResponse.access_token);
-        window.location.href = '/';
+        nav('/', { replace: true });
       } catch (e) {
         setError(`🔐 ${e.message || 'Google sign-in failed'}`);
         setLoading(false);
@@ -95,7 +95,14 @@ export default function SignIn() {
               </button>
             </div>
           </div>
-          <RippleButton type="submit" className="w-full bg-black text-white hover:bg-yellow-300 hover:text-black px-5 py-2.5 rounded-full font-semibold transition-colors">
+          <RippleButton 
+            type="submit" 
+            disabled={isLoading}
+            aria-disabled={isLoading}
+            className={`w-full px-5 py-2.5 rounded-full font-semibold transition-colors ${
+              isLoading ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-black text-white hover:bg-yellow-300 hover:text-black'
+            }`}
+          >
             {isLoading ? 'Signing in...' : 'Sign In'}
           </RippleButton>
         </form>

@@ -72,11 +72,17 @@ const Dashboard = () => {
 
       // Calculate Last Month amount
       const now = new Date();
-      const currentMonth = now.getMonth();
+      const currentMonth = now.getMonth(); // 0-11
+      const currentYear = now.getFullYear();
+      
+      const targetMonthNumber = currentMonth === 0 ? 12 : currentMonth;
+      const targetYear = currentMonth === 0 ? currentYear - 1 : currentYear;
 
       let lastMonthAmount = 0;
       if (monthlyDonations.monthlyDonations && monthlyDonations.monthlyDonations.length > 0) {
-        const lastMonthData = monthlyDonations.monthlyDonations.find(m => m.monthNumber === currentMonth);
+        const lastMonthData = monthlyDonations.monthlyDonations.find(m => 
+          m.monthNumber === targetMonthNumber && (!m.year || m.year === targetYear)
+        );
         lastMonthAmount = lastMonthData?.amount || 0;
       }
 
@@ -116,6 +122,9 @@ const Dashboard = () => {
   // Also react to Chrome extension wallet-update messages
   useEffect(() => {
     const handleWalletUpdate = (event) => {
+      // Validate origin 
+      if (event.origin !== window.location.origin && !event.origin.includes('chrome-extension://')) return;
+
       if (event.data && event.data.type === 'CHARITAP_WALLET_UPDATE') {
         refreshDashboard();
       }

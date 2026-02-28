@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -15,6 +15,13 @@ export default function SignUp() {
   const [showPw, setShowPw] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
+  const timeoutRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, []);
 
   // Password strength validation with visual feedback
   const getPasswordStrength = (pwd) => {
@@ -72,7 +79,8 @@ export default function SignUp() {
       const errorMsg = err.message || 'Failed to sign up';
       if (errorMsg.includes('already exists') || errorMsg.includes('duplicate')) {
         setError('📧 An account with this email already exists. Redirecting to sign in...');
-        setTimeout(() => nav('/signin'), 2000);
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
+        timeoutRef.current = setTimeout(() => nav('/signin'), 2000);
       } else if (errorMsg.includes('invalid email')) {
         setError('✉️ Please enter a valid email address (e.g., user@example.com).');
       } else if (errorMsg.includes('password')) {
@@ -80,7 +88,8 @@ export default function SignUp() {
       } else if (errorMsg.includes('network') || errorMsg.includes('fetch')) {
         setError('🌐 Network error. Please check your internet connection and try again.');
       } else {
-        setError(errorMsg);
+        console.error('Signup internal error:', errorMsg);
+        setError('An unexpected error occurred. Please try again.');
       }
     }
   };
@@ -248,8 +257,12 @@ export default function SignUp() {
             </div>
           ) : (
             <button
-              onClick={() => googleLogin()}
-              className="w-full flex items-center justify-center gap-3 px-6 py-3 border border-gray-300 rounded-full hover:bg-gray-50 transition-all duration-200 group"
+              onClick={() => !(isLoading || loading) && googleLogin()}
+              disabled={isLoading || loading}
+              aria-disabled={isLoading || loading}
+              className={`w-full flex items-center justify-center gap-3 px-6 py-3 border border-gray-300 rounded-full transition-all duration-200 group ${
+                (isLoading || loading) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50'
+              }`}
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24">
                 <path

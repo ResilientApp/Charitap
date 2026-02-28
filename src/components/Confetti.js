@@ -62,7 +62,7 @@ const Confetti = ({ trigger, duration = 3000 }) => {
             height: particle.size,
             backgroundColor: particle.color,
             transform: `rotate(${particle.rotation}deg)`,
-            opacity: particle.y > window.innerHeight ? 0 : 1,
+            opacity: (typeof window !== 'undefined' ? particle.y > window.innerHeight : false) ? 0 : 1,
           }}
         />
       ))}

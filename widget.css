@@ -364,8 +364,8 @@
    =================================================================== */
 
 /* Focus styles */
-.charitap-btn:focus,
-.charitap-close:focus {
+.charitap-btn:focus-visible,
+.charitap-close:focus-visible {
   outline: 2px solid #F0BB78; /* Gold focus ring */
   outline-offset: 2px;
 }

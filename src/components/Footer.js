@@ -7,7 +7,7 @@ export default function Footer() {
         <div className="flex items-center space-x-3 mb-4 md:mb-0">
           <img src="/logo.png" alt="Charitap Logo" className="h-8 w-8 rounded-full" />
           <span className="font-bold text-lg text-yellow-400">Charitap</span>
-          <span className="ml-4 text-gray-700 text-sm italic max-w-xs hidden md:inline-block border-l border-gray-300 pl-4">A micro-donation platform that lets users round up everyday purchases and automatically donate the spare change to a charity of your choice.</span>
+          <span className="ml-4 text-gray-700 text-sm italic max-w-xs hidden md:inline-block border-l border-gray-300 pl-4">A micro-donation platform that lets users round up everyday purchases and automatically donate the spare change to a charity of their choice.</span>
         </div>
         <div className="flex items-center space-x-6">
           <a 

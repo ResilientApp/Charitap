@@ -50,21 +50,13 @@ describe('App component', () => {
   test('does not show Collected badge when not authenticated', () => {
     render(
       <MemoryRouter initialEntries={['/']}>
-        <App />
-      </MemoryRouter>
-    );
-    expect(screen.queryByText(/collected:/i)).not.toBeInTheDocument();
-  });
-
-  test('shows Collected badge and Logout button when authenticated', () => {
-    render(
-      <MemoryRouter initialEntries={['/']}>
         <AuthProvider>
           <App />
         </AuthProvider>
       </MemoryRouter>
     );
-    // Can't assert auth-only UI without mocking context; basic render suffices here
-    expect(screen.getByText(/charitap/i)).toBeInTheDocument();
+    expect(screen.queryByText(/collected:/i)).not.toBeInTheDocument();
   });
+
+
 });

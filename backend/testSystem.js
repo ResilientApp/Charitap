@@ -3,7 +3,7 @@
 /**
  * Charitap System Integration Test
  * Tests: API endpoints, Blockchain integration, Database operations
- * User: hnimonkar@gmail.com (Himanshu Nimonkar)
+ * Usage: TEST_EMAIL=user@example.com TEST_NAME="Full Name" node testSystem.js
  */
 
 const mongoose = require('mongoose');
@@ -14,8 +14,14 @@ const Charity = require('./models/Charity');
 const resilientDB = require('./services/resilientdb-client');
 require('dotenv').config();
 
-const TEST_EMAIL = 'hnimonkar@gmail.com';
-const TEST_NAME = 'Himanshu Nimonkar';
+// Read from environment variables to avoid hardcoding PII in source
+const TEST_EMAIL = process.env.TEST_EMAIL || process.argv[2];
+const TEST_NAME = process.env.TEST_NAME || process.argv[3] || TEST_EMAIL;
+
+if (!TEST_EMAIL || !TEST_EMAIL.includes('@')) {
+  console.error('Usage: TEST_EMAIL=user@example.com TEST_NAME="Full Name" node testSystem.js');
+  process.exit(1);
+}
 
 async function runTests() {
   console.log('\n🚀 Starting Charitap System Integration Tests\n');
@@ -144,7 +150,7 @@ async function runTests() {
     console.log(`User: ${TEST_NAME} (${TEST_EMAIL})`);
     console.log(`Total Donated: $${transactions.reduce((sum, t) => sum + t.amount, 0).toFixed(2)}`);
     console.log(`Transactions: ${transactions.length}`);
-    console.log(`Blockchain Secured: ${transactions.filter(t => t.blockchainTxKey).length}/${transactions.length}`);
+    console.log(`Blockchain Secured: ${transactions.filter(t => t.blockchainTxKey || t.blockchainTxId).length}/${transactions.length}`);
     console.log(`Pending Wallet: $${pendingRoundUps.reduce((sum, r) => sum + r.roundUpAmount, 0).toFixed(2)}`);
     console.log(`Charities Available: ${charities.length}`);
     console.log(`Blockchain Status: ${resilientDB.enabled ? 'ENABLED ✅' : 'DISABLED ❌'}`);

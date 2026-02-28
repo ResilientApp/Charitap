@@ -8,8 +8,9 @@ async function backfillSmartContract() {
     console.log('--- Backfill Smart Contract Receipt IDs ---');
     console.log(`Contract: ${process.env.RESCONTRACT_CONTRACT_ADDRESS || 'MISSING'}`);
 
-    if (!process.env.RESCONTRACT_ENABLED) {
-        console.error('Error: RESCONTRACT_ENABLED is false/missing in .env');
+    // Explicitly check for the string 'true' to avoid treating "false" as truthy
+    if (process.env.RESCONTRACT_ENABLED !== 'true') {
+        console.error('Error: RESCONTRACT_ENABLED must be set to exactly "true" in .env to run backfill');
         return;
     }
 
@@ -28,27 +29,44 @@ async function backfillSmartContract() {
             ]
         };
 
-        const transactions = await Transaction.find(query);
-        console.log(`Found ${transactions.length} transactions needing backfill.`);
-
+        // Use a cursor for memory-efficient processing instead of loading all records at once
+        const cursor = Transaction.find(query).cursor();
         let successCount = 0;
         let failCount = 0;
+        let totalCount = 0;
 
-        for (const tx of transactions) {
+        for await (const tx of cursor) {
+            totalCount++;
             console.log(`\nProcessing TX ${tx._id} (Amount: $${tx.amount}, Charity: ${tx.charity})...`);
 
             try {
-                // 1. Convert Charity ID (ObjectId -> Numeric for Contract)
-                // Take last 8 chars of hex string and convert to int
-                const charityIdStr = tx.charity ? tx.charity.toString() : '0';
-                const charityNumericId = parseInt(charityIdStr.slice(-8), 16) || 0;
+                // 1. Derive charityNumericId - use numericId from Charity model if available,
+                //    otherwise log a skip. The slice/parseInt approach is collision-prone.
+                const Charity = require('./models/Charity');
+                let charityNumericId = 0;
+                if (tx.charity) {
+                    const charityDoc = await Charity.findById(tx.charity).select('numericId');
+                    if (charityDoc && charityDoc.numericId) {
+                        charityNumericId = charityDoc.numericId;
+                    } else {
+                        // Fallback: deterministic but collision-possible (log warning)
+                        const charityIdStr = tx.charity.toString();
+                        charityNumericId = parseInt(charityIdStr.slice(-8), 16) || 0;
+                        console.warn(`  Warning: Charity ${tx.charity} has no numericId - using derived ID (collision-prone)`);
+                    }
+                }
 
-                // 2. Convert Amount (Dollars -> Cents)
-                // Use Math.round to avoid float precision issues
-                const amountCents = Math.round(parseFloat(tx.amount) * 100);
+                // 2. Convert Amount (Dollars -> Cents) with NaN guard
+                const parsedAmount = parseFloat(tx.amount);
+                if (Number.isNaN(parsedAmount)) {
+                    console.log(`  Skipping: tx.amount is NaN (raw value: ${tx.amount})`);
+                    failCount++;
+                    continue;
+                }
+                const amountCents = Math.round(parsedAmount * 100);
 
-                if (charityNumericId === 0 || amountCents <= 0) {
-                    console.log(`  Skipping: Invalid data (CharityID or Amount=0)`);
+                if (charityNumericId === 0 || Number.isNaN(amountCents) || amountCents <= 0) {
+                    console.log(`  Skipping: Invalid data (CharityID=${charityNumericId}, amountCents=${amountCents})`);
                     failCount++;
                     continue;
                 }
@@ -58,7 +76,7 @@ async function backfillSmartContract() {
                 const receiptId = await resContract.mintReceipt(charityNumericId, amountCents);
 
                 if (receiptId) {
-                    console.log(`  ✅ Success! Old Receipt ID: ${receiptId}`);
+                    console.log(`  ✅ Success! Backfilled Receipt ID: ${receiptId}`);
 
                     // 4. Update Database
                     tx.contractReceiptId = receiptId;
@@ -84,6 +102,7 @@ async function backfillSmartContract() {
         }
 
         console.log('\n--- Backfill Complete ---');
+        console.log(`Processed: ${totalCount}`);
         console.log(`Success: ${successCount}`);
         console.log(`Failed:  ${failCount}`);
 

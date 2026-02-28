@@ -779,7 +779,7 @@ function createConfetti() {
   function animate() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
-    pieces.forEach((piece, index) => {
+    pieces.forEach((piece) => {
       ctx.save();
       ctx.translate(piece.x, piece.y);
       ctx.rotate((piece.rotation * Math.PI) / 180);
@@ -789,11 +789,13 @@ function createConfetti() {
       
       piece.y += piece.speed;
       piece.rotation += piece.rotationSpeed;
-      
-      if (piece.y > canvas.height) {
-        pieces.splice(index, 1);
-      }
     });
+
+    // Remove pieces that have fallen off the bottom — filter after forEach
+    // to avoid mutating the array during iteration (which skips elements).
+    const activePieces = pieces.filter(piece => piece.y <= canvas.height);
+    pieces.length = 0;
+    activePieces.forEach(p => pieces.push(p));
     
     if (pieces.length > 0) {
       requestAnimationFrame(animate);

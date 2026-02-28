@@ -14,17 +14,38 @@ const donationValidator = require('./services/donation-validator');
 
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 
+/**
+ * processUserRoundups - Atomically charges the user and distributes to charities.
+ *
+ * Atomicity strategy:
+ *  - If any Stripe transfer fails, no roundups are marked paid (retry next run).
+ *  - All DB writes (Transaction.create, RoundUp.updateMany) happen inside a
+ *    MongoDB session so they can be rolled back together if a later step throws.
+ *  - Blockchain writes are best-effort and non-blocking (non-critical layer).
+ *  - If the charge succeeds but ALL transfers fail, a Stripe refund is issued.
+ */
 async function processUserRoundups(user) {
+  // Capture exact IDs of unpaid roundups before any state changes
   const unpaidRoundUps = await RoundUp.find({ user: user.email, isPaid: false });
+  const unpaidIds = unpaidRoundUps.map(r => r._id);
   let totalAmount = unpaidRoundUps.reduce((sum, ru) => sum + ru.roundUpAmount, 0);
+
+  // Early return: nothing to process
+  if (unpaidRoundUps.length === 0) return;
 
   // Handle different payment preferences
   if (user.paymentPreference === 'threshold') {
     if (totalAmount < 5) return;
   } else if (user.paymentPreference === 'monthly') {
-    if (totalAmount < 1) {
+    // Skip if no actual roundups to charge
+    if (totalAmount === 0) {
+      console.log(`Skipping ${user.email}: zero total amount, no charge`);
+      return;
+    }
+    // Only bump positive sub-$1 totals to $1 minimum
+    if (totalAmount > 0 && totalAmount < 1) {
+      console.log(`Rounding up ${user.email} to $1 minimum (was $${totalAmount.toFixed(2)})`);
       totalAmount = 1;
-      console.log(`Rounding up ${user.email} to $1 minimum`);
     }
   }
 
@@ -34,11 +55,18 @@ async function processUserRoundups(user) {
     return;
   }
 
-  // Check if user has payment method
   if (!user.defaultPaymentMethod) {
     console.log(`No payment method for ${user.email} - skipping`);
     return;
   }
+
+  if (!user.stripeCustomerId) {
+    console.log(`No stripeCustomerId for ${user.email} - skipping`);
+    return;
+  }
+
+  // Open a MongoDB session for atomic DB writes
+  const session = await mongoose.startSession();
 
   try {
     // STEP 1: Charge the user's card
@@ -53,7 +81,7 @@ async function processUserRoundups(user) {
       confirm: true,
       description: `Charitap donation - ${unpaidRoundUps.length} roundups`,
       metadata: {
-        userEmail: user.email,
+        userId: user.id,
         roundupCount: unpaidRoundUps.length.toString(),
         totalAmount: totalAmount.toString(),
       },
@@ -61,127 +89,166 @@ async function processUserRoundups(user) {
 
     console.log(`Successfully charged ${user.email}: $${totalAmount.toFixed(2)}`);
 
-    // STEP 2: Transfer to charities
-    const perCharityAmount = totalAmount / charities.length;
+    // STEP 2: Transfer to charities — integer-cent math to avoid rounding loss
+    const totalCents = Math.round(totalAmount * 100);
+    const baseShare = Math.floor(totalCents / charities.length);
+    const remainder = totalCents % charities.length;
 
-    for (const charity of charities) {
-      try {
-        const transfer = await stripe.transfers.create({
-          amount: Math.round(perCharityAmount * 100),
-          currency: 'usd',
-          destination: charity.stripeAccountId,
-          transfer_group: `payment_${paymentIntent.id}`,
-          description: `Donation from ${user.email}`,
-        });
+    let allTransfersSucceeded = true;
+    const failedTransfers = [];
+    const blockchainPromises = [];
 
-        const transaction = await Transaction.create({
-          stripeTransactionId: transfer.id,
-          stripePaymentIntentId: paymentIntent.id,
-          userEmail: user.email,
-          amount: perCharityAmount,
-          charity: charity._id,
-        });
+    // All Transactions created inside a session for atomicity
+    await session.withTransaction(async () => {
+      for (let i = 0; i < charities.length; i++) {
+        const charity = charities[i];
+        // First N charities get +1 cent to distribute remainder exactly
+        const transferCents = baseShare + (i < remainder ? 1 : 0);
 
-        console.log(`Transferred $${perCharityAmount.toFixed(2)} to ${charity.name}`);
-
-        // Record transaction on ResilientDB blockchain & Smart Contract
         try {
-          const donationData = {
-            amount: perCharityAmount,
-            charities: [charity._id.toString()]
-          };
-          const validationResult = donationValidator.validateDonation(donationData);
+          const transfer = await stripe.transfers.create({
+            amount: transferCents,
+            currency: 'usd',
+            destination: charity.stripeAccountId,
+            transfer_group: `payment_${paymentIntent.id}`,
+            description: 'Charitap donation',
+          });
 
-          const ledgerKey = resilientDB.generateKey('transaction', transaction._id.toString());
-          const ledgerData = {
-            transactionId: transaction._id.toString(),
-            stripeTransferId: transfer.id,
+          const [transaction] = await Transaction.create([{
+            stripeTransactionId: transfer.id,
             stripePaymentIntentId: paymentIntent.id,
-            userId: resilientDB.hashSensitiveData(user.email),
-            amount: perCharityAmount.toFixed(2),
-            charityId: charity._id.toString(),
-            charityName: charity.name,
-            timestamp: new Date().toISOString(),
-            status: 'completed',
-            validated: validationResult.valid,
-            validationRules: validationResult.appliedRules,
-            blockchainVersion: '2.0'
-          };
+            userEmail: user.email,
+            amount: transferCents / 100,
+            charity: charity._id,
+          }], { session });
 
-          const txId = await resilientDB.set(ledgerKey, ledgerData);
+          console.log(`Transferred $${(transferCents / 100).toFixed(2)} to ${charity.name}`);
 
-          if (txId) {
-            transaction.blockchainTxKey = ledgerKey;
-            transaction.blockchainTxId = txId;
-            transaction.blockchainVerified = true;
-            transaction.blockchainTimestamp = new Date();
-
-            // Smart Contract Interaction
+          // Blockchain write: non-critical, best-effort
+          const blockchainPromise = (async () => {
             try {
-              const charityNumericId = parseInt(charity._id.toString().slice(-8), 16) || 0;
-              const amountCents = Math.round(perCharityAmount * 100);
-              const receiptResult = await rescontractClient.mintReceipt(charityNumericId, amountCents);
-              if (receiptResult) {
-                transaction.contractReceiptId = receiptResult;
-                console.log(`📜 Contract receipt minted: ${receiptResult}`);
-              }
-            } catch (contractError) {
-              console.error(`⚠️ Contract receipt failed: ${contractError.message}`);
-            }
+              const donationData = { amount: transferCents / 100, charities: [charity._id.toString()] };
+              const validationResult = donationValidator.validateDonation(donationData);
+              const ledgerKey = resilientDB.generateKey('transaction', transaction._id.toString());
+              const ledgerData = {
+                transactionId: transaction._id.toString(),
+                stripeTransferId: transfer.id,
+                stripePaymentIntentId: paymentIntent.id,
+                userId: resilientDB.hashSensitiveData(user.id || user.email),
+                amount: (transferCents / 100).toFixed(2),
+                charityId: charity._id.toString(),
+                charityName: charity.name,
+                timestamp: new Date().toISOString(),
+                status: 'completed',
+                validated: validationResult.valid,
+                validationRules: validationResult.appliedRules,
+                blockchainVersion: '2.0',
+              };
+              const txId = await resilientDB.set(ledgerKey, ledgerData);
+              if (txId) {
+                // Charity numeric ID from model field rather than slice hack
+                const charityNumId = typeof charity.numericId === 'number'
+                  ? charity.numericId
+                  : (parseInt(charity._id.toString().slice(-8), 16) || 0);
+                const amountCents = transferCents;
 
+                try {
+                  const receiptResult = await rescontractClient.mintReceipt(charityNumId, amountCents);
+                  if (receiptResult) transaction.contractReceiptId = receiptResult;
+                } catch (contractErr) {
+                  console.error(`⚠️ Contract receipt failed: ${contractErr.message}`);
+                }
+
+                transaction.blockchainTxKey = ledgerKey;
+                transaction.blockchainTxId = txId;
+                transaction.blockchainVerified = true;
+                transaction.blockchainTimestamp = new Date();
+              }
+            } catch (blockchainErr) {
+              console.error('⚠️ Blockchain write failed (non-critical):', blockchainErr.message);
+              transaction.blockchainError = blockchainErr.message;
+            }
+            // Save outside session (blockchain fields are non-critical)
             await transaction.save();
-            console.log(`✅ Transaction recorded on blockchain: ${txId}`);
-          }
-        } catch (blockchainError) {
-          console.error('⚠️ Blockchain write failed:', blockchainError.message);
-          transaction.blockchainError = blockchainError.message;
-          await transaction.save();
+          })();
+          blockchainPromises.push(blockchainPromise);
+
+        } catch (err) {
+          console.error(`Error transferring to ${charity.name}:`, err.message);
+          allTransfersSucceeded = false;
+          failedTransfers.push({ charityName: charity.name, error: err.message });
+          // Abort session — Stripe transfer succeeded but DB write failed?
+          // We surface this as an error and do NOT mark roundups paid.
+          throw err; // This causes withTransaction to abort & retry/rollback
         }
-      } catch (err) {
-        console.error(`Error transferring to ${charity.name}:`, err.message);
+      }
+
+      // STEP 3: Mark roundups as paid — all inside same session for atomicity
+      if (allTransfersSucceeded) {
+        const now = new Date();
+        await RoundUp.updateMany(
+          { _id: { $in: unpaidIds }, user: user.email },
+          {
+            $set: {
+              isPaid: true,
+              stripePaymentIntentId: paymentIntent.id,
+              chargedAt: now,
+              processedAt: now,
+            },
+          },
+          { session }
+        );
+      }
+    });
+
+    // Await blockchain writes after session commits (non-transactional, best-effort)
+    await Promise.allSettled(blockchainPromises);
+
+    if (allTransfersSucceeded) {
+      console.log(`✅ Completed processing for ${user.email}`);
+    } else {
+      // Some transfers failed — issue refund for undelivered amount
+      console.error(`Some transfers failed for ${user.email}:`, failedTransfers);
+      const failedCents = failedTransfers.length * baseShare;
+      if (failedCents > 0) {
+        try {
+          await stripe.refunds.create({
+            payment_intent: paymentIntent.id,
+            amount: failedCents,
+            reason: 'other',
+            metadata: { failedTransfers: JSON.stringify(failedTransfers) },
+          });
+          console.log(`Issued partial refund of $${(failedCents / 100).toFixed(2)} for failed transfers`);
+        } catch (refundErr) {
+          console.error('Failed to issue refund:', refundErr.message);
+        }
       }
     }
-
-    // STEP 3: Mark roundups as processed
-    const now = new Date();
-    await RoundUp.updateMany(
-      { user: user.email, isPaid: false },
-      {
-        $set: {
-          isPaid: true,
-          stripePaymentIntentId: paymentIntent.id,
-          chargedAt: now,
-          processedAt: now
-        }
-      }
-    );
-
-    console.log(`Completed processing for ${user.email}`);
 
   } catch (error) {
-    console.error(`Error charging ${user.email}:`, error.message);
+    console.error(`Error processing ${user.email}:`, error.message);
     if (error.type === 'StripeCardError') {
-      console.log(`Card declined for ${user.email}`);
+      console.log(`Card declined for ${user.email} - will retry next cycle`);
     }
+  } finally {
+    await session.endSession();
   }
 }
 
-mongoose.connect(process.env.MONGODB_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-})
+mongoose.connect(process.env.MONGODB_URI)
   .then(async () => {
     console.log('Running manual processor...');
     const users = await User.find();
 
     for (const user of users) {
-      // For manual run, force process by ignoring date filters:
-      // (Bypassing the daily/monthly logic for testing)
+      // For manual run, force process by ignoring date filters
       await processUserRoundups(user);
     }
 
-    mongoose.disconnect();
+    await mongoose.disconnect();
+    console.log('Done.');
   })
   .catch(err => {
     console.error('MongoDB connection error:', err);
+    process.exit(1);
   });

@@ -24,6 +24,10 @@ router.get('/', optionalAuth, async (req, res) => {
 // Get single charity by ID
 router.get('/:id', async (req, res) => {
   try {
+    if (!require('mongoose').Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ error: 'Invalid charity ID format' });
+    }
+
     const charity = await Charity.findById(req.params.id)
       .select('name type description createdAt')
       .lean();
@@ -34,6 +38,9 @@ router.get('/:id', async (req, res) => {
 
     res.json({ charity });
   } catch (error) {
+    if (error.name === 'CastError') {
+      return res.status(400).json({ error: 'Invalid charity ID' });
+    }
     console.error('Get charity error:', error);
     res.status(500).json({ error: 'Error fetching charity' });
   }

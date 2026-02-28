@@ -32,6 +32,11 @@ router.post('/create-stripe-link', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Account ID is required' });
     }
 
+    // Ownership check: the accountId must match the user's own Stripe account
+    if (!req.user.stripeAccountId || req.user.stripeAccountId !== accountId) {
+      return res.status(403).json({ error: 'Forbidden: account does not belong to this user' });
+    }
+
     const accountLink = await stripe.accountLinks.create({
       account: accountId,
       refresh_url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reauth`,
@@ -74,7 +79,7 @@ router.post('/create-customer', authenticateToken, async (req, res) => {
   }
 });
 
-// API to list payment methods (FROM GITHUB - CRITICAL FEATURE)
+// API to list payment methods
 router.post('/list-payment-methods', authenticateToken, async (req, res) => {
   try {
     // Get stripe customer ID from authenticated user
@@ -217,6 +222,17 @@ router.post('/detach-payment-method', authenticateToken, async (req, res) => {
 
     if (!paymentMethodId) {
       return res.status(400).json({ error: 'Payment method ID is required' });
+    }
+
+    if (!req.user.stripeCustomerId) {
+      return res.status(400).json({ error: 'No Stripe customer found' });
+    }
+
+    // Ownership check: verify the PM is actually attached to THIS user's customer
+    // to prevent IDOR where user A could remove user B's payment method.
+    const pm = await stripe.paymentMethods.retrieve(paymentMethodId);
+    if (!pm || pm.customer !== req.user.stripeCustomerId) {
+      return res.status(403).json({ error: 'Forbidden: payment method does not belong to this user' });
     }
 
     // Detach payment method from customer

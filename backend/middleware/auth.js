@@ -1,8 +1,18 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
+// Guard: fail fast at module load if JWT_SECRET is missing
+if (!process.env.JWT_SECRET) {
+  console.error('FATAL: JWT_SECRET environment variable is not set. Auth middleware will not work.');
+}
+
 // Middleware to verify JWT token
 const authenticateToken = async (req, res, next) => {
+  // Ensure JWT_SECRET is configured before attempting verification
+  if (!process.env.JWT_SECRET) {
+    return res.status(500).json({ error: 'Server misconfiguration: missing JWT_SECRET' });
+  }
+
   try {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
@@ -13,14 +23,14 @@ const authenticateToken = async (req, res, next) => {
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     
-    // Fetch user from database
-    const user = await User.findById(decoded.userId);
+    // Fetch user with only allowed fields (exclude password, tokens, and other sensitive fields)
+    const user = await User.findById(decoded.userId).select('-password -tokens -resetToken -resetTokenExpiry');
     
     if (!user) {
       return res.status(401).json({ error: 'User not found' });
     }
 
-    // Attach user to request object
+    // Attach sanitized user to request object
     req.user = user;
     next();
   } catch (error) {
@@ -40,9 +50,10 @@ const optionalAuth = async (req, res, next) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
 
-    if (token) {
+    if (token && process.env.JWT_SECRET) {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      const user = await User.findById(decoded.userId);
+      // Exclude sensitive fields the same way as authenticateToken
+      const user = await User.findById(decoded.userId).select('-password -tokens -resetToken -resetTokenExpiry');
       if (user) {
         req.user = user;
       }
@@ -55,4 +66,3 @@ const optionalAuth = async (req, res, next) => {
 };
 
 module.exports = { authenticateToken, optionalAuth };
-

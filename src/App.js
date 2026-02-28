@@ -37,8 +37,12 @@ function App() {
     return <LoadingSpinner />;
   }
 
+  if (!process.env.REACT_APP_GOOGLE_CLIENT_ID && process.env.NODE_ENV === 'production') {
+    throw new Error('FATAL: REACT_APP_GOOGLE_CLIENT_ID is not set. Google Sign-In will not work.');
+  }
+
   return (
-    <GoogleOAuthProvider clientId={process.env.REACT_APP_GOOGLE_CLIENT_ID || 'your_google_client_id_here'}>
+    <GoogleOAuthProvider clientId={process.env.REACT_APP_GOOGLE_CLIENT_ID || ''}>
       <ErrorBoundary>
         <div className="min-h-screen bg-gray-50">
           {!hideChrome && <Navigation />}

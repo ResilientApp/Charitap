@@ -1,11 +1,13 @@
 const reportWebVitals = onPerfEntry => {
   if (onPerfEntry && onPerfEntry instanceof Function) {
-    import('web-vitals').then(({ getCLS, getFID, getFCP, getLCP, getTTFB }) => {
-      getCLS(onPerfEntry);
-      getFID(onPerfEntry);
-      getFCP(onPerfEntry);
-      getLCP(onPerfEntry);
-      getTTFB(onPerfEntry);
+    import('web-vitals').then((vitals) => {
+      vitals.getCLS(onPerfEntry);
+      vitals.getFCP(onPerfEntry);
+      vitals.getLCP(onPerfEntry);
+      vitals.getTTFB(onPerfEntry);
+      // getINP replaced getFID as a Core Web Vital in 2024; fall back to getFID on older web-vitals versions
+      const inp = vitals.getINP || vitals.getFID;
+      if (inp) inp(onPerfEntry);
     });
   }
 };

@@ -5,15 +5,16 @@ const geoBlock = (req, res, next) => {
                   req.headers['x-country-code'] || 
                   req.headers['cloudfront-viewer-country'];
   
-  // For development/localhost, allow access
-  if (!country || req.hostname === 'localhost' || req.hostname === '127.0.0.1') {
+  // In non-production environments, allow access without a country header
+  // (Use NODE_ENV, not hostname, to avoid spoofing via Host header)
+  if (process.env.NODE_ENV !== 'production') {
     return next();
   }
   
-  // Block if not US
-  if (country !== 'US') {
+  // Fail-closed in production: if country header is missing or not 'US', block
+  if (!country || country !== 'US') {
     return res.status(403).json({
-      error: 'Service Unavailable',
+      error: 'Forbidden',
       message: 'Charitap is currently only available in the United States.',
       code: 'GEO_RESTRICTED'
     });

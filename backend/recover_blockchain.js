@@ -97,14 +97,17 @@ async function recoverSmartContract() {
         // Alternatively, since we updated process.env, we could require the logic directly.
         // Spawning is cleaner for isolation.
 
-        const backfillCmd = `node backfill_smart_contract.js`;
         const child = require('child_process').spawn('node', ['backfill_smart_contract.js'], {
             stdio: 'inherit',
             shell: true
         });
 
-        child.on('close', (code) => {
-            mongoose.disconnect();
+        child.on('close', async (code) => {
+            try {
+                await mongoose.disconnect();
+            } catch (disconnectErr) {
+                console.error('Error disconnecting from MongoDB:', disconnectErr.message);
+            }
             if (code === 0) {
                 console.log('\n🎉 RECOVERY COMPLETE! The system is back online.');
             } else {
@@ -115,7 +118,7 @@ async function recoverSmartContract() {
     } catch (err) {
         console.error('\n❌ RECOVERY FAILED:', err.message);
         if (err.stderr) console.error(err.stderr);
-        if (mongoose.connection.readyState !== 0) mongoose.disconnect();
+        if (mongoose.connection.readyState !== 0) await mongoose.disconnect();
         process.exit(1);
     }
 }

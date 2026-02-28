@@ -80,10 +80,10 @@ export class RateLimiter {
         // Remove calls outside the time window
         this.calls = this.calls.filter(time => now - time < this.timeWindow);
 
-        if (this.calls.length >= this.maxCalls) {
+        while (this.calls.length >= this.maxCalls) {
             // Wait until oldest call expires
             const oldestCall = this.calls[0];
-            const waitTime = this.timeWindow - (now - oldestCall);
+            const waitTime = this.timeWindow - (Date.now() - oldestCall);
 
             if (waitTime > 0) {
                 await new Promise(resolve => setTimeout(resolve, waitTime));

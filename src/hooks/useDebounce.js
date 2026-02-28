@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 /**
  * useDebounce
@@ -15,7 +15,6 @@ import { useEffect, useRef } from 'react';
  * const debouncedSearch = useDebounce(searchInput, 300);
  * useEffect(() => { fetchResults(debouncedSearch); }, [debouncedSearch]);
  */
-import { useState } from 'react';
 
 const useDebounce = (value, delay = 300) => {
   const [debouncedValue, setDebouncedValue] = useState(value);

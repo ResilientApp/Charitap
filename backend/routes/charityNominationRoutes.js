@@ -11,10 +11,6 @@ const emailService = require('../services/email-service');
  */
 router.post('/nominate', authenticateToken, async (req, res) => {
   try {
-    console.log('[DEBUG] Nomination request received:', {
-      user: req.user.email,
-      body: req.body
-    });
     const { charityName, charityEmail, category, message } = req.body;
 
     // Validate required fields
@@ -43,9 +39,8 @@ router.post('/nominate', authenticateToken, async (req, res) => {
     }
 
     // Check if charity already exists (approved)
-    const existingCharity = await Charity.findOne({
-      name: new RegExp(`^${charityName}$`, 'i')
-    });
+    const existingCharity = await Charity.findOne({ name: charityName })
+      .collation({ locale: 'en', strength: 2 });
 
     if (existingCharity) {
       return res.status(400).json({

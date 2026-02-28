@@ -64,9 +64,9 @@ export default useMediaQuery;
 export const useIsMobile = () => useMediaQuery('(max-width: 767px)');
 
 /**
- * useIsTablet — matches screens up to 1023px (< lg in Tailwind)
+ * useIsTablet — matches screens 768px–1023px (≥ md and < lg in Tailwind)
  */
-export const useIsTablet = () => useMediaQuery('(max-width: 1023px)');
+export const useIsTablet = () => useMediaQuery('(min-width: 768px) and (max-width: 1023px)');
 
 /**
  * useIsDesktop — matches screens 1024px and wider (>= lg in Tailwind)

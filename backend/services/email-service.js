@@ -1,5 +1,16 @@
 const nodemailer = require('nodemailer');
 
+/** HTML-escape a string to prevent XSS in email templates. */
+function escHtml(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 /**
  * Email Service for Charitap
  * Handles all email notifications (charity invitations, admin alerts, etc.)
@@ -80,7 +91,7 @@ class EmailService {
               <div class="badge">🎉 You've Been Nominated!</div>
             </div>
             <div class="content">
-              <p class="greeting">Hi ${charityName || 'there'},</p>
+              <p class="greeting">Hi ${escHtml(charityName) || 'there'},</p>
               
               <p class="body-text">Great news! A Charitap user believes your organization would be perfect for our micro-donation platform.</p>
               
@@ -120,7 +131,7 @@ class EmailService {
               <p class="sign-off">Best regards,<br/><strong>The Charitap Team</strong></p>
             </div>
             <div class="footer">
-              <p>This invitation was initiated by a Charitap user (${nominatedBy})</p>
+              <p>This invitation was initiated by a Charitap user (${escHtml(nominatedBy)})</p>
               <p>&copy; ${new Date().getFullYear()} Charitap. All rights reserved.</p>
             </div>
           </div>
@@ -220,19 +231,19 @@ This invitation was initiated by a Charitap user (${nominatedBy})
               <div class="info-grid">
                 <div class="info-row">
                   <span class="info-label">Charity Name:</span>
-                  <span class="info-value">${applicationData.charityName}</span>
+                  <span class="info-value">${escHtml(applicationData.charityName)}</span>
                 </div>
                 <div class="info-row">
                   <span class="info-label">Email Address:</span>
-                  <span class="info-value">${applicationData.charityEmail}</span>
+                  <span class="info-value">${escHtml(applicationData.charityEmail)}</span>
                 </div>
                 <div class="info-row">
                   <span class="info-label">Category:</span>
-                  <span class="info-value">${applicationData.category}</span>
+                  <span class="info-value">${escHtml(applicationData.category)}</span>
                 </div>
                 <div class="info-row">
                   <span class="info-label">Nominated By:</span>
-                  <span class="info-value">${applicationData.nominatedBy}</span>
+                  <span class="info-value">${escHtml(applicationData.nominatedBy)}</span>
                 </div>
                 <div class="info-row" style="border-bottom: none;">
                   <span class="info-label">Request Date:</span>
@@ -297,10 +308,11 @@ The charity has been sent an email notification.
     };
     
     if (!this.enabled) {
-      console.log('[Email] DISABLED - Email would be sent:');
-      console.log('To:', to);
-      console.log('Subject:', subject);
-      console.log('---');
+      // Mask email to avoid PII in server logs: show first char + domain only
+      const maskedTo = typeof to === 'string'
+        ? to.replace(/^(.).*?(@.*)$/, '$1***$2')
+        : '[email]';
+      console.log(`[Email] DISABLED - Would send to ${maskedTo}: ${subject}`);
       return { success: true, message: 'Email service disabled - logged only' };
     }
     

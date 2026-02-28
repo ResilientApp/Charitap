@@ -1,5 +1,5 @@
 // src/auth/AuthContext.js
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { signInWithGoogleGSI } from './google';
 import { authAPI } from '../services/api';
 
@@ -13,6 +13,7 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [token, setToken] = useState(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const logoutTimerRef = useRef(null);
 
   // Function to update user state from API response
   const updateUserState = (userData, tokenParam) => {
@@ -76,6 +77,13 @@ export function AuthProvider({ children }) {
     setLoading(false);
   }, []);
 
+  // Clear the logout timer if the component unmounts mid-timer
+  useEffect(() => {
+    if (!isLoggingOut) return;
+    logoutTimerRef.current = setTimeout(() => setIsLoggingOut(false), 2000);
+    return () => clearTimeout(logoutTimerRef.current);
+  }, [isLoggingOut]);
+
   // Chrome Extension Communication
   useEffect(() => {
     if (user && user.id && token) {
@@ -87,7 +95,6 @@ export function AuthProvider({ children }) {
           process.env.REACT_APP_CHROME_EXTENSION_ID || "hglbfejfbippoeenobopobjbpbcddjjo",
           {
             type: "SAVE_USER_DATA",
-            email: email,
             userId: userId,
             token: token
           },
@@ -99,9 +106,6 @@ export function AuthProvider({ children }) {
             }
           }
         );
-        console.log("Stored Email:", email);
-        console.log("Stored UserID:", userId);
-        console.log("Stored Token:", token ? "Present" : "Missing");
       }
 
 
@@ -297,15 +301,15 @@ export function AuthProvider({ children }) {
       },
 
       logout: async () => {
-        setIsLoggingOut(true);
+        clearTimeout(logoutTimerRef.current);
         localStorage.removeItem('charitap_auth');
         setUser(null);
         setProfile(null);
         setAuthProvider(null);
         setToken(null);
         setEmailVerified(false);
-        // Reset logging out after a short delay to allow navigation to complete
-        setTimeout(() => setIsLoggingOut(false), 2000);
+        // Timer is managed by the useEffect above — just flip the flag
+        setIsLoggingOut(true);
       },
 
       saveName: async (firstName, lastName) => {
@@ -385,7 +389,10 @@ export function AuthProvider({ children }) {
 
       // Update selected charities in state and localStorage
       updateSelectedCharities: (newSelectedCharities) => {
-        setUser(prev => ({ ...prev, selectedCharities: newSelectedCharities }));
+        setUser(prev => {
+          if (!prev) return prev;
+          return { ...prev, selectedCharities: newSelectedCharities };
+        });
         // Also update localStorage so it persists across refreshes
         try {
           const currentAuth = JSON.parse(localStorage.getItem('charitap_auth') || '{}');
@@ -398,7 +405,10 @@ export function AuthProvider({ children }) {
 
       // Update payment preference in state and localStorage
       updatePaymentPreference: (newPreference) => {
-        setUser(prev => ({ ...prev, paymentPreference: newPreference }));
+        setUser(prev => {
+          if (!prev) return prev;
+          return { ...prev, paymentPreference: newPreference };
+        });
         try {
           const currentAuth = JSON.parse(localStorage.getItem('charitap_auth') || '{}');
           currentAuth.paymentPreference = newPreference;

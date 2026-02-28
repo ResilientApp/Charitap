@@ -76,14 +76,12 @@ router.get('/', async (req, res) => {
         const resilientdb = require('../services/resilientdb-client');
         health.services.resilientdb = {
             status: 'info',
-            enabled: resilientdb.enabled || false,
-            endpoint: resilientdb.graphqlUrl || 'not configured'
+            enabled: resilientdb.enabled || false
         };
     } catch (error) {
         health.services.resilientdb = {
             status: 'info',
-            enabled: false,
-            error: error.message
+            enabled: false
         };
     }
 

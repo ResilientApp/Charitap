@@ -28,8 +28,8 @@ router.post('/signup', async (req, res) => {
       return res.status(400).json({ error: 'Please provide a valid email address' });
     }
 
-    if (password.length < 6) {
-      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    if (password.length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters' });
     }
 
     // Check if user already exists
@@ -38,14 +38,10 @@ router.post('/signup', async (req, res) => {
       return res.status(400).json({ error: 'User already exists with this email' });
     }
 
-    // Hash password
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
-
-    // Create new user
+    // Create new user — password hashing is handled by the User model's pre-save hook
     const newUser = new User({
       email,
-      password: hashedPassword,
+      password,
       authProvider: 'local',
       displayName: displayName || email.split('@')[0]
     });
@@ -271,8 +267,8 @@ router.post('/change-password', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Current and new password are required' });
     }
 
-    if (newPassword.length < 6) {
-      return res.status(400).json({ error: 'New password must be at least 6 characters' });
+    if (newPassword.length < 8) {
+      return res.status(400).json({ error: 'New password must be at least 8 characters' });
     }
 
     // Verify current password
@@ -281,11 +277,9 @@ router.post('/change-password', authenticateToken, async (req, res) => {
       return res.status(401).json({ error: 'Current password is incorrect' });
     }
 
-    // Hash new password
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(newPassword, salt);
-
-    req.user.password = hashedPassword;
+    // Hash new password — delegate to model pre-save hook
+    req.user.password = newPassword;
+    req.user.markModified('password');
     await req.user.save();
 
     res.json({ message: 'Password changed successfully' });
@@ -337,6 +331,12 @@ router.patch('/settings/charities', authenticateToken, async (req, res) => {
 
     if (!Array.isArray(charityIds)) {
       return res.status(400).json({ error: 'charityIds must be an array' });
+    }
+
+    const mongoose = require('mongoose');
+    const invalidIds = charityIds.filter(id => !mongoose.Types.ObjectId.isValid(id));
+    if (invalidIds.length > 0) {
+      return res.status(400).json({ error: 'Invalid charity ID(s) provided' });
     }
 
     req.user.selectedCharities = charityIds;

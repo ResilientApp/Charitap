@@ -79,22 +79,10 @@ const charityApplicationSchema = new mongoose.Schema({
   adminNotes: { 
     type: String 
   },
-  
-  // Timestamps
-  createdAt: { 
-    type: Date, 
-    default: Date.now 
-  },
-  updatedAt: { 
-    type: Date, 
-    default: Date.now 
-  }
-});
-
-// Update the updatedAt timestamp before saving
-charityApplicationSchema.pre('save', function(next) {
-  this.updatedAt = Date.now();
-  next();
+}, {
+  // Mongoose handles createdAt and updatedAt automatically for all update methods
+  // (including findOneAndUpdate/updateOne) — no need for a pre('save') hook.
+  timestamps: true
 });
 
 // Indexes for performance

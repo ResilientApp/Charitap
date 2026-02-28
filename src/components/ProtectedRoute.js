@@ -6,7 +6,8 @@ import { toast } from 'react-toastify';
 
 export default function ProtectedRoute({ element: Component }) {
   const { isAuthenticated, isLoading } = useAuth();
-  const bypass = process.env.REACT_APP_AUTH_BYPASS === 'true';
+  // Auth bypass is only allowed in non-production environments
+  const bypass = process.env.REACT_APP_AUTH_BYPASS === 'true' && process.env.NODE_ENV !== 'production';
   const [redirect, setRedirect] = useState(false);
 
   // when we know auth status and it's false, kick off toast + delayed redirect
@@ -21,8 +22,8 @@ export default function ProtectedRoute({ element: Component }) {
   // 1) Loading spinner
   if (isLoading) {
     return (
-      <div className="fixed inset-0 flex items-center justify-center bg-black/40 z-50">
-        <div className="w-14 h-14 border-4 border-yellow-200 border-t-transparent rounded-full animate-spin" />
+      <div className="fixed inset-0 flex items-center justify-center bg-black/40 z-50" role="status" aria-label="Loading, please wait">
+        <div className="w-14 h-14 border-4 border-yellow-200 border-t-transparent rounded-full animate-spin" aria-hidden="true" />
       </div>
     );
   }

@@ -8,11 +8,13 @@ const roundUpSchema = new mongoose.Schema({
   },
   purchaseAmount: {
     type: Number,
-    required: true
+    required: true,
+    min: 0
   },
   roundUpAmount: {
     type: Number,
-    required: true
+    required: true,
+    min: 0
   },
   isPaid: {
     type: Boolean,

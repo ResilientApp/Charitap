@@ -3,21 +3,37 @@
  * Updated to handle tab-specific exports (donated vs collected)
  */
 
-// CSV Export for Donated Tab
-export function exportDonatedCSV(activities, filename = 'charitap-donations.csv') {
-  const headers = ['Date', 'Charity', 'Amount'];
+// Shared HTML escaping helper to prevent XSS in PDF templates
+function escapeHtml(value) {
+  if (value == null) return '';
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
 
-  const rows = activities.map(activity => [
-    new Date(activity.date).toLocaleString(),
-    activity.charity,
-    activity.amount
-  ]);
+// Shared CSV cell escaper: wraps in quotes and escapes embedded quotes (RFC 4180)
+function csvCell(value) {
+  const str = value == null ? '' : String(value);
+  return `"${str.replace(/"/g, '""')}"`;
+}
 
-  const csvContent = [
-    headers.join(','),
-    ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
-  ].join('\n');
+// Shared popup helper with null-guard (handles popup-blocked case)
+function printHtml(htmlContent) {
+  const printWindow = window.open('', '_blank');
+  if (!printWindow) {
+    console.warn('[Charitap] Popup blocked: cannot open PDF preview.');
+    return;
+  }
+  printWindow.document.write(htmlContent);
+  printWindow.document.close();
+  setTimeout(() => { printWindow.print(); }, 250);
+}
 
+// Shared CSV download helper — revokes blob URL to prevent memory leaks
+function downloadCSV(csvContent, filename) {
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   const link = document.createElement('a');
   const url = URL.createObjectURL(blob);
@@ -28,6 +44,25 @@ export function exportDonatedCSV(activities, filename = 'charitap-donations.csv'
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+  URL.revokeObjectURL(url); // release memory
+}
+
+// CSV Export for Donated Tab
+export function exportDonatedCSV(activities, filename = 'charitap-donations.csv') {
+  const headers = ['Date', 'Charity', 'Amount'];
+
+  const rows = activities.map(activity => [
+    new Date(activity.date).toLocaleString(),
+    activity.charity,
+    activity.amount,
+  ]);
+
+  const csvContent = [
+    headers.map(csvCell).join(','),
+    ...rows.map(row => row.map(csvCell).join(',')),
+  ].join('\n');
+
+  downloadCSV(csvContent, filename);
 }
 
 // CSV Export for Collected Tab
@@ -37,28 +72,27 @@ export function exportCollectedCSV(activities, filename = 'charitap-collected.cs
   const rows = activities.map(activity => [
     new Date(activity.date).toLocaleString(),
     activity.purchaseAmount ? `$${parseFloat(activity.purchaseAmount).toFixed(2)}` : '-',
-    activity.amount
+    activity.amount,
   ]);
 
   const csvContent = [
-    headers.join(','),
-    ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+    headers.map(csvCell).join(','),
+    ...rows.map(row => row.map(csvCell).join(',')),
   ].join('\n');
 
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const link = document.createElement('a');
-  const url = URL.createObjectURL(blob);
-
-  link.setAttribute('href', url);
-  link.setAttribute('download', filename);
-  link.style.visibility = 'hidden';
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  downloadCSV(csvContent, filename);
 }
 
 // PDF Export for Donated Tab
-export function exportDonatedPDF(activities, filename = 'charitap-donations.pdf') {
+export function exportDonatedPDF(activities) {
+  const rows = activities.map(activity => `
+    <tr>
+      <td>${escapeHtml(new Date(activity.date).toLocaleDateString())}</td>
+      <td>${escapeHtml(activity.charity)}</td>
+      <td>${escapeHtml(activity.amount)}</td>
+    </tr>
+  `).join('');
+
   const htmlContent = `
     <!DOCTYPE html>
     <html>
@@ -75,40 +109,31 @@ export function exportDonatedPDF(activities, filename = 'charitap-donations.pdf'
       </head>
       <body>
         <h1>Charitap Donation Report</h1>
-        <p>Generated on: ${new Date().toLocaleDateString()}</p>
+        <p>Generated on: ${escapeHtml(new Date().toLocaleDateString())}</p>
         <table>
           <thead>
-            <tr>
-              <th>Date</th>
-              <th>Charity</th>
-              <th>Amount</th>
-            </tr>
+            <tr><th>Date</th><th>Charity</th><th>Amount</th></tr>
           </thead>
-          <tbody>
-            ${activities.map(activity => `
-              <tr>
-                <td>${new Date(activity.date).toLocaleDateString()}</td>
-                <td>${activity.charity}</td>
-                <td>${activity.amount}</td>
-              </tr>
-            `).join('')}
-          </tbody>
+          <tbody>${rows}</tbody>
         </table>
         <p class="total">Total Transactions: ${activities.length}</p>
       </body>
     </html>
   `;
 
-  const printWindow = window.open('', '_blank');
-  printWindow.document.write(htmlContent);
-  printWindow.document.close();
-  setTimeout(() => {
-    printWindow.print();
-  }, 250);
+  printHtml(htmlContent);
 }
 
 // PDF Export for Collected Tab
-export function exportCollectedPDF(activities, filename = 'charitap-collected.pdf') {
+export function exportCollectedPDF(activities) {
+  const rows = activities.map(activity => `
+    <tr>
+      <td>${escapeHtml(new Date(activity.date).toLocaleDateString())}</td>
+      <td>${escapeHtml(activity.purchaseAmount ? `$${parseFloat(activity.purchaseAmount).toFixed(2)}` : '-')}</td>
+      <td>${escapeHtml(activity.amount)}</td>
+    </tr>
+  `).join('');
+
   const htmlContent = `
     <!DOCTYPE html>
     <html>
@@ -125,39 +150,22 @@ export function exportCollectedPDF(activities, filename = 'charitap-collected.pd
       </head>
       <body>
         <h1>Charitap Collection Report</h1>
-        <p>Generated on: ${new Date().toLocaleDateString()}</p>
+        <p>Generated on: ${escapeHtml(new Date().toLocaleDateString())}</p>
         <table>
           <thead>
-            <tr>
-              <th>Date</th>
-              <th>Purchase Amount</th>
-              <th>Round-Up Amount</th>
-            </tr>
+            <tr><th>Date</th><th>Purchase Amount</th><th>Round-Up Amount</th></tr>
           </thead>
-          <tbody>
-            ${activities.map(activity => `
-              <tr>
-                <td>${new Date(activity.date).toLocaleDateString()}</td>
-                <td>${activity.purchaseAmount ? `$${parseFloat(activity.purchaseAmount).toFixed(2)}` : '-'}</td>
-                <td>${activity.amount}</td>
-              </tr>
-            `).join('')}
-          </tbody>
+          <tbody>${rows}</tbody>
         </table>
         <p class="total">Total Transactions: ${activities.length}</p>
       </body>
     </html>
   `;
 
-  const printWindow = window.open('', '_blank');
-  printWindow.document.write(htmlContent);
-  printWindow.document.close();
-  setTimeout(() => {
-    printWindow.print();
-  }, 250);
+  printHtml(htmlContent);
 }
 
-// Legacy exports for backward compatibility (will be removed)
+// Legacy exports for backward compatibility (will be removed in a future release)
 export function exportToCSV(activities, filename = 'charitap-export.csv') {
   const headers = ['Date', 'Type', 'Charity', 'Category', 'Amount'];
 
@@ -166,27 +174,28 @@ export function exportToCSV(activities, filename = 'charitap-export.csv') {
     activity.type === 'donation' ? 'Donation' : 'Round-Up Collection',
     activity.charity,
     activity.category,
-    activity.amount
+    activity.amount,
   ]);
 
   const csvContent = [
-    headers.join(','),
-    ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+    headers.map(csvCell).join(','),
+    ...rows.map(row => row.map(csvCell).join(',')),
   ].join('\n');
 
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const link = document.createElement('a');
-  const url = URL.createObjectURL(blob);
-
-  link.setAttribute('href', url);
-  link.setAttribute('download', filename);
-  link.style.visibility = 'hidden';
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  downloadCSV(csvContent, filename);
 }
 
-export function exportToPDF(activities, filename = 'charitap-export.pdf') {
+export function exportToPDF(activities) {
+  const rows = activities.map(activity => `
+    <tr>
+      <td>${escapeHtml(new Date(activity.date).toLocaleDateString())}</td>
+      <td>${escapeHtml(activity.type === 'donation' ? 'Donation' : 'Round-Up')}</td>
+      <td>${escapeHtml(activity.charity)}</td>
+      <td>${escapeHtml(activity.category)}</td>
+      <td>${escapeHtml(activity.amount)}</td>
+    </tr>
+  `).join('');
+
   const htmlContent = `
     <!DOCTYPE html>
     <html>
@@ -203,38 +212,17 @@ export function exportToPDF(activities, filename = 'charitap-export.pdf') {
       </head>
       <body>
         <h1>Charitap Report</h1>
-        <p>Generated on: ${new Date().toLocaleDateString()}</p>
+        <p>Generated on: ${escapeHtml(new Date().toLocaleDateString())}</p>
         <table>
           <thead>
-            <tr>
-              <th>Date</th>
-              <th>Type</th>
-              <th>Charity</th>
-              <th>Category</th>
-              <th>Amount</th>
-            </tr>
+            <tr><th>Date</th><th>Type</th><th>Charity</th><th>Category</th><th>Amount</th></tr>
           </thead>
-          <tbody>
-            ${activities.map(activity => `
-              <tr>
-                <td>${new Date(activity.date).toLocaleDateString()}</td>
-                <td>${activity.type === 'donation' ? 'Donation' : 'Round-Up'}</td>
-                <td>${activity.charity}</td>
-                <td>${activity.category}</td>
-                <td>${activity.amount}</td>
-              </tr>
-            `).join('')}
-          </tbody>
+          <tbody>${rows}</tbody>
         </table>
         <p class="total">Total Transactions: ${activities.length}</p>
       </body>
     </html>
   `;
 
-  const printWindow = window.open('', '_blank');
-  printWindow.document.write(htmlContent);
-  printWindow.document.close();
-  setTimeout(() => {
-    printWindow.print();
-  }, 250);
+  printHtml(htmlContent);
 }

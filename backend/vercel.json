@@ -18,6 +18,10 @@
   ],
   "routes": [
     {
+      "src": "/api/cron/process-roundups",
+      "dest": "/api/cron/process-roundups.js"
+    },
+    {
       "src": "/api/(.*)",
       "dest": "/api/index.js"
     }

@@ -61,7 +61,7 @@ const RootMutation = new GraphQLObjectType({
           const result = await createAccount(args.config, args.type);
           return result;
         } catch (error) {
-          throw new Error(error);
+          throw error;
         }
       },
     },
@@ -77,7 +77,7 @@ const RootMutation = new GraphQLObjectType({
           const result = await addAddress(args.config, args.address, args.type);
           return result;
         } catch (error) {
-          throw new Error(error);
+          throw error;
         }
       },
     },
@@ -92,7 +92,7 @@ const RootMutation = new GraphQLObjectType({
           const result = await compileContract(args.source, args.type);
           return result;
         } catch (error) {
-          throw new Error(error);
+          throw error;
         }
       },
     },
@@ -118,7 +118,7 @@ const RootMutation = new GraphQLObjectType({
           );
           return result;
         } catch (error) {
-          throw new Error(error);
+          throw error;
         }
       },
     },
@@ -144,7 +144,7 @@ const RootMutation = new GraphQLObjectType({
           );
           return result;
         } catch (error) {
-          throw new Error(error);
+          throw error;
         }
       },
     },

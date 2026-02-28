@@ -142,8 +142,6 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
-.DS_Store
-
 # OS files
 .DS_Store
 Thumbs.db
@@ -155,11 +153,15 @@ Thumbs.db
 *.swo
 *~
 
-# Test files
-test-*.js
-*-test.js
-fix-*.js
-final-*.js
+# Temporary/scratch test files (NOT files in test/ or __tests__/)
+# These patterns scope to scratch files in the project root only
+tmp-test-*.js
+tmp-fix-*.js
+tmp-final-*.js
+tmp-*.js
+
+# Deployed contract artifacts (contain real blockchain addresses - keep out of repo)
+backend/cloud_deployed.json
 
 # Build output
 build/

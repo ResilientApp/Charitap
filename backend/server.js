@@ -14,11 +14,39 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // MongoDB Connection (using MongoDB URI from .env)
+const server = app.listen(0); // placeholder, actual listen below
 mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log('MongoDB connected'))
-  .catch(err => console.error('MongoDB connection error:', err));
+  .then(() => {
+    console.log('MongoDB connected');
+    // Only start the HTTP server after a successful DB connection
+    if (require.main === module) {
+      server.listen(PORT, () => console.log(`Server is running at http://localhost:${PORT}`));
+      server.close(); // close placeholder
+    }
+  })
+  .catch(err => {
+    console.error('MongoDB connection error:', err);
+    if (process.env.NODE_ENV !== 'development') {
+      process.exit(1);
+    }
+  });
 
-app.use(cors());
+// CORS - only allow explicitly whitelisted origins
+const allowedOrigins = [
+  process.env.CORS_ORIGIN,
+  process.env.CORS_ORIGIN_EXTRA,
+  'http://localhost:3000',
+  'http://localhost:3001',
+].filter(Boolean);
+
+app.use(cors({
+  origin: function(origin, callback) {
+    if (!origin) return callback(null, true); // server-to-server requests
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+}));
 app.use(express.json());
 
 // Custom XSS Sanitizer for Express 5 compatibility
@@ -32,7 +60,7 @@ const sanitizeObject = (data) => {
     Object.keys(data).forEach(key => {
       // Prevent NoSQL injection in object keys
       if (key.startsWith('$') || key.includes('.')) {
-        const cleanKey = key.replace(/^\$|\./g, '_');
+        const cleanKey = key.replace(/[$\.]/g, '_');
         data[cleanKey] = sanitizeObject(data[key]);
         delete data[key];
       } else {

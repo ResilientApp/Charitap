@@ -60,10 +60,12 @@ class DonationValidator {
             }
 
             // Rule 4: Validate charity IDs exist (basic check)
-            const invalidCharities = donationData.charities.filter(c => !c._id && !c.charityId);
+            // Guard: charities may be undefined/empty — already reported in Rule 2
+            const charityList = Array.isArray(donationData.charities) ? donationData.charities : [];
+            const invalidCharities = charityList.filter(c => !c._id && !c.charityId);
             if (invalidCharities.length > 0) {
                 errors.push('All charities must have valid IDs');
-            } else {
+            } else if (charityList.length > 0) {
                 appliedRules.push('charity_ids_valid');
             }
 
@@ -183,14 +185,16 @@ class DonationValidator {
             }
 
             // Validate charities and amounts match
-            if (distributionData.charities.length !== distributionData.amounts.length) {
+            const charities = Array.isArray(distributionData.charities) ? distributionData.charities : [];
+            const amounts = Array.isArray(distributionData.amounts) ? distributionData.amounts : [];
+            if (charities.length !== amounts.length) {
                 errors.push('Charities and amounts arrays must have same length');
             } else {
                 appliedRules.push('charities_amounts_match');
             }
 
             // Validate all amounts are positive
-            const negativeAmounts = distributionData.amounts.filter(amt => amt <= 0);
+            const negativeAmounts = amounts.filter(amt => amt <= 0);
             if (negativeAmounts.length > 0) {
                 errors.push('All distribution amounts must be positive');
             } else {

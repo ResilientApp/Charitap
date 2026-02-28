@@ -43,10 +43,14 @@ async function inspectContract() {
     console.log("\nSample Charity Totals (Charity IDs 123, 1, 0):");
     const testIds = [123, 1, 0];
     for (const id of testIds) {
-        const totalHex = await resContract.getTotalByCharity(id);
-        const total = parseInt(totalHex, 16);
-        if (total > 0) {
-            console.log(`  Charity ID ${id}: $${(total / 100).toFixed(2)} (${total} cents)`);
+        try {
+            const totalHex = await resContract.getTotalByCharity(id);
+            const total = parseInt(totalHex, 16);
+            if (total > 0) {
+                console.log(`  Charity ID ${id}: $${(total / 100).toFixed(2)} (${total} cents)`);
+            }
+        } catch (e) {
+            console.error(`  Charity ID ${id}: Error reading total - ${e.message}`);
         }
     }
 }

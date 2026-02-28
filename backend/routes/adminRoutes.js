@@ -27,28 +27,33 @@ const isAdmin = (req, res, next) => {
  */
 router.get('/charity-applications', authenticateToken, isAdmin, async (req, res) => {
   try {
-    const { status, limit = 50, offset = 0 } = req.query;
-    
+    const ALLOWED_STATUSES = ['pending', 'under_review', 'approved', 'rejected'];
+    const rawStatus = typeof req.query.status === 'string' ? req.query.status : undefined;
+    const status = rawStatus && ALLOWED_STATUSES.includes(rawStatus) ? rawStatus : undefined;
+
+    const rawLimit = Number.parseInt(req.query.limit, 10);
+    const rawOffset = Number.parseInt(req.query.offset, 10);
+    const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 100) : 50;
+    const offset = Number.isFinite(rawOffset) && rawOffset >= 0 ? rawOffset : 0;
+
     const query = {};
-    if (status) {
-      query.status = status;
-    }
-    
+    if (status) query.status = status;
+
     const applications = await CharityApplication.find(query)
       .sort({ createdAt: -1 })
-      .skip(parseInt(offset))
-      .limit(parseInt(limit))
+      .skip(offset)
+      .limit(limit)
       .lean();
-    
+
     const totalCount = await CharityApplication.countDocuments(query);
-    
+
     res.json({
       applications,
       pagination: {
         total: totalCount,
-        limit: parseInt(limit),
-        offset: parseInt(offset),
-        hasMore: totalCount > parseInt(offset) + parseInt(limit)
+        limit,
+        offset,
+        hasMore: totalCount > offset + limit
       }
     });
   } catch (error) {
@@ -137,66 +142,69 @@ router.patch('/charity-applications/:id', authenticateToken, isAdmin, async (req
  * POST /api/admin/charity-applications/:id/approve
  */
 router.post('/charity-applications/:id/approve', authenticateToken, isAdmin, async (req, res) => {
+  const session = await require('mongoose').startSession();
   try {
     const { stripeAccountId } = req.body;
-    
+
     if (!stripeAccountId) {
-      return res.status(400).json({ 
-        error: 'Stripe Account ID is required to approve charity' 
+      return res.status(400).json({
+        error: 'Stripe Account ID is required to approve charity'
       });
     }
-    
-    const application = await CharityApplication.findById(req.params.id);
-    
-    if (!application) {
-      return res.status(404).json({ error: 'Application not found' });
-    }
-    
-    if (application.status === 'approved') {
-      return res.status(400).json({ error: 'Application is already approved' });
-    }
-    
-    // Check if charity with this name already exists
-    const existingCharity = await Charity.findOne({ 
-      name: new RegExp(`^${application.charityName}$`, 'i') 
+
+    let newCharity, application;
+
+    await session.withTransaction(async () => {
+      application = await CharityApplication.findById(req.params.id).session(session);
+
+      if (!application) {
+        const err = new Error('Application not found'); err.statusCode = 404; throw err;
+      }
+
+      if (application.status === 'approved') {
+        const err = new Error('Application is already approved'); err.statusCode = 400; throw err;
+      }
+
+      // Case-insensitive exact-name lookup via collation (no ReDoS risk)
+      const existingCharity = await Charity.findOne({ name: application.charityName })
+        .collation({ locale: 'en', strength: 2 })
+        .session(session);
+
+      if (existingCharity) {
+        const err = new Error('A charity with this name already exists in the system');
+        err.statusCode = 400; throw err;
+      }
+
+      [newCharity] = await Charity.create([{
+        name: application.charityName,
+        description: application.description || `Supporting ${application.category} causes`,
+        type: application.category,
+        stripeAccountId
+      }], { session });
+
+      application.status = 'approved';
+      application.stripeAccountId = stripeAccountId;
+      application.stripeOnboardingComplete = true;
+      application.approvedAt = new Date();
+      application.reviewedBy = req.user.email;
+      application.reviewedAt = new Date();
+      await application.save({ session });
     });
-    
-    if (existingCharity) {
-      return res.status(400).json({ 
-        error: 'A charity with this name already exists in the system' 
-      });
-    }
-    
-    // Create the charity
-    const newCharity = new Charity({
-      name: application.charityName,
-      description: application.description || `Supporting ${application.category} causes`,
-      type: application.category,
-      stripeAccountId
-    });
-    
-    await newCharity.save();
-    
-    // Update application
-    application.status = 'approved';
-    application.stripeAccountId = stripeAccountId;
-    application.stripeOnboardingComplete = true;
-    application.approvedAt = new Date();
-    application.reviewedBy = req.user.email;
-    application.reviewedAt = new Date();
-    
-    await application.save();
-    
+
     console.log(`[Admin] Approved charity: ${application.charityName} by ${req.user.email}`);
-    
+
     res.json({
       message: 'Charity approved and added to platform!',
       charity: newCharity,
       application
     });
   } catch (error) {
-    console.error('[Admin] Error approving application:', error);
-    res.status(500).json({ error: 'Failed to approve application' });
+    const status = error.statusCode || 500;
+    const msg = status === 500 ? 'Failed to approve application' : error.message;
+    if (status === 500) console.error('[Admin] Error approving application:', error);
+    res.status(status).json({ error: msg });
+  } finally {
+    await session.endSession();
   }
 });
 
@@ -245,17 +253,25 @@ router.post('/charity-applications/:id/reject', authenticateToken, isAdmin, asyn
  */
 router.delete('/charity-applications/:id', authenticateToken, isAdmin, async (req, res) => {
   try {
-    const application = await CharityApplication.findByIdAndDelete(req.params.id);
-    
+    // Load first so we can check status before deleting
+    const application = await CharityApplication.findById(req.params.id);
+
     if (!application) {
       return res.status(404).json({ error: 'Application not found' });
     }
-    
+
+    // Block deletion of approved applications to prevent orphaned Charity records
+    if (application.status === 'approved') {
+      return res.status(409).json({
+        error: 'Cannot delete an approved application. The associated charity record must be removed separately.'
+      });
+    }
+
+    await CharityApplication.findByIdAndDelete(req.params.id);
+
     console.log(`[Admin] Deleted application: ${application.charityName} by ${req.user.email}`);
-    
-    res.json({
-      message: 'Application deleted successfully'
-    });
+
+    res.json({ message: 'Application deleted successfully' });
   } catch (error) {
     console.error('[Admin] Error deleting application:', error);
     res.status(500).json({ error: 'Failed to delete application' });

@@ -53,9 +53,9 @@ class ResContractClient {
             return null;
         }
 
+        const tempFile = path.join(os.tmpdir(), `rescontract_${Date.now()}.json`);
         try {
             // Write config JSON to a Windows temp file
-            const tempFile = path.join(os.tmpdir(), `rescontract_${Date.now()}.json`);
             fs.writeFileSync(tempFile, JSON.stringify(config));
 
             // Convert Windows path to WSL path (e.g., C:\Users\... -> /mnt/c/Users/...)
@@ -69,9 +69,6 @@ class ResContractClient {
             console.log(`[ResContract] Executing: ${config.command} ${config.function_name || ''}`);
             const output = execSync(cmd, { timeout: 20000, encoding: 'utf8' });
 
-            // Clean up temp file
-            try { fs.unlinkSync(tempFile); } catch (e) { /* ignore */ }
-
             console.log(`[ResContract] Raw output: ${output.trim().substring(0, 200)}`);
             return output;
 
@@ -79,6 +76,9 @@ class ResContractClient {
             console.error('[ResContract] ERROR:', error.message);
             if (!this.failSilently) throw error;
             return null;
+        } finally {
+            // Always clean up temp file
+            try { fs.unlinkSync(tempFile); } catch (e) { /* ignore */ }
         }
     }
 
@@ -126,14 +126,20 @@ class ResContractClient {
      */
     async mintReceipt(charityId, amountCents) {
         const centsInt = Math.round(Number(amountCents));
-        if (centsInt <= 0) {
-            console.warn('[ResContract] Skipping receipt: amount must be positive');
+        if (centsInt <= 0 || !Number.isFinite(centsInt)) {
+            console.warn('[ResContract] Skipping receipt: amount must be a positive finite number');
+            return null;
+        }
+
+        const charityIdNum = Number(charityId);
+        if (!Number.isFinite(charityIdNum) || charityIdNum < 0) {
+            console.warn('[ResContract] Skipping receipt: charityId must be a non-negative number');
             return null;
         }
 
         return this.executeContract(
             'mintReceipt(uint256,uint256)',
-            `${charityId},${centsInt}`
+            `${Math.round(charityIdNum)},${centsInt}`
         );
     }
 
@@ -144,9 +150,14 @@ class ResContractClient {
      * @returns {Promise<string|null>} Total in cents or null
      */
     async getTotalByCharity(charityId) {
+        const charityIdNum = Number(charityId);
+        if (!Number.isFinite(charityIdNum) || charityIdNum < 0) {
+            console.warn('[ResContract] getTotalByCharity: invalid charityId', charityId);
+            return null;
+        }
         return this.executeContract(
             'getTotalByCharity(uint256)',
-            `${charityId}`
+            `${Math.round(charityIdNum)}`
         );
     }
 

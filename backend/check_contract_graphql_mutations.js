@@ -31,13 +31,29 @@ async function introspectMutations() {
 
     try {
         const res = await axios.post(URL, { query: GET_SCHEMA_QUERY }, { timeout: 10000 });
+
+        // Guard against unexpected response shapes
+        if (!res || !res.data || !res.data.data) {
+            console.error(`\nURL: ${URL}`);
+            console.error('Unexpected response shape - missing res.data.data');
+            return;
+        }
+
         const data = res.data.data.__schema;
-        const mutationTypeName = data.mutationType.name;
-        const mutationType = data.types.find(t => t.name === mutationTypeName);
 
         console.log(`\nURL: ${URL}`);
+
+        // Guard: mutationType may be null if the schema has no mutations
+        if (!data.mutationType) {
+            console.log('No Root Mutation Type found (schema has no mutations).');
+            return;
+        }
+
+        const mutationTypeName = data.mutationType.name;
+        const mutationType = data.types && data.types.find(t => t.name === mutationTypeName);
+
         if (!mutationType) {
-            console.log("No Root Mutation Fields found.");
+            console.log(`No Root Mutation Fields found for type: ${mutationTypeName}`);
             return;
         }
         console.log(`Root Mutation Fields (${mutationTypeName}):`);

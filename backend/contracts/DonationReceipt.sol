@@ -1,12 +1,22 @@
 pragma solidity >=0.8.0 <0.9.0;
 
 contract DonationReceipt {
+    address public owner;
     uint256 public receiptCount;
     mapping(uint256 => uint256) public charityOf;
     mapping(uint256 => uint256) public amountOf;
     mapping(uint256 => uint256) public totalByCharity;
 
-    function mintReceipt(uint256 charityId, uint256 amountCents) public returns (uint256) {
+    constructor() {
+        owner = msg.sender;
+    }
+
+    modifier onlyOwner() {
+        require(msg.sender == owner, "DonationReceipt: caller is not the owner");
+        _;
+    }
+
+    function mintReceipt(uint256 charityId, uint256 amountCents) public onlyOwner returns (uint256) {
         receiptCount = receiptCount + 1;
         charityOf[receiptCount] = charityId;
         amountOf[receiptCount] = amountCents;

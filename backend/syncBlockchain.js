@@ -6,7 +6,14 @@ const RoundUp = require('./models/RoundUp');
 const resilientDB = require('./services/resilientdb-client');
 const rescontractClient = require('./services/rescontract-client');
 
-const USER_EMAIL = 'hnimonkar@gmail.com';
+// Read user email from env or CLI to avoid hardcoding PII
+const USER_EMAIL = process.env.USER_EMAIL || process.argv[2];
+
+if (!USER_EMAIL || !USER_EMAIL.includes('@')) {
+  console.error('Usage: USER_EMAIL=email@example.com node syncBlockchain.js');
+  console.error('   or: node syncBlockchain.js email@example.com');
+  process.exit(1);
+}
 
 async function syncToBlockchain() {
   console.log('\n🔗 Syncing Charitap Data to Blockchain');
@@ -44,10 +51,16 @@ async function syncToBlockchain() {
 
     for (const transaction of transactions) {
       const ledgerKey = resilientDB.generateKey('transaction', transaction._id.toString());
+
+      // Guard against NaN in amount parsing
+      const amtNum = Number(transaction.amount);
+      const amountStr = Number.isFinite(amtNum) ? amtNum.toFixed(2) : '0.00';
+      const amountCentsNum = Number.isFinite(amtNum) ? Math.round(amtNum * 100) : 0;
+
       const ledgerData = {
         transactionId: transaction._id.toString(),
         userId: resilientDB.hashSensitiveData(USER_EMAIL),
-        amount: parseFloat(transaction.amount).toFixed(2),
+        amount: amountStr,
         charityId: transaction.charity?.toString() || 'unknown',
         timestamp: transaction.timestamp?.toISOString() || new Date().toISOString(),
         stripeTransactionId: transaction.stripeTransactionId || '',
@@ -70,9 +83,8 @@ async function syncToBlockchain() {
             // Convert MongoDB ObjectId to a numeric hash for Solidity uint256
             const charityIdStr = transaction.charity?.toString() || '0';
             const charityNumericId = parseInt(charityIdStr.slice(-8), 16) || 0;
-            const amountCents = Math.round(parseFloat(transaction.amount) * 100);
 
-            const receiptResult = await rescontractClient.mintReceipt(charityNumericId, amountCents);
+            const receiptResult = await rescontractClient.mintReceipt(charityNumericId, amountCentsNum);
             if (receiptResult) {
               transaction.contractReceiptId = receiptResult;
               console.log(`  📜 Contract receipt minted: ${receiptResult}`);
@@ -111,11 +123,18 @@ async function syncToBlockchain() {
 
     for (const roundup of roundups) {
       const ledgerKey = resilientDB.generateKey('donation', roundup._id.toString());
+
+      // Guard against NaN in roundup amount fields
+      const pAmt = Number(roundup.purchaseAmount);
+      const rAmt = Number(roundup.roundUpAmount);
+      const purchaseAmountStr = Number.isFinite(pAmt) ? pAmt.toFixed(2) : '0.00';
+      const roundUpAmountStr = Number.isFinite(rAmt) ? rAmt.toFixed(2) : '0.00';
+
       const ledgerData = {
         transactionId: roundup._id.toString(),
         userId: resilientDB.hashSensitiveData(USER_EMAIL),
-        purchaseAmount: parseFloat(roundup.purchaseAmount).toFixed(2),
-        roundUpAmount: parseFloat(roundup.roundUpAmount).toFixed(2),
+        purchaseAmount: purchaseAmountStr,
+        roundUpAmount: roundUpAmountStr,
         timestamp: roundup.createdAt?.toISOString() || new Date().toISOString(),
         status: roundup.isPaid ? 'paid' : 'pending',
         blockchainVersion: '2.0'
@@ -130,8 +149,12 @@ async function syncToBlockchain() {
           roundup.blockchainTxId = txId;
           roundup.blockchainVerified = true;
           roundup.blockchainTimestamp = new Date();
-          await roundup.save();
-          console.log(`  ✅ Synced: TX ID ${txId}`);
+          try {
+            await roundup.save();
+            console.log(`  ✅ Synced: TX ID ${txId}`);
+          } catch (saveError) {
+            console.error(`  ❌ Failed to save roundup ${roundup._id} (txId: ${txId}, ledgerKey: ${ledgerKey}): ${saveError.message}`);
+          }
         } else {
           console.log(`  ⚠️  Blockchain returned null`);
         }

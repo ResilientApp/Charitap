@@ -9,9 +9,11 @@ const stripeLib = require("stripe");
 
 const app = express();
 
-// CORS - Allow both the frontend Vercel URL and any custom domain
+// CORS - explicitly list trusted origins; avoid blanket ".vercel.app" wildcard
+// which would allow any vercel deployment to send credentialed requests.
 const allowedOrigins = [
-  process.env.CORS_ORIGIN,
+  process.env.CORS_ORIGIN,           // Primary frontend Vercel URL (set via env)
+  process.env.CORS_ORIGIN_EXTRA,     // Optional secondary origin
   "http://localhost:3000",
   "http://localhost:3001",
 ].filter(Boolean);
@@ -19,12 +21,9 @@ const allowedOrigins = [
 app.use(
   cors({
     origin: function (origin, callback) {
-      // Allow requests with no origin (mobile apps, curl, etc.)
+      // Allow server-to-server requests (no origin header)
       if (!origin) return callback(null, true);
-      if (
-        allowedOrigins.indexOf(origin) !== -1 ||
-        origin.endsWith(".vercel.app")
-      ) {
+      if (allowedOrigins.indexOf(origin) !== -1) {
         return callback(null, true);
       }
       return callback(new Error("Not allowed by CORS"));
@@ -35,13 +34,32 @@ app.use(
 
 app.use(express.json());
 
-// MongoDB Connection (lazy - only connect once)
+// MongoDB Connection - shared promise prevents concurrent connect races
 let isConnected = false;
+let connectionPromise = null;
+
 const connectDB = async () => {
   if (isConnected) return;
-  await mongoose.connect(process.env.MONGODB_URI);
-  isConnected = true;
-  console.log("MongoDB connected");
+  if (connectionPromise) return connectionPromise;
+
+  // Validate MONGODB_URI is configured before attempting to connect
+  if (!process.env.MONGODB_URI) {
+    console.error("FATAL: MONGODB_URI environment variable is not set");
+    throw new Error("MONGODB_URI is required");
+  }
+
+  connectionPromise = mongoose.connect(process.env.MONGODB_URI)
+    .then(() => {
+      isConnected = true;
+      connectionPromise = null;
+      console.log("MongoDB connected");
+    })
+    .catch((err) => {
+      connectionPromise = null;
+      throw err;
+    });
+
+  return connectionPromise;
 };
 
 // Connect before handling requests

@@ -77,7 +77,7 @@ html, body {
 }
 
 .animate-fade-in-up {
-  animation: fade-in-up 0.9s cubic-bezier(0.4,0,0.2,1) both;
+  animation: fade-in-up 0.6s ease-out both;
 }
 
 .animate-fade-in-up.delay-300 {
@@ -123,79 +123,9 @@ html, body {
   }
 }
 
-@keyframes fade-in-up {
-  0% {
-    opacity: 0;
-    transform: translateY(30px);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes fade-in {
-  0% {
-    opacity: 0;
-  }
-  100% {
-    opacity: 1;
-  }
-}
-
-@keyframes slide-in-left {
-  0% {
-    opacity: 0;
-    transform: translateX(-30px);
-  }
-  100% {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-@keyframes slide-in-right {
-  0% {
-    opacity: 0;
-    transform: translateX(30px);
-  }
-  100% {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-@keyframes scale-in {
-  0% {
-    opacity: 0;
-    transform: scale(0.9);
-  }
-  100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-@keyframes pulse-slow {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.5;
-  }
-}
-
 /* Animation classes */
 .animate-ripple {
   animation: ripple 0.6s linear;
-}
-
-.animate-fade-in-up {
-  animation: fade-in-up 0.6s ease-out;
-}
-
-.animate-fade-in {
-  animation: fade-in 0.5s ease-out;
 }
 
 .animate-slide-in-left {
@@ -210,9 +140,7 @@ html, body {
   animation: scale-in 0.4s ease-out;
 }
 
-.animate-pulse-slow {
-  animation: pulse-slow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
+/* Note: .animate-fade-in, .animate-fade-in-up, .animate-pulse-slow defined above */
 
 /* Typography improvements */
 @layer base {

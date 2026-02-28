@@ -5,6 +5,7 @@
 const dotenv = require('dotenv');
 dotenv.config();
 
+const crypto = require('crypto');
 const mongoose = require('mongoose');
 const Stripe = require('stripe');
 
@@ -17,40 +18,78 @@ const donationValidator = require('../../services/donation-validator');
 
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 
-// MongoDB connection (serverless-friendly)
+// Non-PII identifier for logging - hashes email with SHA-256
+function hashIdentifier(email) {
+  return crypto.createHash('sha256').update(email).digest('hex').slice(0, 12);
+}
+
+// MongoDB connection - shared promise to prevent race where multiple requests start new connects
 let isConnected = false;
+let connectionPromise = null;
 const connectDB = async () => {
   if (isConnected) return;
-  await mongoose.connect(process.env.MONGODB_URI);
-  isConnected = true;
+  if (connectionPromise) return connectionPromise;
+  if (!process.env.MONGODB_URI) {
+    console.error('FATAL: MONGODB_URI environment variable is not set');
+    throw new Error('MONGODB_URI is required');
+  }
+  connectionPromise = mongoose.connect(process.env.MONGODB_URI)
+    .then(() => {
+      isConnected = true;
+      connectionPromise = null;
+      console.log('MongoDB connected');
+    })
+    .catch((err) => {
+      connectionPromise = null;
+      throw err;
+    });
+  return connectionPromise;
 };
 
 async function processUserRoundups(user) {
   const unpaidRoundUps = await RoundUp.find({ user: user.email, isPaid: false });
+  const unpaidIds = unpaidRoundUps.map(r => r._id);
   let totalAmount = unpaidRoundUps.reduce((sum, ru) => sum + ru.roundUpAmount, 0);
+
+  // Early return if no roundups
+  if (unpaidRoundUps.length === 0) return;
 
   if (user.paymentPreference === 'threshold') {
     if (totalAmount < 5) return;
   } else if (user.paymentPreference === 'monthly') {
-    if (totalAmount < 1) {
+    // Only bump amounts that are positive but below $1 - do NOT charge when totalAmount is 0
+    if (totalAmount === 0) {
+      console.log(`Skipping ${hashIdentifier(user.email)}: no roundups to charge`);
+      return;
+    }
+    if (totalAmount > 0 && totalAmount < 1) {
+      console.log(`Rounding up ${hashIdentifier(user.email)} to $1 minimum (was $${totalAmount.toFixed(2)})`);
       totalAmount = 1;
-      console.log(`Rounding up ${user.email} to $1 minimum`);
     }
   }
 
   const charities = await Charity.find({ _id: { $in: user.selectedCharities } });
   if (!charities.length) {
-    console.log(`No charities selected for ${user.email}`);
+    console.log(`No charities selected for ${hashIdentifier(user.email)}`);
     return;
   }
 
   if (!user.defaultPaymentMethod) {
-    console.log(`No payment method for ${user.email} - skipping`);
+    console.log(`No payment method for ${hashIdentifier(user.email)} - skipping`);
+    return;
+  }
+
+  // Validate stripeCustomerId before attempting a charge
+  if (!user.stripeCustomerId) {
+    console.log(`No stripeCustomerId for user ${user.id} - skipping`);
     return;
   }
 
   try {
-    console.log(`Charging ${user.email} for $${totalAmount.toFixed(2)}`);
+    console.log(`Charging user ${hashIdentifier(user.email)} for $${totalAmount.toFixed(2)}`);
+
+    // Deterministic idempotency key: same key for the same user+roundups batch
+    const idempotencyKey = `charge-${user.id}-${unpaidIds.map(id => id.toString()).sort().join('-')}`;
 
     const paymentIntent = await stripe.paymentIntents.create({
       amount: Math.round(totalAmount * 100),
@@ -61,48 +100,60 @@ async function processUserRoundups(user) {
       confirm: true,
       description: `Charitap donation - ${unpaidRoundUps.length} roundups`,
       metadata: {
-        userEmail: user.email,
+        userId: user.id,
         roundupCount: unpaidRoundUps.length.toString(),
         totalAmount: totalAmount.toString(),
       },
-    });
+    }, { idempotencyKey });
 
-    console.log(`Successfully charged ${user.email}: $${totalAmount.toFixed(2)}`);
+    console.log(`Successfully charged user ${hashIdentifier(user.email)}: $${totalAmount.toFixed(2)}`);
 
-    const perCharityAmount = totalAmount / charities.length;
+    // Integer-cent division: avoids floating-point rounding loss
+    const totalCents = Math.round(totalAmount * 100);
+    const baseShare = Math.floor(totalCents / charities.length);
+    const remainder = totalCents % charities.length;
 
-    for (const charity of charities) {
+    // Track successes and failures separately
+    let allTransfersSucceeded = true;
+    const failedTransfers = [];
+    const blockchainPromises = [];
+
+    for (let i = 0; i < charities.length; i++) {
+      const charity = charities[i];
+      // First N charities get +1 cent to distribute the remainder
+      const transferCents = baseShare + (i < remainder ? 1 : 0);
+
       try {
         const transfer = await stripe.transfers.create({
-          amount: Math.round(perCharityAmount * 100),
+          amount: transferCents,
           currency: 'usd',
           destination: charity.stripeAccountId,
           transfer_group: `payment_${paymentIntent.id}`,
-          description: `Donation from ${user.email}`,
+          description: `Charitap donation`,
         });
 
         const transaction = await Transaction.create({
           stripeTransactionId: transfer.id,
           stripePaymentIntentId: paymentIntent.id,
           userEmail: user.email,
-          amount: perCharityAmount,
+          amount: transferCents / 100,
           charity: charity._id,
         });
 
-        console.log(`Transferred $${perCharityAmount.toFixed(2)} to ${charity.name}`);
+        console.log(`Transferred $${(transferCents / 100).toFixed(2)} to ${charity.name}`);
 
-        // Record to blockchain (non-blocking, fail-silent)
-        (async () => {
+        // Record to blockchain - collect promise to await before function returns
+        const blockchainPromise = (async () => {
           try {
-            const donationData = { amount: perCharityAmount, charities: [charity._id.toString()] };
+            const donationData = { amount: transferCents / 100, charities: [charity._id.toString()] };
             const validationResult = donationValidator.validateDonation(donationData);
             const ledgerKey = resilientDB.generateKey('transaction', transaction._id.toString());
             const ledgerData = {
               transactionId: transaction._id.toString(),
               stripeTransferId: transfer.id,
               stripePaymentIntentId: paymentIntent.id,
-              userId: resilientDB.hashSensitiveData(user.email),
-              amount: perCharityAmount.toFixed(2),
+              userId: resilientDB.hashSensitiveData(user.id || user.email),
+              amount: (transferCents / 100).toFixed(2),
               charityId: charity._id.toString(),
               charityName: charity.name,
               timestamp: new Date().toISOString(),
@@ -126,31 +177,42 @@ async function processUserRoundups(user) {
             await transaction.save();
           }
         })();
+        blockchainPromises.push(blockchainPromise);
 
       } catch (err) {
         console.error(`Error transferring to ${charity.name}:`, err.message);
+        allTransfersSucceeded = false;
+        failedTransfers.push({ charityId: charity._id, charityName: charity.name, error: err.message });
       }
     }
 
-    const now = new Date();
-    await RoundUp.updateMany(
-      { user: user.email, isPaid: false },
-      {
-        $set: {
-          isPaid: true,
-          stripePaymentIntentId: paymentIntent.id,
-          chargedAt: now,
-          processedAt: now,
-        },
-      }
-    );
+    // Await all blockchain writes before the serverless function exits
+    await Promise.all(blockchainPromises);
 
-    console.log(`Completed processing for ${user.email}`);
+    // Only mark roundups as paid when ALL transfers succeeded, using exact IDs fetched earlier
+    if (allTransfersSucceeded) {
+      const now = new Date();
+      await RoundUp.updateMany(
+        { _id: { $in: unpaidIds }, user: user.email },
+        {
+          $set: {
+            isPaid: true,
+            stripePaymentIntentId: paymentIntent.id,
+            chargedAt: now,
+            processedAt: now,
+          },
+        }
+      );
+      console.log(`Completed processing for user ${hashIdentifier(user.email)}`);
+    } else {
+      console.error(`Some transfers failed for user ${hashIdentifier(user.email)}:`, failedTransfers);
+      // Do not mark roundups as paid - will retry next cycle
+    }
 
   } catch (error) {
-    console.error(`Error charging ${user.email}:`, error.message);
+    console.error(`Error charging user ${hashIdentifier(user.email)}:`, error.message);
     if (error.type === 'StripeCardError') {
-      console.log(`Card declined for ${user.email} - will retry next cycle`);
+      console.log(`Card declined for user ${hashIdentifier(user.email)} - will retry next cycle`);
     }
   }
 }
@@ -158,8 +220,15 @@ async function processUserRoundups(user) {
 // Vercel serverless handler
 module.exports = async function handler(req, res) {
   // Security: Verify this is triggered by Vercel Cron (not a random public request)
+  // Guard: ensure CRON_SECRET is configured to avoid matching "Bearer undefined"
+  if (!process.env.CRON_SECRET) {
+    console.error('Server misconfiguration: CRON_SECRET is not set');
+    return res.status(500).json({ error: 'Server misconfiguration' });
+  }
+
   const authHeader = req.headers['authorization'];
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  const expectedHeader = `Bearer ${process.env.CRON_SECRET}`;
+  if (authHeader !== expectedHeader) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 

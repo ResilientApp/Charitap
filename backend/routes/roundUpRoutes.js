@@ -179,7 +179,11 @@ router.get('/collected-this-month', authenticateToken, async (req, res) => {
 // Shows each order/purchase with roundup amount and date
 router.get('/activity/collected', authenticateToken, async (req, res) => {
   try {
-    const { limit = 100, offset = 0, startDate, endDate } = req.query;
+    const rawLimit = Number.parseInt(req.query.limit, 10);
+    const rawOffset = Number.parseInt(req.query.offset, 10);
+    const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 500) : 100;
+    const offset = Number.isFinite(rawOffset) && rawOffset >= 0 ? rawOffset : 0;
+    const { startDate, endDate } = req.query;
 
     const query = { user: req.user.email };
 
@@ -192,18 +196,17 @@ router.get('/activity/collected', authenticateToken, async (req, res) => {
 
     const roundups = await RoundUp.find(query)
       .sort({ createdAt: -1 })
-      .skip(parseInt(offset))
-      .limit(parseInt(limit))
+      .skip(offset)
+      .limit(limit)
       .lean();
 
-    // Get total count for pagination
     const totalCount = await RoundUp.countDocuments(query);
 
     // Format the response
     const formattedRoundups = roundups.map(roundup => ({
       id: roundup._id,
-      purchaseAmount: parseFloat(roundup.purchaseAmount.toFixed(2)),
-      roundUpAmount: parseFloat(roundup.roundUpAmount.toFixed(2)),
+      purchaseAmount: parseFloat((roundup.purchaseAmount || 0).toFixed(2)),
+      roundUpAmount: parseFloat((roundup.roundUpAmount || 0).toFixed(2)),
       date: roundup.createdAt,
       isPaid: roundup.isPaid,
       status: roundup.isPaid ? 'Donated' : 'Pending'
@@ -213,9 +216,9 @@ router.get('/activity/collected', authenticateToken, async (req, res) => {
       data: formattedRoundups,
       pagination: {
         total: totalCount,
-        limit: parseInt(limit),
-        offset: parseInt(offset),
-        hasMore: totalCount > parseInt(offset) + parseInt(limit)
+        limit,
+        offset,
+        hasMore: totalCount > offset + limit
       }
     });
   } catch (error) {
@@ -228,7 +231,11 @@ router.get('/activity/collected', authenticateToken, async (req, res) => {
 // Shows each donation with amount, charity name, type, and date
 router.get('/activity/donated', authenticateToken, async (req, res) => {
   try {
-    const { limit = 100, offset = 0, startDate, endDate } = req.query;
+    const rawLimit = Number.parseInt(req.query.limit, 10);
+    const rawOffset = Number.parseInt(req.query.offset, 10);
+    const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 500) : 100;
+    const offset = Number.isFinite(rawOffset) && rawOffset >= 0 ? rawOffset : 0;
+    const { startDate, endDate } = req.query;
 
     const query = { userEmail: req.user.email };
 
@@ -242,34 +249,35 @@ router.get('/activity/donated', authenticateToken, async (req, res) => {
     const transactions = await Transaction.find(query)
       .populate('charity', 'name type description')
       .sort({ timestamp: -1 })
-      .skip(parseInt(offset))
-      .limit(parseInt(limit))
+      .skip(offset)
+      .limit(limit)
       .lean();
 
-    // Get total count for pagination
     const totalCount = await Transaction.countDocuments(query);
 
-    // Format the response
-    const formattedTransactions = transactions.map(transaction => ({
-      id: transaction._id,
-      amount: parseFloat(transaction.amount.toFixed(2)),
-      date: transaction.timestamp,
-      charity: {
-        id: transaction.charity._id,
-        name: transaction.charity.name,
-        type: transaction.charity.type,
-        description: transaction.charity.description
-      },
-      stripeTransactionId: transaction.stripeTransactionId
-    }));
+    // Null-safe: skip transactions whose charity reference was deleted
+    const formattedTransactions = transactions
+      .filter(t => t.charity)
+      .map(transaction => ({
+        id: transaction._id,
+        amount: parseFloat((transaction.amount || 0).toFixed(2)),
+        date: transaction.timestamp,
+        charity: {
+          id: transaction.charity._id,
+          name: transaction.charity.name,
+          type: transaction.charity.type,
+          description: transaction.charity.description
+        },
+        stripeTransactionId: transaction.stripeTransactionId
+      }));
 
     res.json({
       data: formattedTransactions,
       pagination: {
         total: totalCount,
-        limit: parseInt(limit),
-        offset: parseInt(offset),
-        hasMore: totalCount > parseInt(offset) + parseInt(limit)
+        limit,
+        offset,
+        hasMore: totalCount > offset + limit
       }
     });
   } catch (error) {
@@ -384,6 +392,8 @@ router.get('/dashboard/charity-breakdown', authenticateToken, async (req, res) =
     let totalAmount = 0;
 
     transactions.forEach(transaction => {
+      // Skip transactions whose charity reference was deleted
+      if (!transaction.charity || !transaction.charity._id) return;
       const charityId = transaction.charity._id.toString();
       totalAmount += transaction.amount;
 
@@ -447,7 +457,9 @@ router.get('/dashboard/blockchain-stats', authenticateToken, async (req, res) =>
     res.json({
       totalTransactions,
       blockchainSecured,
-      percentage: totalTransactions > 0 ? 100 : 0
+      percentage: totalTransactions > 0
+        ? parseFloat(((blockchainSecured / totalTransactions) * 100).toFixed(1))
+        : 0
     });
   } catch (error) {
     console.error(error);
@@ -460,7 +472,10 @@ router.get('/verify-blockchain/:transactionId', authenticateToken, async (req, r
   try {
     const { transactionId } = req.params;
 
-    console.log(`[Charitap] Verifying blockchain transaction: ${transactionId}`);
+    // Validate ObjectId format before querying DB
+    if (!require('mongoose').Types.ObjectId.isValid(transactionId)) {
+      return res.status(400).json({ error: 'Invalid transaction ID format', verified: false });
+    }
 
     // First check if transaction exists in database
     const transaction = await Transaction.findOne({

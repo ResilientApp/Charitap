@@ -33,7 +33,12 @@ const apiCall = async (endpoint, options = {}) => {
   };
 
   const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
-  const data = await response.json();
+
+  // Guard against non-JSON responses (e.g. HTML error pages)
+  const contentType = response.headers.get('content-type') || '';
+  const data = contentType.includes('application/json')
+    ? await response.json()
+    : { error: await response.text() };
 
   if (!response.ok) {
     throw new Error(data.error || 'API request failed');
@@ -62,13 +67,10 @@ export const authAPI = {
 
   // Google OAuth
   googleAuth: async (googleId, email, displayName, profilePicture, firstName, lastName) => {
-    console.log('API: Calling Google auth with:', { googleId, email, displayName, profilePicture, firstName, lastName });
-    const result = await apiCall('/api/auth/google', {
+    return apiCall('/api/auth/google', {
       method: 'POST',
       body: JSON.stringify({ googleId, email, displayName, profilePicture, firstName, lastName }),
     });
-    console.log('API: Google auth response:', result);
-    return result;
   },
 
   // Get current user profile

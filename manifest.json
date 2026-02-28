@@ -26,7 +26,9 @@
     },
     "host_permissions": [
       "http://localhost:3000/*",
-      "<all_urls>"
+      "http://localhost:3001/*",
+      "https://charitap-backend.vercel.app/*",
+      "https://charitap-frontend.vercel.app/*"
     ],
     "background": {
       "service_worker": "background.js"

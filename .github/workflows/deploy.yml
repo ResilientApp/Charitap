@@ -56,8 +56,17 @@ jobs:
       - name: Deploy Backend to Vercel
         id: deploy
         run: |
+          set -euo pipefail
+          STDERR_LOG=$(mktemp)
           DEPLOY_URL=$(vercel deploy --prebuilt --prod \
-            --token=${{ secrets.VERCEL_TOKEN }})
+            --token=${{ secrets.VERCEL_TOKEN }} 2>"$STDERR_LOG") || {
+            echo "❌ Backend deployment failed!"
+            echo "stderr output:"
+            cat "$STDERR_LOG"
+            rm -f "$STDERR_LOG"
+            exit 1
+          }
+          rm -f "$STDERR_LOG"
           echo "backend-url=$DEPLOY_URL" >> $GITHUB_OUTPUT
           echo "✅ Backend deployed to: $DEPLOY_URL"
         env:

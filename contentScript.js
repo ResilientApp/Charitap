@@ -580,15 +580,15 @@ function showSuccessPopup(amount) {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%) scale(0.85);
-    background: linear-gradient(135deg, rgba(252, 248, 241, 0.98) 0%, rgba(245, 236, 213, 0.98) 100%);
+    background: #ffffff;
     backdrop-filter: blur(20px);
     border-radius: 24px;
     padding: 48px 40px;
-    box-shadow: 0 20px 60px rgba(98, 111, 71, 0.3), 0 8px 24px rgba(0, 0, 0, 0.12);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15), 0 8px 24px rgba(0, 0, 0, 0.08);
     z-index: 10000000;
     min-width: 360px;
     text-align: center;
-    border: 3px solid rgba(98, 111, 71, 0.25);
+    border: 3px solid rgba(0, 0, 0, 0.05);
     opacity: 0;
     transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
@@ -596,11 +596,11 @@ function showSuccessPopup(amount) {
   
   // Success icon
   const icon = document.createElement('div');
-  icon.innerHTML = `<svg width="72" height="72" viewBox="0 0 24 24" fill="none" stroke="#626F47" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`;
+  icon.innerHTML = `<svg width="72" height="72" viewBox="0 0 24 24" fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`;
   icon.style.cssText = `
     margin-bottom: 24px;
     animation: charitapBounce 0.8s ease;
-    filter: drop-shadow(0 4px 8px rgba(98, 111, 71, 0.15));
+    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.1));
     display: flex;
     justify-content: center;
   `;
@@ -611,10 +611,10 @@ function showSuccessPopup(amount) {
   title.style.cssText = `
     font-size: 28px;
     font-weight: 800;
-    color: #626F47;
+    color: #000000;
     margin-bottom: 14px;
     letter-spacing: -0.5px;
-    text-shadow: 0 2px 4px rgba(98, 111, 71, 0.1);
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
   `;
   
   // Amount text
@@ -622,7 +622,7 @@ function showSuccessPopup(amount) {
   amountText.textContent = `$${amount.toFixed(2)} added to your wallet`;
   amountText.style.cssText = `
     font-size: 19px;
-    color: #8A9A5B;
+    color: #4b5563;
     margin-bottom: 28px;
     font-weight: 600;
   `;
@@ -637,8 +637,8 @@ function showSuccessPopup(amount) {
     width: 36px;
     height: 36px;
     border-radius: 50%;
-    background: rgba(98, 111, 71, 0.12);
-    color: #626F47;
+    background: rgba(0, 0, 0, 0.05);
+    color: #000000;
     font-size: 32px;
     line-height: 32px;
     cursor: pointer;
@@ -761,7 +761,7 @@ function createConfetti() {
   const ctx = canvas.getContext('2d');
   const pieces = [];
   const numberOfPieces = 100;
-  const colors = ['#626F47', '#8A9A5B', '#F0BB78', '#FCF8F1', '#E8DCC4'];
+  const colors = ['#FACC15', '#FBBF24', '#F59E0B', '#000000', '#111827'];
   
   // Create confetti pieces
   for (let i = 0; i < numberOfPieces; i++) {

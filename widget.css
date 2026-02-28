@@ -25,17 +25,17 @@
   background: rgba(252, 248, 241, 0.98); /* Warm cream from website */
   backdrop-filter: blur(12px);
   border-radius: 16px;
-  box-shadow: 0 8px 32px rgba(98, 111, 71, 0.15), 0 2px 8px rgba(98, 111, 71, 0.08);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15), 0 2px 8px rgba(0, 0, 0, 0.08);
   padding: 24px;
   min-width: 280px;
   max-width: 360px;
-  border: 1px solid rgba(98, 111, 71, 0.2); /* Olive border */
+  border: 1px solid rgba(0, 0, 0, 0.1);
 }
 
 /* Dark Theme */
 .charitap-dark-theme .charitap-container {
-  background: rgba(98, 111, 71, 0.95); /* Dark olive for dark theme */
-  border-color: rgba(240, 187, 120, 0.2);
+  background: rgba(17, 24, 39, 0.95); /* Gray-900 for dark theme */
+  border-color: rgba(255, 255, 255, 0.1);
   color: #FCF8F1;
 }
 
@@ -47,12 +47,12 @@
   width: 28px;
   height: 28px;
   border: none;
-  background: rgba(98, 111, 71, 0.1); /* Soft olive */
+  background: rgba(0, 0, 0, 0.05); /* Light gray */
   border-radius: 50%;
   font-size: 20px;
   line-height: 1;
   cursor: pointer;
-  color: #626F47; /* Dark olive */
+  color: #000000; /* Black */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -60,7 +60,7 @@
 }
 
 .charitap-close:hover {
-  background: rgba(98, 111, 71, 0.2);
+  background: rgba(0, 0, 0, 0.1);
   transform: scale(1.1);
 }
 
@@ -100,7 +100,7 @@
   margin: 0 0 8px 0;
   font-size: 20px;
   font-weight: 700;
-  color: #626F47; /* Dark olive */
+  color: #000000; /* Black */
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   line-height: 1.3;
 }
@@ -114,7 +114,7 @@
   margin: 12px 0;
   font-size: 36px;
   font-weight: 800;
-  color: #F0BB78; /* Warm gold accent */
+  color: #FACC15; /* UI Yellow */
   line-height: 1;
   letter-spacing: -0.02em;
 }
@@ -123,7 +123,7 @@
 .charitap-subtitle {
   margin: 8px 0 20px 0;
   font-size: 14px;
-  color: #7a886d; /* Muted olive */
+  color: #4b5563; /* Gray-600 */
   line-height: 1.4;
 }
 
@@ -156,14 +156,15 @@
 }
 
 .charitap-btn-yes {
-  background: linear-gradient(135deg, #626F47 0%, #7a886d 100%); /* Olive gradient */
-  color: #ffffff;
-  box-shadow: 0 4px 12px rgba(98, 111, 71, 0.3);
+  background: #FACC15; /* Yellow */
+  color: #000000;
+  box-shadow: 0 4px 12px rgba(250, 204, 21, 0.3);
 }
 
 .charitap-btn-yes:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(98, 111, 71, 0.4);
+  background: #FBBF24;
+  box-shadow: 0 6px 16px rgba(250, 204, 21, 0.4);
 }
 
 .charitap-btn-yes:active {
@@ -171,17 +172,17 @@
 }
 
 .charitap-btn-no {
-  background: rgba(245, 236, 213, 0.8); /* Sand color */
-  color: #626F47; /* Olive text */
+  background: #f3f4f6; /* Gray-100 */
+  color: #111827; /* Gray-900 */
 }
 
 .charitap-dark-theme .charitap-btn-no {
-  background: rgba(240, 187, 120, 0.15); /* Gold tint */
+  background: rgba(255, 255, 255, 0.1); 
   color: #F5ECD5;
 }
 
 .charitap-btn-no:hover {
-  background: rgba(245, 236, 213, 1); /* Solid sand on hover */
+  background: #e5e7eb; /* Gray-200 on hover */
 }
 
 .charitap-dark-theme .charitap-btn-no:hover {
@@ -204,8 +205,8 @@
 
 /* Success State */
 .charitap-success .charitap-container {
-  background: linear-gradient(135deg, #626F47 0%, #7a886d 100%); /* Olive gradient */
-  color: #ffffff;
+  background: #FACC15; /* Solid UI yellow */
+  color: #000000;
 }
 
 .charitap-checkmark {
@@ -227,11 +228,11 @@
 }
 
 .charitap-success .charitap-title {
-  color: #ffffff;
+  color: #000000;
 }
 
 .charitap-success p {
-  color: rgba(255, 255, 255, 0.9);
+  color: rgba(0, 0, 0, 0.9);
 }
 
 /* Error State */
@@ -284,8 +285,8 @@
   width: 40px;
   height: 40px;
   margin: 0 auto 16px;
-  border: 4px solid rgba(240, 187, 120, 0.2); /* Gold tint */
-  border-top-color: #F0BB78; /* Warm gold */
+  border: 4px solid rgba(250, 204, 21, 0.2); /* Yellow tint */
+  border-top-color: #FACC15; /* Yellow UI */
   border-radius: 50%;
   animation: charitap-spin 0.8s linear infinite;
 }

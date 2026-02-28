@@ -55,4 +55,7 @@ async function inspectContract() {
     }
 }
 
-inspectContract();
+inspectContract().catch(err => {
+    console.error("inspectContract failed:", err);
+    process.exit(1);
+});

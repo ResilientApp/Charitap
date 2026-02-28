@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 pragma solidity >=0.8.0 <0.9.0;
 
 contract DonationReceipt {
@@ -11,6 +12,8 @@ contract DonationReceipt {
         owner = msg.sender;
     }
 
+    event ReceiptMinted(uint256 indexed receiptId, uint256 indexed charityId, uint256 amountCents);
+
     modifier onlyOwner() {
         require(msg.sender == owner, "DonationReceipt: caller is not the owner");
         _;
@@ -21,6 +24,7 @@ contract DonationReceipt {
         charityOf[receiptCount] = charityId;
         amountOf[receiptCount] = amountCents;
         totalByCharity[charityId] = totalByCharity[charityId] + amountCents;
+        emit ReceiptMinted(receiptCount, charityId, amountCents);
         return receiptCount;
     }
 

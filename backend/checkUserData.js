@@ -16,7 +16,7 @@ const RoundUp = require('./models/RoundUp');
   try {
     await mongoose.connect(process.env.MONGODB_URI);
 
-    const transactions = await Transaction.find({ userEmail: email });
+    const transactions = await Transaction.find({ userId: user.id });
     const roundups = await RoundUp.find({ user: email });
 
     console.log(`Transactions for ${email}:`, transactions.length);

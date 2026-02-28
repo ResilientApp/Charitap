@@ -16,6 +16,10 @@ const Transaction = require('../../models/Transaction');
 const resilientDB = require('../../services/resilientdb-client');
 const donationValidator = require('../../services/donation-validator');
 
+if (!process.env.STRIPE_SECRET_KEY) {
+  console.error('FATAL: STRIPE_SECRET_KEY is required');
+  process.exit(1);
+}
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 
 // Non-PII identifier for logging - hashes email with SHA-256
@@ -81,15 +85,16 @@ async function processUserRoundups(user) {
 
   // Validate stripeCustomerId before attempting a charge
   if (!user.stripeCustomerId) {
-    console.log(`No stripeCustomerId for user ${user.id} - skipping`);
+    console.log(`No stripeCustomerId for user ${hashIdentifier(user.email)} - skipping`);
     return;
   }
 
   try {
     console.log(`Charging user ${hashIdentifier(user.email)} for $${totalAmount.toFixed(2)}`);
 
-    // Deterministic idempotency key: same key for the same user+roundups batch
-    const idempotencyKey = `charge-${user.id}-${unpaidIds.map(id => id.toString()).sort().join('-')}`;
+    // Deterministic idempotency key: hash of unpaidIds to fit within Stripe's 255-char limit
+    const unpaidDigest = crypto.createHash('sha256').update(unpaidIds.map(id => id.toString()).sort().join('-')).digest('hex');
+    const idempotencyKey = `charge-${user.id}-${unpaidDigest}`.substring(0, 255);
 
     const paymentIntent = await stripe.paymentIntents.create({
       amount: Math.round(totalAmount * 100),
@@ -135,7 +140,7 @@ async function processUserRoundups(user) {
         const transaction = await Transaction.create({
           stripeTransactionId: transfer.id,
           stripePaymentIntentId: paymentIntent.id,
-          userEmail: user.email,
+          userId: user.id, // Replaced userEmail with non-PII identifier
           amount: transferCents / 100,
           charity: charity._id,
         });
@@ -226,9 +231,19 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ error: 'Server misconfiguration' });
   }
 
-  const authHeader = req.headers['authorization'];
+  const authHeader = req.headers['authorization'] || '';
   const expectedHeader = `Bearer ${process.env.CRON_SECRET}`;
-  if (authHeader !== expectedHeader) {
+
+  const authBuffer = Buffer.from(authHeader);
+  const expectedBuffer = Buffer.from(expectedHeader);
+
+  if (authBuffer.length !== expectedBuffer.length) {
+    // Prevent timing leaks by still calling timingSafeEqual on dummy buffers
+    crypto.timingSafeEqual(expectedBuffer, expectedBuffer);
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  if (!crypto.timingSafeEqual(authBuffer, expectedBuffer)) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 

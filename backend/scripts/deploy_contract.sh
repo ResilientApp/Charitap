@@ -11,8 +11,15 @@ echo ""
 echo "=== Step 2: Start KV service ==="
 ./service/tools/kv/server_tools/start_kv_service.sh &
 KV_PID=$!
-echo "KV service starting (PID: $KV_PID), waiting 10 seconds..."
-sleep 10
+trap 'kill $KV_PID 2>/dev/null || true' EXIT INT TERM
+echo "KV service starting (PID: $KV_PID), waiting to initialize..."
+for i in {1..20}; do
+  if kill -0 $KV_PID 2>/dev/null; then
+    break
+  fi
+  sleep 1
+done
+sleep 5 # Allow sufficient warm-up time after process exists
 echo "KV service should be ready now"
 echo ""
 
@@ -38,8 +45,8 @@ ACCOUNT_RESULT=$(bazel-bin/service/tools/kv/api_tools/contract_service_tools \
 echo "Account result: $ACCOUNT_RESULT"
 echo "$ACCOUNT_RESULT" > /tmp/account_result.txt
 
-# Extract address from the protobuf output
-OWNER_ADDRESS=$(echo "$ACCOUNT_RESULT" | grep -oP 'address: "\K[^"]+' || echo "")
+# Extract address from the protobuf output portably
+OWNER_ADDRESS=$(echo "$ACCOUNT_RESULT" | grep -oE '0x[0-9a-fA-F]+' || echo "")
 if [ -z "$OWNER_ADDRESS" ]; then
   echo "ERROR: Could not extract owner address"
   echo "Raw output: $ACCOUNT_RESULT"
@@ -96,7 +103,14 @@ ENDJSON
     --config_file=/tmp/deploy_contract.json 2>&1)
   echo "Deploy result: $DEPLOY_RESULT"
   
-  CONTRACT_ADDRESS=$(echo "$DEPLOY_RESULT" | grep -oP 'contract_address: "\K[^"]+' || echo "")
+  CONTRACT_ADDRESS=$(echo "$DEPLOY_RESULT" | grep -oE '0x[0-9a-fA-F]+' | tail -1 || echo "")
+  
+  if [ -z "$CONTRACT_ADDRESS" ]; then
+    echo "ERROR: Could not deploy contract successfully (empty address)."
+    echo "Deployment output: $DEPLOY_RESULT"
+    exit 1
+  fi
+  
   echo ""
   echo "============================================"
   echo "DEPLOYMENT COMPLETE"

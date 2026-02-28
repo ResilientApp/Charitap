@@ -45,7 +45,8 @@ async function runTests() {
 
     // Test 2: Check Transactions
     console.log('\n💰 Test 2: Checking transactions...');
-    const transactions = await Transaction.find({ userEmail: TEST_EMAIL });
+
+    const transactions = await Transaction.find({ userId: user.id });
     console.log(`✅ Total transactions: ${transactions.length}`);
     
     if (transactions.length > 0) {
@@ -84,7 +85,7 @@ async function runTests() {
     const startOfYear = new Date(currentYear, 0, 1);
     
     const ytdTransactions = await Transaction.find({
-      userEmail: TEST_EMAIL,
+      userId: user.id,
       timestamp: { $gte: startOfYear, $lte: now }
     });
     

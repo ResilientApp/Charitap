@@ -4,7 +4,7 @@ const transactionSchema = new mongoose.Schema({
   // Stripe IDs - unique sparse indexes prevent duplicates while allowing null/missing values
   stripeTransactionId: { type: String, unique: true, sparse: true }, // The transfer to charity
   stripePaymentIntentId: { type: String, unique: true, sparse: true }, // The charge to user
-  userEmail: { type: String, required: true },
+  userId: { type: String, required: true },
   // min: 0.01 prevents zero or negative donation amounts from being recorded
   amount: { type: Number, required: true, min: [0.01, 'Donation amount must be at least $0.01'] },
   charity: { type: mongoose.Schema.Types.ObjectId, ref: 'Charity', required: true },

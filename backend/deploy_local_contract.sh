@@ -11,6 +11,13 @@ if ! command -v solc &> /dev/null; then
   exit 1
 fi
 
+# Ensure contract exists and copy to /tmp for build
+if [ ! -f "contracts/DonationReceipt.sol" ]; then
+    echo "Error: contracts/DonationReceipt.sol not found. Run this from the backend directory."
+    exit 1
+fi
+cp ./contracts/DonationReceipt.sol /tmp/
+
 # Use relative path compilation to keep keys clean
 cd /tmp
 solc --evm-version homestead --combined-json bin,hashes --pretty-json --optimize DonationReceipt.sol > DonationReceipt.json
@@ -41,7 +48,7 @@ EOF
 cd "$RESDB_DIR"
 ACC_OUT=$($TOOL -c "$CONFIG" --config_file=/tmp/create_acc.json 2>&1)
 echo "ACC_OUT RAW: $ACC_OUT"
-OWNER=$(echo "$ACC_OUT" | grep -oP '0x[0-9a-fA-F]+' | head -1)
+OWNER=$(echo "$ACC_OUT" | grep -oE '0x[0-9a-fA-F]+' | head -1)
 
 if [ -z "$OWNER" ]; then
     echo "Error: Failed to create account."
@@ -63,7 +70,7 @@ EOF
 
 DEP_OUT=$($TOOL -c "$CONFIG" --config_file=/tmp/deploy.json 2>&1)
 echo "DEP_OUT RAW: $DEP_OUT"
-CONTRACT=$(echo "$DEP_OUT" | grep -oP '0x[0-9a-fA-F]+' | tail -1)
+CONTRACT=$(echo "$DEP_OUT" | grep -oE '0x[0-9a-fA-F]+' | tail -1)
 
 if [ -z "$CONTRACT" ]; then
     echo "Error: Failed to deploy."

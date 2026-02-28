@@ -34,6 +34,11 @@ async function recoverSmartContract() {
         // --- Step 2: Parse Output ---
         console.log('✅ [2/5] Deployment Complete. Parsing addresses...');
 
+        if (stderr) {
+            console.warn('Deployment Warnings/Errors:');
+            console.warn(stderr);
+        }
+
         // Find Owner (first hash after ACCOUNT) or RESCONTRACT_OWNER_ADDRESS=...
         const ownerMatch = stdout.match(/RESCONTRACT_OWNER_ADDRESS=(0x[0-9a-fA-F]{40})/);
         const contractMatch = stdout.match(/RESCONTRACT_CONTRACT_ADDRESS=(0x[0-9a-fA-F]{40})/);
@@ -52,6 +57,10 @@ async function recoverSmartContract() {
 
         // --- Step 3: Update .env ---
         console.log('📝 [3/5] Updating .env file...');
+        if (!fs.existsSync(ENV_PATH)) {
+            console.error(`❌ .env file not found at ${ENV_PATH}`);
+            process.exit(1);
+        }
         let envContent = fs.readFileSync(ENV_PATH, 'utf8');
 
         // Replace or Append
@@ -113,12 +122,17 @@ async function recoverSmartContract() {
             } else {
                 console.error('\n⚠️  Backfill script exited with error code:', code);
             }
+            process.exit(code);
         });
 
     } catch (err) {
         console.error('\n❌ RECOVERY FAILED:', err.message);
         if (err.stderr) console.error(err.stderr);
-        if (mongoose.connection.readyState !== 0) await mongoose.disconnect();
+        try {
+            if (mongoose.connection.readyState !== 0) await mongoose.disconnect();
+        } catch (discErr) {
+            console.error('Error disconnecting from MongoDB:', discErr.message);
+        }
         process.exit(1);
     }
 }

@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const dotenv = require('dotenv');
 const cron = require('node-cron');
 const Stripe = require('stripe');
+const crypto = require('crypto');
 
 const RoundUp = require('./models/RoundUp');
 const User = require('./models/User');
@@ -13,13 +14,14 @@ const donationValidator = require('./services/donation-validator');
 dotenv.config();
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 
-// Connect to MongoDB
-mongoose.connect(process.env.MONGODB_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-})
-  .then(() => console.log('Connected to MongoDB for cron job'))
-  .catch(err => console.error('MongoDB connection error:', err));
+async function startCron() {
+  try {
+    await mongoose.connect(process.env.MONGODB_URI);
+    console.log('Connected to MongoDB for cron job');
+  } catch (err) {
+    console.error('MongoDB connection error:', err);
+    process.exit(1);
+  }
 
 async function processUserRoundups(user) {
   const unpaidRoundUps = await RoundUp.find({ user: user.email, isPaid: false });
@@ -33,7 +35,7 @@ async function processUserRoundups(user) {
   if (user.paymentPreference === 'threshold') {
     // If less than $5, skip for now (for "threshold" users)
     if (totalAmount < 5) return;
-  } else if (user.paymentPreference === 'monthly') {
+  } else if (user.paymentPreference === 'monthly' || user.paymentPreference === 'daily') {
     // Skip users with no roundups or tally of $0
     if (totalAmount === 0) {
       console.log(`Skipping ${user.email}: zero total, no charge needed`);
@@ -73,8 +75,9 @@ async function processUserRoundups(user) {
     // STEP 1: Charge the user's card (outside session — Stripe is the point of no return)
     console.log(`Charging ${user.email} for $${totalAmount.toFixed(2)}`);
 
-    // Deterministic idempotency key: same key for the same user+roundups batch
-    const idempotencyKey = `charge-${user.id}-${unpaidIds.map(id => id.toString()).sort().join('-')}`;
+    // Deterministic idempotency key: hash of unpaidIds to fit within Stripe's 255-char limit
+    const unpaidDigest = crypto.createHash('sha256').update(unpaidIds.map(id => id.toString()).sort().join('-')).digest('hex');
+    const idempotencyKey = `charge-${user.id}-${unpaidDigest}`.substring(0, 255);
 
     const paymentIntent = await stripe.paymentIntents.create({
       amount: Math.round(totalAmount * 100),
@@ -116,12 +119,12 @@ async function processUserRoundups(user) {
             destination: charity.stripeAccountId,
             transfer_group: `payment_${paymentIntent.id}`,
             description: 'Charitap donation',
-          });
+          }, { idempotencyKey: `transfer-${paymentIntent.id}-${charity.stripeAccountId}` });
 
           const [transaction] = await Transaction.create([{
             stripeTransactionId: transfer.id,
             stripePaymentIntentId: paymentIntent.id,
-            userEmail: user.email,
+            userId: user.id,
             amount: transferCents / 100,
             charity: charity._id,
           }], { session });
@@ -211,25 +214,29 @@ async function processUserRoundups(user) {
   }
 }
 
-// Run the cron job every day at midnight
-cron.schedule('0 0 * * *', async () => {
-  console.log('Running daily roundup processor...');
+  // Run the cron job every day at midnight
+  cron.schedule('0 0 * * *', async () => {
+    console.log('Running daily roundup processor...');
 
-  try {
-    const users = await User.find();
+    try {
+      const users = await User.find();
 
-    for (const user of users) {
-      // Check if user should be processed today
-      const today = new Date();
-      const shouldProcess =
-        user.paymentPreference === 'threshold' || // Threshold users: process daily
-        (user.paymentPreference === 'monthly' && today.getDate() === 1); // Monthly users: process only on 1st
+      for (const user of users) {
+        // Check if user should be processed today
+        const today = new Date();
+        const shouldProcess =
+          user.paymentPreference === 'threshold' || // Threshold users: process daily
+          user.paymentPreference === 'daily' ||     // Daily users: process daily
+          (user.paymentPreference === 'monthly' && today.getDate() === 1); // Monthly users: process only on 1st
 
-      if (!shouldProcess) continue;
+        if (!shouldProcess) continue;
 
-      await processUserRoundups(user);
+        await processUserRoundups(user);
+      }
+    } catch (err) {
+      console.error('Error in cron job:', err.message);
     }
-  } catch (err) {
-    console.error('Error in cron job:', err.message);
-  }
-});
+  });
+}
+
+startCron();

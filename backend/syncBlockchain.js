@@ -36,10 +36,17 @@ async function syncToBlockchain() {
       return;
     }
 
+    const userDoc = await mongoose.model('User').findOne({ email: USER_EMAIL.toLowerCase() });
+    if (!userDoc) {
+      console.log(`User ${USER_EMAIL} not found, cannot sync.`);
+      await mongoose.disconnect();
+      return;
+    }
+
     // Sync Transactions
     console.log('\n📊 Syncing Transactions to Blockchain...');
     const transactions = await Transaction.find({
-      userEmail: USER_EMAIL,
+      userId: userDoc.id,
       $or: [
         { blockchainTxKey: { $exists: false } },
         { blockchainTxKey: null },
@@ -168,7 +175,7 @@ async function syncToBlockchain() {
     console.log('📋 SYNC COMPLETE');
     console.log('=' + '='.repeat(59));
 
-    const allTransactions = await Transaction.find({ userEmail: USER_EMAIL });
+    const allTransactions = await Transaction.find({ userId: userDoc.id });
     const allRoundUps = await RoundUp.find({ user: USER_EMAIL });
 
     const transactionsOnBlockchain = allTransactions.filter(t => t.blockchainTxKey).length;

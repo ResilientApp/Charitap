@@ -86,7 +86,7 @@ async function backfillBlockchain() {
                 transactionId: transaction._id.toString(),
                 stripeTransferId: transaction.stripeTransactionId || 'N/A',
                 stripePaymentIntentId: transaction.stripePaymentIntentId || 'N/A',
-                userId: resilientDB.hashSensitiveData(transaction.userEmail),
+                userId: transaction.userId,
                 amount: transaction.amount.toFixed(2),
                 charityId: transaction.charity._id.toString(),
                 charityName: transaction.charity.name || 'Unknown',

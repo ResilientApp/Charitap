@@ -9,7 +9,7 @@ async function addMockData() {
     await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/charitap');
     console.log('Connected to MongoDB');
 
-    const userEmail = 'hnimonkar@gmail.com';
+    const userId = process.env.MOCK_USER_EMAIL || 'user+mock@example.com';
     
     // Create or get charities
     const charities = await Promise.all([
@@ -40,35 +40,28 @@ async function addMockData() {
     // January 2026 mock transactions
     const januaryTransactions = [
       {
-        userEmail,
+        userId,
         amount: 12.50,
         charity: charities[0]._id,
         timestamp: new Date('2026-01-05T10:30:00Z'),
         stripeTransactionId: 'mock_stripe_jan_001'
       },
       {
-        userEmail,
-        amount: 12.50,
-        charity: charities[0]._id,
-        timestamp: new Date('2026-01-05T10:30:00Z'),
-        stripeTransactionId: 'mock_stripe_jan_001'
-      },
-      {
-        userEmail,
+        userId,
         amount: 8.75,
         charity: charities[1]._id,
         timestamp: new Date('2026-01-12T14:20:00Z'),
         stripeTransactionId: 'mock_stripe_jan_002'
       },
       {
-        userEmail,
+        userId,
         amount: 15.25,
         charity: charities[2]._id,
         timestamp: new Date('2026-01-18T09:45:00Z'),
         stripeTransactionId: 'mock_stripe_jan_003'
       },
       {
-        userEmail,
+        userId,
         amount: 10.00,
         charity: charities[3]._id,
         timestamp: new Date('2026-01-25T16:30:00Z'),
@@ -79,14 +72,14 @@ async function addMockData() {
     // February 2026 mock transactions
     const februaryTransactions = [
       {
-        userEmail,
+        userId,
         amount: 18.50,
         charity: charities[0]._id,
         timestamp: new Date('2026-02-03T11:15:00Z'),
         stripeTransactionId: 'mock_stripe_feb_001'
       },
       {
-        userEmail,
+        userId,
         amount: 14.75,
         charity: charities[1]._id,
         timestamp: new Date('2026-02-07T13:40:00Z'),
@@ -142,8 +135,8 @@ async function addMockData() {
     console.log(`   Last Month (January): $${janTotal.toFixed(2)}`);
     console.log(`   Wallet Balance: $${walletBalance.toFixed(2)}`);
     console.log(`   Blockchain Secured: ${allTransactions.length}/${allTransactions.length} (100%)`);
-    console.log(`   User: ${userEmail}`);
-    mongoose.connection.close();
+    console.log(`   User: ${userId}`);
+    await mongoose.connection.close();
     console.log('\n✅ Mock data added successfully!');
   } catch (error) {
     console.error('❌ Error adding mock data:', error);

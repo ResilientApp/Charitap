@@ -129,7 +129,7 @@ router.get('/pending', authenticateToken, async (req, res) => {
 // Returns sum of all processed transactions (doesn't include pending roundups)
 router.get('/total-donated', authenticateToken, async (req, res) => {
   try {
-    const transactions = await Transaction.find({ userEmail: req.user.email });
+    const transactions = await Transaction.find({ userId: req.user._id });
 
     const totalDonated = transactions.reduce((sum, transaction) => sum + transaction.amount, 0);
 
@@ -237,7 +237,7 @@ router.get('/activity/donated', authenticateToken, async (req, res) => {
     const offset = Number.isFinite(rawOffset) && rawOffset >= 0 ? rawOffset : 0;
     const { startDate, endDate } = req.query;
 
-    const query = { userEmail: req.user.email };
+    const query = { userId: req.user._id };
 
     // Optional date filtering
     if (startDate || endDate) {
@@ -289,7 +289,7 @@ router.get('/activity/donated', authenticateToken, async (req, res) => {
 // Dashboard: Get unique charities count that user has donated to
 router.get('/dashboard/unique-charities', authenticateToken, async (req, res) => {
   try {
-    const transactions = await Transaction.find({ userEmail: req.user.email }).distinct('charity');
+    const transactions = await Transaction.find({ userId: req.user._id }).distinct('charity');
 
     const uniqueCharitiesCount = transactions.length;
 
@@ -316,7 +316,7 @@ router.get('/dashboard/monthly-donations', authenticateToken, async (req, res) =
 
     // Fetch all transactions for current year only
     const transactions = await Transaction.find({
-      userEmail: req.user.email,
+      userId: req.user._id,
       timestamp: { $gte: startDate, $lte: now }
     }).lean();
 
@@ -375,7 +375,7 @@ router.get('/dashboard/monthly-donations', authenticateToken, async (req, res) =
 router.get('/dashboard/charity-breakdown', authenticateToken, async (req, res) => {
   try {
     // Fetch all user transactions with charity details
-    const transactions = await Transaction.find({ userEmail: req.user.email })
+    const transactions = await Transaction.find({ userId: req.user._id })
       .populate('charity', 'name type description')
       .lean();
 
@@ -447,7 +447,7 @@ router.get('/dashboard/charity-breakdown', authenticateToken, async (req, res) =
 router.get('/dashboard/blockchain-stats', authenticateToken, async (req, res) => {
   try {
     // Get all transactions for the user
-    const transactions = await Transaction.find({ userEmail: req.user.email });
+    const transactions = await Transaction.find({ userId: req.user._id });
 
     // Count how many have actually been secured on blockchain
     // Only count transactions that have a blockchainTxId (verified on-chain)
@@ -480,7 +480,7 @@ router.get('/verify-blockchain/:transactionId', authenticateToken, async (req, r
     // First check if transaction exists in database
     const transaction = await Transaction.findOne({
       _id: transactionId,
-      userEmail: req.user.email
+      userId: req.user._id
     });
 
     if (!transaction) {

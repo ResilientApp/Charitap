@@ -66,7 +66,7 @@ async function verifyBlockchain() {
     if (withoutBlockchainId.length > 0) {
         console.log('⚠ Transactions missing blockchainTxId (not on blockchain):');
         withoutBlockchainId.forEach(tx => {
-            console.log(`  - ${tx._id} | $${tx.amount.toFixed(2)} | ${tx.userEmail} | ${tx.charity?.name || 'Unknown'}`);
+            console.log(`  - ${tx._id} | $${tx.amount.toFixed(2)} | ${tx.userId} | ${tx.charity?.name || 'Unknown'}`);
         });
         console.log('');
     }
@@ -105,7 +105,7 @@ async function verifyBlockchain() {
                     id: tx._id.toString(),
                     blockchainTxId: tx.blockchainTxId,
                     amount: tx.amount,
-                    userEmail: tx.userEmail,
+                    userId: tx.userId,
                     charity: tx.charity?.name || 'Unknown'
                 });
             }
@@ -144,7 +144,7 @@ async function verifyBlockchain() {
         if (failedCount > 0) {
             console.log('  ⚠ FAILED VERIFICATIONS:');
             failedTransactions.forEach(tx => {
-                console.log(`    - ${tx.id} | $${tx.amount.toFixed(2)} | ${tx.userEmail} | ${tx.charity}`);
+                console.log(`    - ${tx.id} | $${tx.amount.toFixed(2)} | ${tx.userId} | ${tx.charity}`);
                 console.log(`      Blockchain TX: ${tx.blockchainTxId}`);
             });
             console.log('');

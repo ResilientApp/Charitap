@@ -94,8 +94,16 @@ echo "[3/6] Starting KV service..."
 killall -9 kv_service 2>/dev/null || true
 sleep 1
 ./service/tools/kv/server_tools/start_kv_service.sh &
-echo "[3/6] Waiting 15 seconds for service to initialize..."
-sleep 15
+KV_PID=$!
+trap 'kill $KV_PID 2>/dev/null || true' EXIT INT TERM
+echo "[3/6] Waiting for service to initialize..."
+for i in {1..20}; do
+  if kill -0 $KV_PID 2>/dev/null; then
+    break
+  fi
+  sleep 1
+done
+sleep 5
 echo "[3/6] KV service should be ready"
 echo ""
 
@@ -113,7 +121,7 @@ ACCOUNT_OUTPUT=$(bazel-bin/service/tools/kv/api_tools/contract_service_tools \
 
 echo "Account output: $ACCOUNT_OUTPUT"
 
-OWNER_ADDRESS=$(echo "$ACCOUNT_OUTPUT" | grep -oP '0x[0-9a-fA-F]+' | head -1 || echo "")
+OWNER_ADDRESS=$(echo "$ACCOUNT_OUTPUT" | grep -oE '0x[0-9a-fA-F]+' | head -1 || echo "")
 if [ -z "$OWNER_ADDRESS" ]; then
   echo ""
   echo "Could not auto-extract address. Please find it in the output above."
@@ -132,7 +140,7 @@ if ! command -v solc &> /dev/null; then
 fi
 
 solc --evm-version homestead --combined-json bin,hashes --pretty-json --optimize \
-  /tmp/DonationReceipt.sol > /tmp/DonationReceipt.json 2>&1
+  /tmp/DonationReceipt.sol > /tmp/DonationReceipt.json
 
 echo "[5/6] Contract compiled"
 echo ""
@@ -155,7 +163,7 @@ DEPLOY_OUTPUT=$(bazel-bin/service/tools/kv/api_tools/contract_service_tools \
 
 echo "Deploy output: $DEPLOY_OUTPUT"
 
-CONTRACT_ADDRESS=$(echo "$DEPLOY_OUTPUT" | grep -oP '0x[0-9a-fA-F]+' | head -1 || echo "")
+CONTRACT_ADDRESS=$(echo "$DEPLOY_OUTPUT" | grep -oE '0x[0-9a-fA-F]+' | tail -1 || echo "")
 
 echo ""
 echo "============================================"

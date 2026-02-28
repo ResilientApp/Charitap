@@ -33,9 +33,12 @@ async function introspect() {
         const res = await axios.post(URL, { query: GET_SCHEMA_QUERY }, { timeout: 10000 });
 
         // Guard against unexpected response shapes
-        if (!res || !res.data || !res.data.data) {
+        if (!res?.data?.data?.__schema) {
             console.error(`\nURL: ${URL}`);
-            console.error('Unexpected response shape - missing res.data.data');
+            console.error('Unexpected response shape - missing __schema in res.data.data');
+            if (res?.data?.errors) {
+                console.error('GraphQL errors:', JSON.stringify(res.data.errors, null, 2));
+            }
             return;
         }
 
@@ -58,13 +61,13 @@ async function introspect() {
         const queryType = data.types.find(t => t.name === queryTypeName);
 
         console.log(`\nURL: ${URL}`);
-        if (!queryType) {
+        if (!queryType || !Array.isArray(queryType.fields) || queryType.fields.length === 0) {
             console.log(`No Root Query Fields found for type: ${queryTypeName}`);
             return;
         }
         console.log(`Root Query Fields (${queryTypeName}):`);
         queryType.fields.forEach(f => {
-            const args = f.args.map(a => `${a.name}`);
+            const args = Array.isArray(f.args) ? f.args.map(a => `${a.name}`) : [];
             console.log(` - ${f.name}(${args.join(', ')})`);
         });
     } catch (e) {

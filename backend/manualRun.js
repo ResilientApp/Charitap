@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const dotenv = require('dotenv');
 dotenv.config(); // Must be called before requiring services
 
+const crypto = require('crypto');
 const Stripe = require('stripe');
 
 const RoundUp = require('./models/RoundUp');
@@ -72,6 +73,10 @@ async function processUserRoundups(user) {
     // STEP 1: Charge the user's card
     console.log(`Charging ${user.email} for $${totalAmount.toFixed(2)}`);
 
+    // Deterministic idempotency key: hash of unpaidIds to fit within Stripe's 255-char limit
+    const unpaidDigest = crypto.createHash('sha256').update(unpaidIds.map(id => id.toString()).sort().join('-')).digest('hex');
+    const idempotencyKey = `charge-${user.id}-${unpaidDigest}`.substring(0, 255);
+
     const paymentIntent = await stripe.paymentIntents.create({
       amount: Math.round(totalAmount * 100),
       currency: 'usd',
@@ -85,7 +90,7 @@ async function processUserRoundups(user) {
         roundupCount: unpaidRoundUps.length.toString(),
         totalAmount: totalAmount.toString(),
       },
-    });
+    }, { idempotencyKey });
 
     console.log(`Successfully charged ${user.email}: $${totalAmount.toFixed(2)}`);
 
@@ -112,7 +117,7 @@ async function processUserRoundups(user) {
             destination: charity.stripeAccountId,
             transfer_group: `payment_${paymentIntent.id}`,
             description: 'Charitap donation',
-          });
+          }, { idempotencyKey: `transfer-${paymentIntent.id}-${charity.stripeAccountId}` });
 
           const [transaction] = await Transaction.create([{
             stripeTransactionId: transfer.id,

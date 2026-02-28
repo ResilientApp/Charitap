@@ -6,7 +6,7 @@
 
 ### 🚀 Motivation
 
-In today's fast-paced world, many individuals wish to support charitable causes but often face meaningful friction:
+In today's fast-paced world, many individuals wish to support charitable causes but often face significant friction:
 
 1.  **Decision Fatigue**: Choosing where and how much to donate can be overwhelming.
 2.  **Lack of Transparency**: Donors often wonder if their money actually reaches the intended cause.
@@ -36,7 +36,7 @@ Charitap links with your daily transactions. When you spend $12.40, the app calc
 ### 2. Flexible Payment Preferences
 
 - **Threshold Mode**: Donations are processed immediately once your accumulated round-ups reach $5.00.
-- **Monthly Mode**: Accumulated round-ups are processed once a month, regardless of the total (minimum $1.00).
+- **Monthly Mode**: Accumulated round-ups are processed once a month; payouts require a minimum of $1.00.
 
 ### 3. Blockchain Verification
 
@@ -71,12 +71,11 @@ Charitap employs a robust, microservices-inspired architecture to ensure scalabi
 
 - **Runtime**: Node.js & Express.js
 - **Task Scheduling**: `node-cron` handles background jobs to process accumulated round-ups daily at midnight.
-- **Payments**: **Stripe Connect** manages secure card charges/transfers. The platform acts as a platform, transferring funds from donors to connected charity accounts.
+- **Payments**: **Stripe Connect** manages secure card charges/transfers, enabling the platform to transfer funds from donors to connected charity accounts.
 
 ### 3. Database & Storage
 
 - **MongoDB**: Primary data store.
-- **Redis**: Used for caching and performance.
 - **ResilientDB**: Distributed ledger for immutable transaction records.
 
 ---
@@ -101,7 +100,7 @@ Charitap employs a robust, microservices-inspired architecture to ensure scalabi
 
 - `POST /create-customer`: Initialize Stripe customer for user.
 - `POST /save-payment-method`: Securely save a card for future recurring charges.
-- `POST /list-payment-methods`: Retrieve user's saved cards.
+- `GET /list-payment-methods`: Retrieve user's saved cards.
 
 ### Charity (`/api/charity-nominations`)
 

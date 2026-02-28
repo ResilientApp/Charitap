@@ -29,18 +29,25 @@ function executeResContract(commandName, funcName, params = '') {
     // We can write to a file in the current directory (d:\Masters\Charitap\backend) 
     // and reference it as /mnt/d/Masters/Charitap/backend/temp_config.json
 
+    const isWindows = os.platform() === 'win32';
     const tempFileName = `temp_exec_${Date.now()}.json`;
-    const tempFilePath = path.join(__dirname, '..', tempFileName);
+    const tempFilePath = path.join(os.tmpdir(), tempFileName);
     fs.writeFileSync(tempFilePath, JSON.stringify(config, null, 2));
 
-    const wslConfigPath = `/mnt/d/Masters/Charitap/backend/${tempFileName}`;
-    const toolCmd = `bazel-bin/service/tools/kv/api_tools/contract_service_tools -c service/tools/config/interface/service.config --config_file=${wslConfigPath}`;
-
-    const wslCmd = `wsl -e bash -c "cd ~/resilientdb && ${toolCmd}"`;
+    let execCmd;
+    if (isWindows) {
+        // Approximate WSL path conversion
+        const wslPath = tempFilePath.replace(/^([A-Za-z]):/, (match, drive) => `/mnt/${drive.toLowerCase()}`).replace(/\\/g, '/');
+        const toolCmd = `bazel-bin/service/tools/kv/api_tools/contract_service_tools -c service/tools/config/interface/service.config --config_file=${wslPath}`;
+        execCmd = `wsl -e bash -c "cd ~/resilientdb && ${toolCmd}"`;
+    } else {
+        const toolCmd = `bazel-bin/service/tools/kv/api_tools/contract_service_tools -c service/tools/config/interface/service.config --config_file=${tempFilePath}`;
+        execCmd = `bash -c "cd ~/resilientdb && ${toolCmd}"`;
+    }
 
     try {
-        console.log(`Running: ${wslCmd}`);
-        const output = execSync(wslCmd, { encoding: 'utf8', stdio: 'pipe' });
+        console.log(`Running: ${execCmd}`);
+        const output = execSync(execCmd, { encoding: 'utf8', stdio: 'pipe' });
         console.log("Output:", output);
         return output;
     } catch (error) {

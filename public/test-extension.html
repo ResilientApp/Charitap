@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head><title>Charitap Extension Diagnostic</title></head>
+<body>
+<h1>Charitap Extension Diagnostic</h1>
+<p>Open DevTools Console (F12) to see results.</p>
+<pre id="log"></pre>
+<script>
+const log = (msg) => {
+  console.log(msg);
+  document.getElementById('log').textContent += msg + '\n';
+};
+
+// Try the extension ID
+const extId = "hglbfejfbippoeenobopobjbpbcddjjo";
+log("Testing extension ID: " + extId);
+log("Current origin: " + window.location.origin);
+log("chrome.runtime available: " + !!(window.chrome && window.chrome.runtime));
+
+if (window.chrome && window.chrome.runtime && window.chrome.runtime.sendMessage) {
+  log("Sending test message...");
+  try {
+    chrome.runtime.sendMessage(
+      extId,
+      { type: "SAVE_USER_DATA", email: "test@test.com", userId: "test123", token: "testtoken" },
+      (response) => {
+        if (chrome.runtime.lastError) {
+          log("❌ FAILED: " + chrome.runtime.lastError.message);
+          log("");
+          log("TROUBLESHOOTING:");
+          log("1. Go to chrome://extensions");
+          log("2. Check the extension ID matches: " + extId);
+          log("3. If the ID is DIFFERENT, update .env and AuthContext.js");
+          log("4. Click the Reload button on the extension");
+          log("5. Come back here and refresh this page");
+        } else {
+          log("✅ SUCCESS! Response: " + JSON.stringify(response));
+          log("Extension communication is working!");
+        }
+      }
+    );
+  } catch(e) {
+    log("❌ Exception: " + e.message);
+  }
+} else {
+  log("❌ chrome.runtime.sendMessage not available - are you in Chrome?");
+}
+</script>
+</body>
+</html>

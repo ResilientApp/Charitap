@@ -529,8 +529,8 @@ function collapseWidget(button) {
 // DONATION HANDLING
 // ===================================================================
 
-function handleDonation(amount) {
-  console.log('[Charitap] Processing donation:', amount);
+function handleDonation(roundUpAmount) {
+  console.log('[Charitap] Processing donation:', roundUpAmount);
   
   if (!userId || !userEmail) {
     console.error('[Charitap] User not logged in');
@@ -538,25 +538,28 @@ function handleDonation(amount) {
     return;
   }
   
+  // Get cart total for purchaseAmount
+  const cartTotal = getCartTotal();
+  const purchaseAmount = cartTotal !== null ? cartTotal : roundUpAmount;
+  
   // Send message to background script to create roundup
   chrome.runtime.sendMessage({
     action: 'createRoundUp',
     data: {
       userEmail: userEmail,
-      amount: amount,
+      purchaseAmount: purchaseAmount,
+      roundUpAmount: roundUpAmount,
       merchantName: window.location.hostname
     }
   }, (response) => {
     console.log('[Charitap] Response from background:', response);
     
     if (response && response.success) {
-      showSuccessPopup(amount);
+      showSuccessPopup(roundUpAmount);
       removeWidget();
-      
-      // Broadcast wallet update
-      chrome.runtime.sendMessage({ action: 'walletUpdated' });
+      // Note: background.js broadcasts wallet update automatically after success
     } else {
-      showMessage('Failed to add donation', 'error');
+      showMessage('Failed to add donation: ' + (response?.error || 'Unknown error'), 'error');
     }
   });
 }

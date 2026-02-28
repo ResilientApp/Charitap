@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import Breadcrumb from './Breadcrumb';
 import useScrollAnimation from '../hooks/useScrollAnimation';
@@ -54,7 +54,20 @@ export default function Activity() {
   }, [isAuthenticated]);
 
   // Auto-refresh every 45s — pauses on hidden tab, resumes instantly on return
-  useRealTimeSync(fetchActivityData, 45000, isAuthenticated);
+  const { refresh: refreshActivity } = useRealTimeSync(fetchActivityData, 45000, isAuthenticated);
+
+  // React immediately when background.js broadcasts a wallet update
+  // (fired after every successful round-up via chrome.scripting.executeScript → postMessage)
+  useEffect(() => {
+    const handleWalletUpdate = (event) => {
+      if (event.data && event.data.type === 'CHARITAP_WALLET_UPDATE') {
+        console.log('[Activity] Wallet update received, refreshing...');
+        refreshActivity();
+      }
+    };
+    window.addEventListener('message', handleWalletUpdate);
+    return () => window.removeEventListener('message', handleWalletUpdate);
+  }, [refreshActivity]);
 
 
   const getActivityIcon = (type) => {

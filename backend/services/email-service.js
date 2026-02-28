@@ -74,6 +74,7 @@ class EmailService {
         <div class="wrapper">
           <div class="card">
             <div class="header">
+              <img src="https://charitap-frontend.vercel.app/logo192.png" alt="Charitap" style="width:64px;height:64px;border-radius:50%;margin-bottom:12px;display:block;margin-left:auto;margin-right:auto;" />
               <div class="header-logo">Charitap</div>
               <div class="header-tagline">Make a Difference One Click at a Time</div>
               <div class="badge">🎉 You've Been Nominated!</div>
@@ -205,8 +206,13 @@ This invitation was initiated by a Charitap user (${nominatedBy})
         <div class="wrapper">
           <div class="card">
             <div class="header">
-              <div class="header-logo">Charitap</div>
-              <div class="header-badge">Admin Alert</div>
+              <div style="display:flex;align-items:center;justify-content:space-between;">
+                <div style="display:flex;align-items:center;gap:12px;">
+                  <img src="https://charitap-frontend.vercel.app/logo192.png" alt="Charitap" style="width:40px;height:40px;border-radius:50%;" />
+                  <div class="header-logo">Charitap</div>
+                </div>
+                <div class="header-badge">Admin Alert</div>
+              </div>
             </div>
             <div class="content">
               <p class="title">📋 New Charity Nomination</p>

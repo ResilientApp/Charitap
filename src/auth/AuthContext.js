@@ -84,7 +84,7 @@ export function AuthProvider({ children }) {
 
       if (typeof window !== 'undefined' && window.chrome && window.chrome.runtime && window.chrome.runtime.sendMessage) {
         window.chrome.runtime.sendMessage(
-          process.env.REACT_APP_CHROME_EXTENSION_ID || "hmadgdapmiiiimdhebjchcocnjennahi",
+          process.env.REACT_APP_CHROME_EXTENSION_ID || "hglbfejfbippoeenobopobjbpbcddjjo",
           {
             type: "SAVE_USER_DATA",
             email: email,

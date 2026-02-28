@@ -147,7 +147,7 @@ export default function Settings() {
       await saveName(firstNameEdit, lastNameEdit);
 
       // Show success toast
-      toast.success('✅ Name updated successfully!', {
+      toast.success('Name updated successfully!', {
         position: 'top-right',
         autoClose: 3000,
       });
@@ -169,7 +169,7 @@ export default function Settings() {
     try {
       await settingsAPI.updatePaymentPreference(paymentMode);
       updatePaymentPreference(paymentMode); // Update local context and localStorage
-      toast.success('✅ Payment settings saved successfully!', {
+      toast.success('Payment settings saved successfully!', {
         position: 'top-right',
         autoClose: 3000,
       });
@@ -473,7 +473,7 @@ export default function Settings() {
                         setCurrentPassword('');
                         setNewPassword('');
                         setConfirmPassword('');
-                        toast.success('Password updated successfully! 🎉', {
+                        toast.success('Password updated successfully!', {
                           position: 'top-right',
                           autoClose: 3000,
                         });
@@ -1010,7 +1010,7 @@ function StripePaymentSection({ userEmail, displayName }) {
       await fetchSavedMethods();
 
       // Show success toast with auto-dismiss
-      toast.success(`✅ Card saved successfully! ${result.paymentMethod.brand.toUpperCase()} •••• ${result.paymentMethod.last4}`, {
+      toast.success(`Card saved successfully! ${result.paymentMethod.brand.toUpperCase()} •••• ${result.paymentMethod.last4}`, {
         position: 'top-right',
         autoClose: 3000,
       });

@@ -596,12 +596,13 @@ function showSuccessPopup(amount) {
   
   // Success icon
   const icon = document.createElement('div');
-  icon.innerHTML = '🎉';
+  icon.innerHTML = `<svg width="72" height="72" viewBox="0 0 24 24" fill="none" stroke="#626F47" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`;
   icon.style.cssText = `
-    font-size: 72px;
     margin-bottom: 24px;
     animation: charitapBounce 0.8s ease;
     filter: drop-shadow(0 4px 8px rgba(98, 111, 71, 0.15));
+    display: flex;
+    justify-content: center;
   `;
   
   // Success text

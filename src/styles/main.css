@@ -7,6 +7,27 @@ html, body {
   background-color: #FCF8F1;
 }
 
+:root {
+  --toastify-color-light: #FCF8F1;
+  --toastify-color-dark: #2F362F;
+  --toastify-color-info: #626F47;
+  --toastify-color-success: #626F47;
+  --toastify-color-warning: #F0BB78;
+  --toastify-color-error: #D9534F;
+  --toastify-text-color-light: #2F362F;
+  --toastify-color-progress-info: #626F47;
+  --toastify-color-progress-success: #626F47;
+  --toastify-color-progress-warning: #F0BB78;
+  --toastify-color-progress-error: #D9534F;
+  --toastify-color-progress-bgo: 0.2;
+}
+
+.Toastify__toast {
+  border-radius: 8px !important;
+  box-shadow: 0 4px 12px rgba(98, 111, 71, 0.1) !important;
+  border: 1px solid rgba(98, 111, 71, 0.1) !important;
+}
+
 /* Vertical padding under navbar & above bottom on all pages */
 .page-content {
   @apply pt-4 pb-4;

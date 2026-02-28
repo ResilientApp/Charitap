@@ -7,8 +7,22 @@ import 'react-toastify/dist/ReactToastify.css';
 import './styles/main.css';
 import App from './App';
 import { BrowserRouter as Router } from 'react-router-dom';
+import { CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react';
 
-// No Auth0 configuration needed
+const ToastIcon = ({ type }) => {
+  switch (type) {
+    case 'success':
+      return <CheckCircle size={20} className="text-[#626F47]" />;
+    case 'error':
+      return <AlertCircle size={20} className="text-[#D9534F]" />;
+    case 'warning':
+      return <AlertTriangle size={20} className="text-[#F0BB78]" />;
+    case 'info':
+      return <Info size={20} className="text-[#626F47]" />;
+    default:
+      return null;
+  }
+};
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
@@ -29,6 +43,7 @@ root.render(
         pauseOnHover
         theme="light"
         transition={Slide}
+        icon={ToastIcon}
       />
     </AuthProvider>
   </React.StrictMode>

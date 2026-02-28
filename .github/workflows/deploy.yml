@@ -118,9 +118,9 @@ jobs:
         id: deploy
         run: |
           set -euo pipefail
-          if ! DEPLOY_URL=$(vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }} 2>&1); then
+          DEPLOY_URL=$(vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }} | grep -Eo 'https://[a-zA-Z0-9-]+\.vercel\.app')
+          if [ -z "$DEPLOY_URL" ]; then
             echo "❌ Vercel frontend deployment failed!"
-            echo "$DEPLOY_URL"
             exit 1
           fi
           echo "frontend-url=$DEPLOY_URL" >> $GITHUB_OUTPUT

@@ -10,10 +10,10 @@ export default function Footer() {
           <span className="ml-4 text-gray-700 text-sm italic max-w-xs hidden md:inline-block border-l border-gray-300 pl-4">A micro-donation platform that lets users round up everyday purchases and automatically donate the spare change to a charity of your choice.</span>
         </div>
         <div className="flex items-center space-x-6">
-          <a 
-            href="https://forms.gle/ag3Ct7zBXK94Eu1XA" 
-            target="_blank" 
-            rel="noopener noreferrer" 
+          <a
+            href="https://forms.gle/ag3Ct7zBXK94Eu1XA"
+            target="_blank"
+            rel="noopener noreferrer"
             className="flex items-center space-x-2 text-gray-600 hover:text-yellow-600 transition group"
             aria-label="Contact Us"
           >
@@ -27,8 +27,10 @@ export default function Footer() {
           </a>
         </div>
       </div>
-      <div className="mt-6 text-center text-gray-600 text-sm">
-        &copy; {new Date().getFullYear()} Charitap. All rights reserved.
+      <div className="mt-6 flex flex-col md:flex-row items-center justify-center gap-4 text-gray-500 text-sm">
+        <span>&copy; {new Date().getFullYear()} Charitap. All rights reserved.</span>
+        <span className="hidden md:inline-block text-gray-300">|</span>
+        <a href="/privacy" className="hover:text-gray-800 transition-colors">Privacy Policy</a>
       </div>
     </footer>
   );

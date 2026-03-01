@@ -7,6 +7,7 @@
 const currentUrl = window.location.href;
 if (currentUrl.includes('localhost:3000') || 
     currentUrl.includes('127.0.0.1:3000') ||
+    currentUrl.includes('charitap.resilientdb.com') ||
     (window.location.hostname === 'localhost' && window.location.port === '3000')) {
   console.log('[Charitap] Skipping - running on Charitap website');
   // Exit script completely

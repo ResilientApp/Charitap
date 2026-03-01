@@ -9,10 +9,10 @@
       "cookies"
     ],
     "externally_connectable": {
-      "matches": ["http://localhost:3000/*", "<all_urls>"]
+      "matches": ["https://charitap.resilientdb.com/*"]
     },
     "host_permissions": [
-      "http://localhost:3000/*",
+      "https://charitap.resilientdb.com/*",
       "<all_urls>"
     ],
     "background": {
@@ -26,11 +26,9 @@
       }
     ],
     "web_accessible_resources": [
-    {
-      "resources": ["assets/charity.png", "patterns.json", "widget.css", "icons/icon16.png", "icons/icon48.png", "icons/icon128.png"],
-      "matches": ["http://localhost:3000/*", "<all_urls>"]
-    }
-  ]
-  }
-
-  
+      {
+        "resources": ["assets/charity.png", "patterns.json", "widget.css", "icons/icon16.png", "icons/icon48.png", "icons/icon128.png"],
+        "matches": ["https://charitap.resilientdb.com/*", "<all_urls>"]
+      }
+    ]
+}

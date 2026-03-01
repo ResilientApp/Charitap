@@ -100,7 +100,7 @@ export default function SignUp() {
         setLoading(true);
         setError('');
         await loginWithGoogle(tokenResponse.access_token);
-        window.location.href = '/';
+        nav('/', { replace: true });
       } catch (e) {
         setError(`🔐 ${e.message || 'Google sign-up failed'}`);
         setLoading(false);

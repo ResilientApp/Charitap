@@ -4,6 +4,9 @@ RESDB_DIR="$HOME/resilientdb"
 TOOL="$RESDB_DIR/bazel-bin/service/tools/kv/api_tools/contract_service_tools"
 CONFIG="$RESDB_DIR/service/tools/config/interface/service.config"
 
+TEMP_DIR=$(mktemp -d)
+trap 'rm -rf "$TEMP_DIR"' EXIT
+
 # Compile properly (stdout only to file)
 echo "[COMPILE] Compiling..."
 if ! command -v solc &> /dev/null; then
@@ -16,10 +19,10 @@ if [ ! -f "contracts/DonationReceipt.sol" ]; then
     echo "Error: contracts/DonationReceipt.sol not found. Run this from the backend directory."
     exit 1
 fi
-cp ./contracts/DonationReceipt.sol /tmp/
+cp ./contracts/DonationReceipt.sol "$TEMP_DIR/"
 
 # Use relative path compilation to keep keys clean
-cd /tmp
+cd "$TEMP_DIR"
 solc --evm-version homestead --combined-json bin,hashes --pretty-json --optimize DonationReceipt.sol > DonationReceipt.json
 # Note: omitted stderr redirection so warnings go to console
 
@@ -39,14 +42,14 @@ echo "[COMPILE] Success."
 
 # Create Account
 echo "[ACCOUNT] Creating owner account..."
-cat > /tmp/create_acc.json <<EOF
+cat > "$TEMP_DIR/create_acc.json" <<EOF
 {
   "command": "create_account"
 }
 EOF
 
 cd "$RESDB_DIR"
-ACC_OUT=$($TOOL -c "$CONFIG" --config_file=/tmp/create_acc.json 2>&1)
+ACC_OUT=$($TOOL -c "$CONFIG" --config_file="$TEMP_DIR/create_acc.json" 2>&1)
 echo "ACC_OUT RAW: $ACC_OUT"
 OWNER=$(echo "$ACC_OUT" | grep -oE '0x[0-9a-fA-F]+' | head -1)
 
@@ -58,17 +61,17 @@ echo "[ACCOUNT] Owner: $OWNER"
 
 # Deploy
 echo "[DEPLOY] Deploying contract..."
-cat > /tmp/deploy.json <<EOF
+cat > "$TEMP_DIR/deploy.json" <<EOF
 {
   "command": "deploy",
-  "contract_path": "/tmp/DonationReceipt.json",
+  "contract_path": "$TEMP_DIR/DonationReceipt.json",
   "contract_name": "DonationReceipt.sol:DonationReceipt",
   "init_params": "",
   "owner_address": "$OWNER"
 }
 EOF
 
-DEP_OUT=$($TOOL -c "$CONFIG" --config_file=/tmp/deploy.json 2>&1)
+DEP_OUT=$($TOOL -c "$CONFIG" --config_file="$TEMP_DIR/deploy.json" 2>&1)
 echo "DEP_OUT RAW: $DEP_OUT"
 CONTRACT=$(echo "$DEP_OUT" | grep -oE '0x[0-9a-fA-F]+' | tail -1)
 

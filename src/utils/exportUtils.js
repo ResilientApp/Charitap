@@ -20,6 +20,14 @@ function csvCell(value) {
   return `"${str.replace(/"/g, '""')}"`;
 }
 
+// Trap corrupted date formations safely
+function formatDateStr(dateStr, includeTime = true) {
+  if (!dateStr) return '-';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '-';
+  return includeTime ? d.toLocaleString() : d.toLocaleDateString();
+}
+
 // Shared popup helper with null-guard (handles popup-blocked case)
 function printHtml(htmlContent) {
   const printWindow = window.open('', '_blank');
@@ -52,7 +60,7 @@ export function exportDonatedCSV(activities, filename = 'charitap-donations.csv'
   const headers = ['Date', 'Charity', 'Amount'];
 
   const rows = activities.map(activity => [
-    new Date(activity.date).toLocaleString(),
+    formatDateStr(activity.date, true),
     activity.charity,
     activity.amount,
   ]);
@@ -70,7 +78,7 @@ export function exportCollectedCSV(activities, filename = 'charitap-collected.cs
   const headers = ['Date', 'Purchase Amount', 'Round-Up Amount'];
 
   const rows = activities.map(activity => [
-    new Date(activity.date).toLocaleString(),
+    formatDateStr(activity.date, true),
     activity.purchaseAmount ? `$${parseFloat(activity.purchaseAmount).toFixed(2)}` : '-',
     activity.amount,
   ]);
@@ -87,7 +95,7 @@ export function exportCollectedCSV(activities, filename = 'charitap-collected.cs
 export function exportDonatedPDF(activities) {
   const rows = activities.map(activity => `
     <tr>
-      <td>${escapeHtml(new Date(activity.date).toLocaleDateString())}</td>
+      <td>${escapeHtml(formatDateStr(activity.date, false))}</td>
       <td>${escapeHtml(activity.charity)}</td>
       <td>${escapeHtml(activity.amount)}</td>
     </tr>
@@ -128,7 +136,7 @@ export function exportDonatedPDF(activities) {
 export function exportCollectedPDF(activities) {
   const rows = activities.map(activity => `
     <tr>
-      <td>${escapeHtml(new Date(activity.date).toLocaleDateString())}</td>
+      <td>${escapeHtml(formatDateStr(activity.date, false))}</td>
       <td>${escapeHtml(activity.purchaseAmount ? `$${parseFloat(activity.purchaseAmount).toFixed(2)}` : '-')}</td>
       <td>${escapeHtml(activity.amount)}</td>
     </tr>
@@ -170,7 +178,7 @@ export function exportToCSV(activities, filename = 'charitap-export.csv') {
   const headers = ['Date', 'Type', 'Charity', 'Category', 'Amount'];
 
   const rows = activities.map(activity => [
-    new Date(activity.date).toLocaleString(),
+    formatDateStr(activity.date, true),
     activity.type === 'donation' ? 'Donation' : 'Round-Up Collection',
     activity.charity,
     activity.category,
@@ -188,7 +196,7 @@ export function exportToCSV(activities, filename = 'charitap-export.csv') {
 export function exportToPDF(activities) {
   const rows = activities.map(activity => `
     <tr>
-      <td>${escapeHtml(new Date(activity.date).toLocaleDateString())}</td>
+      <td>${escapeHtml(formatDateStr(activity.date, false))}</td>
       <td>${escapeHtml(activity.type === 'donation' ? 'Donation' : 'Round-Up')}</td>
       <td>${escapeHtml(activity.charity)}</td>
       <td>${escapeHtml(activity.category)}</td>

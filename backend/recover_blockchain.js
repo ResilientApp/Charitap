@@ -89,6 +89,7 @@ async function recoverSmartContract() {
 
         // --- Step 4: Reset Receipts in DB ---
         console.log('🧹 [4/5] Clearing old receipt IDs from MongoDB...');
+        if (!process.env.MONGODB_URI) throw new Error('MONGODB_URI is required globally');
         await mongoose.connect(process.env.MONGODB_URI);
         const Transaction = require('./models/Transaction');
 
@@ -109,6 +110,10 @@ async function recoverSmartContract() {
         const child = require('child_process').spawn('node', ['backfill_smart_contract.js'], {
             stdio: 'inherit',
             shell: true
+        });
+
+        child.on('error', (err) => {
+            console.error('\n❌ Failed to spawn backfill process:', err.message);
         });
 
         child.on('close', async (code) => {

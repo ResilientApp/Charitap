@@ -14,6 +14,11 @@ const donationValidator = require('./services/donation-validator');
 dotenv.config();
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 
+function hashIdentifier(email) {
+  if (!email) return 'unknown';
+  return crypto.createHash('sha256').update(email).digest('hex').slice(0, 12);
+}
+
 async function startCron() {
   try {
     await mongoose.connect(process.env.MONGODB_URI);
@@ -38,31 +43,31 @@ async function processUserRoundups(user) {
   } else if (user.paymentPreference === 'monthly' || user.paymentPreference === 'daily') {
     // Skip users with no roundups or tally of $0
     if (totalAmount === 0) {
-      console.log(`Skipping ${user.email}: zero total, no charge needed`);
+      console.log(`Skipping ${hashIdentifier(user.email)}: zero total, no charge needed`);
       return;
     }
     // Only bump to $1 minimum if there ARE roundups but total is below $1
     if (totalAmount > 0 && totalAmount < 1) {
-      console.log(`Rounding up ${user.email} to $1 minimum (was $${totalAmount.toFixed(2)})`);
+      console.log(`Rounding up ${hashIdentifier(user.email)} to $1 minimum (was $${totalAmount.toFixed(2)})`);
       totalAmount = 1;
     }
   }
 
   const charities = await Charity.find({ _id: { $in: user.selectedCharities } });
   if (!charities.length) {
-    console.log(`No charities selected for ${user.email}`);
+    console.log(`No charities selected for ${hashIdentifier(user.email)}`);
     return;
   }
 
   // Check if user has payment method
   if (!user.defaultPaymentMethod) {
-    console.log(`No payment method for ${user.email} - skipping`);
+    console.log(`No payment method for ${hashIdentifier(user.email)} - skipping`);
     return;
   }
 
   // Validate stripeCustomerId before attempting a charge
   if (!user.stripeCustomerId) {
-    console.log(`No stripeCustomerId for user ${user.email || user.id} - skipping`);
+    console.log(`No stripeCustomerId for user ${hashIdentifier(user.email || user.id)} - skipping`);
     return;
   }
 
@@ -73,7 +78,7 @@ async function processUserRoundups(user) {
 
   try {
     // STEP 1: Charge the user's card (outside session — Stripe is the point of no return)
-    console.log(`Charging ${user.email} for $${totalAmount.toFixed(2)}`);
+    console.log(`Charging ${hashIdentifier(user.email)} for $${totalAmount.toFixed(2)}`);
 
     // Deterministic idempotency key: hash of unpaidIds to fit within Stripe's 255-char limit
     const unpaidDigest = crypto.createHash('sha256').update(unpaidIds.map(id => id.toString()).sort().join('-')).digest('hex');
@@ -94,7 +99,7 @@ async function processUserRoundups(user) {
       },
     }, { idempotencyKey });
 
-    console.log(`Successfully charged ${user.email}: $${totalAmount.toFixed(2)}`);
+    console.log(`Successfully charged ${hashIdentifier(user.email)}: $${totalAmount.toFixed(2)}`);
 
     // STEP 2: Transfer to charities — integer-cent math avoids rounding loss
     const totalCents = Math.round(totalAmount * 100);
@@ -198,16 +203,16 @@ async function processUserRoundups(user) {
     await Promise.allSettled(blockchainPromises);
 
     if (allTransfersSucceeded) {
-      console.log(`Completed processing for ${user.email}`);
+      console.log(`Completed processing for ${hashIdentifier(user.email)}`);
     } else {
-      console.error(`Some transfers failed for ${user.email}. Failed:`, failedTransfers);
+      console.error(`Some transfers failed for ${hashIdentifier(user.email)}. Failed:`, failedTransfers);
       // Roundups not marked paid - will be retried next cycle
     }
 
   } catch (error) {
-    console.error(`Error charging ${user.email}:`, error.message);
+    console.error(`Error charging ${hashIdentifier(user.email)}:`, error.message);
     if (error.type === 'StripeCardError') {
-      console.log(`Card declined for ${user.email} - will retry next cycle`);
+      console.log(`Card declined for ${hashIdentifier(user.email)} - will retry next cycle`);
     }
   } finally {
     await session.endSession();
@@ -219,9 +224,9 @@ async function processUserRoundups(user) {
     console.log('Running daily roundup processor...');
 
     try {
-      const users = await User.find();
+      const cursor = User.find().cursor();
 
-      for (const user of users) {
+      for await (const user of cursor) {
         // Check if user should be processed today
         const today = new Date();
         const shouldProcess =

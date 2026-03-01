@@ -27,9 +27,14 @@ chrome.storage.local.get(['userId', 'userEmail', 'userToken', 'authOrigin'], (re
   }
 });
 
-const isValidOrigin = (origin) => {
-  if (!origin) return false;
-  return origin.startsWith('http://localhost:') || (origin.includes('charitap') && origin.endsWith('.vercel.app'));
+const isValidOrigin = (originStr) => {
+  if (!originStr) return false;
+  try {
+    const originUrl = new URL(originStr);
+    return originUrl.hostname === 'localhost' || originUrl.hostname === '127.0.0.1' || originUrl.hostname.endsWith('charitap.vercel.app');
+  } catch (e) {
+    return false;
+  }
 };
 
 chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => {
@@ -140,7 +145,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           merchantName: merchantName || 'Unknown Merchant'
         })
       })
-      .then(response => response.json())
+      .then(async response => {
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({}));
+          throw new Error(err.message || err.error || `HTTP error ${response.status}`);
+        }
+        return response.json();
+      })
       .then(data => {
         console.log('Service Worker: Roundup created successfully:', data);
         broadcastWalletUpdate();

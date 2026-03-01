@@ -1,4 +1,6 @@
-const { execSync } = require('child_process');
+const { execFile } = require('child_process');
+const util = require('util');
+const execFileAsync = util.promisify(execFile);
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -47,7 +49,7 @@ class ResContractClient {
      * @param {object} config - The JSON config for contract_service_tools
      * @returns {string|null} Raw output from the tool, or null on failure
      */
-    _runContractTool(config) {
+    async _runContractTool(config) {
         if (!this.enabled) {
             console.log('[ResContract] Disabled - skipping contract call');
             return null;
@@ -64,13 +66,13 @@ class ResContractClient {
                 .replace(/^([A-Z]):/, (_, drive) => `/mnt/${drive.toLowerCase()}`);
 
             // Build the WSL command
-            const cmd = `wsl -e bash -c "cd ${this.wslResdbDir} && ${this.wslTool} -c ${this.wslConfig} --config_file=${wslTempPath} 2>&1"`;
+            const cmdArgs = ['-e', 'bash', '-c', `cd ${this.wslResdbDir} && ${this.wslTool} -c ${this.wslConfig} --config_file=${wslTempPath} 2>&1`];
 
-            console.log(`[ResContract] Executing: ${config.command} ${config.function_name || ''}`);
-            const output = execSync(cmd, { timeout: 20000, encoding: 'utf8' });
+            console.log(`[ResContract] Executing (async): ${config.command} ${config.function_name || ''}`);
+            const { stdout } = await execFileAsync('wsl', cmdArgs, { timeout: 20000, encoding: 'utf8' });
 
-            console.log(`[ResContract] Raw output: ${output.trim().substring(0, 200)}`);
-            return output;
+            console.log(`[ResContract] Raw output: ${stdout.trim().substring(0, 200)}`);
+            return stdout;
 
         } catch (error) {
             console.error('[ResContract] ERROR:', error.message);
@@ -103,7 +105,7 @@ class ResContractClient {
             params: args
         };
 
-        const output = this._runContractTool(config);
+        const output = await this._runContractTool(config);
         if (!output) return null;
 
         if (output.includes('execute contract fail')) {
@@ -170,11 +172,12 @@ class ResContractClient {
         if (!this.enabled) return false;
 
         try {
-            const output = execSync(
-                'wsl -e bash -c "ps aux | grep kv_service | grep -v grep | wc -l"',
+            const { stdout } = await execFileAsync(
+                'wsl',
+                ['-e', 'bash', '-c', 'ps aux | grep kv_service | grep -v grep | wc -l'],
                 { timeout: 5000, encoding: 'utf8' }
             );
-            const processCount = parseInt(output.trim());
+            const processCount = parseInt(stdout.trim());
             const healthy = processCount >= 5;
             console.log(`[ResContract] Health: ${healthy ? 'OK' : 'UNHEALTHY'} (${processCount} kv_service processes)`);
             return healthy;

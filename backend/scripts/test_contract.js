@@ -20,7 +20,7 @@ function executeResContract(commandName, funcName, params = '') {
         caller_address: ownerAddress,
         contract_address: contractAddress,
         func_name: funcName,
-        params: params
+        params: typeof params === 'string' && params.startsWith('0x') ? `\"${params}\"` : params
     };
 
     // Write config to temp file accessible by WSL

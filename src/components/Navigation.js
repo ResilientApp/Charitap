@@ -19,7 +19,6 @@ export default function Navigation() {
   const nav = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  const [animateCounts, setAnimateCounts] = useState(false);
   const [totalDonations, setTotalDonations] = useState(0);
   const [collectedAmount, setCollectedAmount] = useState(0);
   // Track previous values for smart CountUp animation (animate from prev → new)
@@ -64,7 +63,8 @@ export default function Navigation() {
   useEffect(() => {
     const handleWalletUpdate = (event) => {
       // Validate origin 
-      if (event.origin !== window.location.origin && !event.origin.includes('chrome-extension://')) return;
+      const extId = process.env.REACT_APP_CHROME_EXTENSION_ID || 'hglbfejfbippoeenobopobjbpbcddjjo';
+      if (event.origin !== window.location.origin && event.origin !== `chrome-extension://${extId}`) return;
 
       if (event.data && event.data.type === 'CHARITAP_WALLET_UPDATE') {
         refreshNav();
@@ -119,20 +119,6 @@ export default function Navigation() {
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      const done = sessionStorage.getItem('charitap_counts_done');
-      if (!done) {
-        setAnimateCounts(true);
-        sessionStorage.setItem('charitap_counts_done', '1');
-      } else {
-        setAnimateCounts(false);
-      }
-    } else {
-      setAnimateCounts(false);
-    }
-  }, [isAuthenticated]);
 
   // Swipe handlers for mobile navigation
   const swipeHandlers = useSwipeable({

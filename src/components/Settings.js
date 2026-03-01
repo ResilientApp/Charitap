@@ -12,7 +12,7 @@ import NominateCharity from './NominateCharity';
 import useDebounce from '../hooks/useDebounce';
 import useRealTimeSync from '../hooks/useRealTimeSync';
 
-const stripePromise = loadStripe(process.env.REACT_APP_STRIPE_PUBLIC_KEY);
+const stripePromise = process.env.REACT_APP_STRIPE_PUBLIC_KEY ? loadStripe(process.env.REACT_APP_STRIPE_PUBLIC_KEY) : null;
 
 export default function Settings() {
   const { user, profile, email, saveName, changePassword, logout, authProvider, isAuthenticated, updateSelectedCharities, updatePaymentPreference } = useAuth();
@@ -296,6 +296,7 @@ export default function Settings() {
                         setFirstNameEdit(value);
                       }
                     }}
+                    minLength={2}
                     maxLength={50}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
                     placeholder="First name"
@@ -314,6 +315,7 @@ export default function Settings() {
                         setLastNameEdit(value);
                       }
                     }}
+                    minLength={2}
                     maxLength={50}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
                     placeholder="Last name"
@@ -849,7 +851,12 @@ function StripePaymentSection({ userEmail, displayName }) {
         return;
       }
 
-      const parsedAuth = JSON.parse(authData);
+      let parsedAuth;
+      try {
+        parsedAuth = JSON.parse(authData);
+      } catch (e) {
+        throw new Error('Invalid auth token payload');
+      }
       const token = parsedAuth.token;
       if (!token) {
         console.log('No auth token found');
@@ -977,7 +984,12 @@ function StripePaymentSection({ userEmail, displayName }) {
         throw new Error('Please log in to save payment method');
       }
 
-      const parsedAuth = JSON.parse(authData);
+      let parsedAuth;
+      try {
+        parsedAuth = JSON.parse(authData);
+      } catch (e) {
+        throw new Error('Invalid local storage session');
+      }
       const token = parsedAuth.token;
       if (!token) {
         throw new Error('Please log in to save payment method');
@@ -1211,7 +1223,13 @@ function StripePaymentSection({ userEmail, displayName }) {
                         return;
                       }
 
-                      const parsedAuth = JSON.parse(authData);
+                      let parsedAuth;
+                      try {
+                        parsedAuth = JSON.parse(authData);
+                      } catch (e) {
+                        toast.error('Corrupted credentials data');
+                        return;
+                      }
                       const token = parsedAuth.token;
                       if (!token) {
                         toast.error('Please log in to manage payment methods');
@@ -1253,7 +1271,13 @@ function StripePaymentSection({ userEmail, displayName }) {
                         return;
                       }
 
-                      const parsedAuth = JSON.parse(authData);
+                      let parsedAuth;
+                      try {
+                        parsedAuth = JSON.parse(authData);
+                      } catch (e) {
+                        toast.error('Corrupted credentials data');
+                        return;
+                      }
                       const token = parsedAuth.token;
                       if (!token) {
                         toast.error('Please log in to manage payment methods');

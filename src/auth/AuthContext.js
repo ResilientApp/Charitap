@@ -157,7 +157,13 @@ export function AuthProvider({ children }) {
           setUser({
             id: response.user.id,
             email: response.user.email,
-            displayName: response.user.displayName
+            displayName: response.user.displayName,
+            firstName: response.user.firstName || '',
+            lastName: response.user.lastName || '',
+            profilePicture: response.user.profilePicture,
+            authProvider: response.user.authProvider,
+            paymentPreference: response.user.paymentPreference,
+            selectedCharities: response.user.selectedCharities || []
           });
           setProfile({
             email: response.user.email,
@@ -268,7 +274,9 @@ export function AuthProvider({ children }) {
 
           console.log('AuthContext: Backend response received successfully');
 
-          const session = saveAuthData(response);
+          // Prevent JWT to ID Token mismatch
+          const tokenToSave = response.token || googleInfo.idToken;
+          const session = saveAuthData({ ...response, token: tokenToSave });
 
           setUser({
             id: response.user.id,
@@ -287,7 +295,7 @@ export function AuthProvider({ children }) {
             lastName: response.user.lastName || ''
           });
           setAuthProvider('google');
-          setToken(response.token);
+          setToken(tokenToSave);
           setEmailVerified(true);
 
           return session;

@@ -1,6 +1,14 @@
 <!DOCTYPE html>
 <html>
-<head><title>Charitap Extension Diagnostic</title></head>
+<head>
+  <title>Charitap Extension Diagnostic</title>
+  <script>
+    if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      document.documentElement.innerHTML = '<h1>Not Found</h1>';
+      window.stop();
+    }
+  </script>
+</head>
 <body>
 <h1>Charitap Extension Diagnostic</h1>
 <p>Open DevTools Console (F12) to see results.</p>

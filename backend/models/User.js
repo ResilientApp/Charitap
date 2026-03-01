@@ -4,7 +4,7 @@ const bcrypt = require('bcryptjs');
 const SALT_ROUNDS = 12;
 
 const userSchema = new mongoose.Schema({
-  email: { type: String, required: true, unique: true },
+  email: { type: String, required: true, unique: true, lowercase: true, trim: true },
   password: { type: String }, // Only for traditional auth users
   googleId: { type: String, unique: true, sparse: true }, // For Google OAuth users
   authProvider: { type: String, enum: ['local', 'google'], required: true }, // Track auth method

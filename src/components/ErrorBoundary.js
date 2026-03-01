@@ -20,6 +20,18 @@ class ErrorBoundary extends React.Component {
     if (process.env.NODE_ENV === 'development') {
       console.error('Error caught by boundary:', error, errorInfo);
     }
+    
+    // Remote capture
+    try {
+      if (process.env.NODE_ENV === 'production') {
+        const url = process.env.REACT_APP_SERVER_URL || '';
+        fetch(`${url}/api/metrics/error`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ error: error.message, stack: errorInfo.componentStack })
+        }).catch(() => {});
+      }
+    } catch (e) {}
   }
 
   render() {
@@ -44,7 +56,8 @@ class ErrorBoundary extends React.Component {
                 Refresh Page
               </button>
               <button
-                onClick={() => window.history.back()}
+                type="button"
+                onClick={() => window.history.length > 1 ? window.history.back() : window.location.href = '/'}
                 className="w-full bg-gray-200 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-300 transition-colors duration-200"
               >
                 Go Back

@@ -16,11 +16,11 @@ const Transaction = require('../../models/Transaction');
 const resilientDB = require('../../services/resilientdb-client');
 const donationValidator = require('../../services/donation-validator');
 
-if (!process.env.STRIPE_SECRET_KEY) {
-  console.error('FATAL: STRIPE_SECRET_KEY is required');
-  process.exit(1);
+// Stripe initialization is deferred inside the handler to gracefully handle missing env in Serverless
+let stripe = null;
+if (process.env.STRIPE_SECRET_KEY) {
+  stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 }
-const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 
 // Non-PII identifier for logging - hashes email with SHA-256
 function hashIdentifier(email) {
@@ -147,13 +147,15 @@ async function processUserRoundups(user) {
       const transferCents = baseShare + (i < remainder ? 1 : 0);
 
       try {
+        if (transferCents <= 0) continue; // Reject $0 cent transfers
+        
         const transfer = await stripe.transfers.create({
           amount: transferCents,
           currency: 'usd',
           destination: charity.stripeAccountId,
           transfer_group: `payment_${paymentIntent.id}`,
           description: `Charitap donation`,
-        });
+        }, { idempotencyKey: `transfer-${paymentIntent.id}-${charity.stripeAccountId}` });
 
         const transaction = await Transaction.create({
           stripeTransactionId: transfer.id,
@@ -202,10 +204,10 @@ async function processUserRoundups(user) {
         })();
         blockchainPromises.push(blockchainPromise);
 
-      } catch (err) {
+        } catch (err) {
         console.error(`Error transferring to ${charity.name}:`, err.message);
         allTransfersSucceeded = false;
-        failedTransfers.push({ charityId: charity._id, charityName: charity.name, error: err.message });
+        failedTransfers.push({ charityId: charity._id, charityName: charity.name, error: err.message, amountCents: transferCents });
       }
     }
 
@@ -226,10 +228,24 @@ async function processUserRoundups(user) {
           },
         }
       );
-      console.log(`Completed processing for user ${hashIdentifier(user.email)}`);
+      console.log(`✅ Completed processing for user ${hashIdentifier(user.email)}`);
     } else {
       console.error(`Some transfers failed for user ${hashIdentifier(user.email)}:`, failedTransfers);
-      // Do not mark roundups as paid - will retry next cycle
+      // Issue refund for undelivered amount instead of double-charging user next cycle
+      const failedCents = failedTransfers.reduce((sum, f) => sum + f.amountCents, 0);
+      if (failedCents > 0) {
+        try {
+          await stripe.refunds.create({
+            payment_intent: paymentIntent.id,
+            amount: failedCents,
+            reason: 'other',
+            metadata: { failedTransfers: JSON.stringify(failedTransfers) },
+          });
+          console.log(`Issued partial refund of $${(failedCents / 100).toFixed(2)} for failed transfers`);
+        } catch (refundErr) {
+          console.error('Failed to issue refund:', refundErr.message);
+        }
+      }
     }
 
   } catch (error) {
@@ -247,6 +263,10 @@ async function processUserRoundups(user) {
 
 // Vercel serverless handler
 module.exports = async function handler(req, res) {
+  if (!stripe) {
+    console.error('Server misconfiguration: STRIPE_SECRET_KEY is not set');
+    return res.status(500).json({ error: 'Stripe configuration missing' });
+  }
   // Security: Verify this is triggered by Vercel Cron (not a random public request)
   // Guard: ensure CRON_SECRET is configured to avoid matching "Bearer undefined"
   if (!process.env.CRON_SECRET) {

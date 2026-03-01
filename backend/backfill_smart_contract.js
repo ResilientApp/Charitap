@@ -26,7 +26,8 @@ async function backfillSmartContract() {
             $or: [
                 { contractReceiptId: { $exists: false } },
                 { contractReceiptId: null },
-                { contractReceiptId: '' }
+                { contractReceiptId: '' },
+                { contractReceiptId: 'pending' }
             ]
         };
 
@@ -44,8 +45,12 @@ async function backfillSmartContract() {
                 // 1. Derive charityNumericId - use numericId from Charity model if available,
                 //    otherwise log a skip. The slice/parseInt approach is collision-prone.
                 let charityNumericId = 0;
-                if (tx.charity) {
-                    const charityDoc = await Charity.findById(tx.charity).select('numericId');
+                if (!tx.charity) {
+                    console.log(`  Skipping: missing charity association on TX`);
+                    failCount++;
+                    continue;
+                }
+                const charityDoc = await Charity.findById(tx.charity).select('numericId');
                     if (charityDoc && charityDoc.numericId) {
                         charityNumericId = charityDoc.numericId;
                     } else {
@@ -71,7 +76,10 @@ async function backfillSmartContract() {
                     continue;
                 }
 
-                // 3. Call Smart Contract
+                // Attach pending marker
+                tx.contractReceiptId = 'pending';
+                await tx.save();
+
                 console.log(`  Minting Receipt: Charity=${charityNumericId}, Amount=${amountCents}`);
                 const receiptId = await resContract.mintReceipt(charityNumericId, amountCents);
 
@@ -98,6 +106,10 @@ async function backfillSmartContract() {
             } catch (err) {
                 console.error(`  ❌ Error processing tx: ${err.message}`);
                 failCount++;
+                try {
+                    tx.contractReceiptId = undefined;
+                    await tx.save();
+                } catch(e) {}
             }
         }
 
@@ -114,7 +126,9 @@ async function backfillSmartContract() {
     }
 }
 
-backfillSmartContract().catch(err => {
+backfillSmartContract().then(() => {
+    process.exit(0);
+}).catch(err => {
     console.error('Unhandled Rejection:', err);
-    process.exitCode = 1;
+    process.exit(1);
 });

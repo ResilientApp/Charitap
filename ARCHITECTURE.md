@@ -43,8 +43,8 @@ flowchart TB
     API -- "Charges/Saves Payment" --> Stripe
     Cron -- "Bulk transfers to charities" --> Stripe
 
-    API -- "Posts Txn Data via GraphQL" --> Ledger
-    Cron -- "Logs processed Txns via GraphQL" --> Ledger
+    API -- "Executes via ResContract CLI (Trusted Oracle)" --> Contract
+    Cron -- "Mints receipt via ResContract CLI (Trusted Oracle)" --> Contract
 
     API -- "Executes via ResContract CLI" --> Contract
     Cron -- "Mints receipt via ResContract CLI" --> Contract
@@ -75,7 +75,7 @@ flowchart TB
 ### 2. Server Layer (Backend)
 
 - **Node.js / Express API**: A robust microservices-inspired API that handles user authentication, data fetching, and direct interactions with Stripe and ResilientDB.
-- **Cron Job Processor (`node-cron`)**: A background schedule worker that evaluates users' accumulated "unpaid" round-ups every midnight. It checks if the threshold ($5.00) or monthly criteria are met, charging cards and initiating the blockchain verification sequences.
+- **Cron Job Processor (`node-cron`)**: A background schedule worker that evaluates users' accumulated "unpaid" round-ups every midnight (UTC). It checks if the threshold ($5.00) or monthly criteria are met, charging cards and initiating the blockchain verification sequences.
 
 ### 3. Traditional Data & Payments
 
@@ -100,3 +100,11 @@ A critical focus of Charitap is resolving donor trust issues using **blockchain 
   - `getTotalByCharity(uint256 charityId)`: Aggregates on-chain metrics directly from the smart contract layer, independent from MongoDB.
 - **Security & Governance**: The contract is designed as an immutable singleton (no upgrade proxy pattern used) to guarantee the finality of operations. There is no emergency pause switch to prevent centralization risks. Source code verification instructions and the compiled JSON interface are provided in the repository, though full third-party formal auditing has not yet been conducted.
 - **Why it Matters**: Smart contracts enforce programmable trust. The `DonationReceipt` acts as a trustless smart-escrow log, meaning neither Charitap nor the charities can inflate or deny donation histories—it is mathematically bound to the source code execution.
+
+### C. Off-Chain Security Flaws & Trust Boundaries
+
+While the blockchain guarantees the immutability of the final donation record, the **off-chain** data entry and processing layers still require trust:
+
+- **Extension/Browser Compromise**: The Chrome extension operates in the browser environment, which is susceptible to malware or other rogue extensions manipulating the DOM before the round-up payload is captured.
+- **Server Middleware Trust**: Charitap's backend acts as an oracle to ResilientDB. If the Node.js API environment is compromised, bad actors could forge round-up amounts before they reach the blockchain. The `transactionId` linkage relies on the centralized server posting honest receipts.
+- **Stripe Fiat Dependency**: Actual fund settlement is completely reliant on Stripe. While ResilientDB tracks the _logical_ allocation of funds, the _physical_ fiat deposit into charity bank accounts is subject to traditional banking rails and delays.

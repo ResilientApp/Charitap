@@ -20,6 +20,7 @@ contract DonationReceipt {
     }
 
     function mintReceipt(uint256 charityId, uint256 amountCents) public onlyOwner returns (uint256) {
+        require(amountCents > 0, "DonationReceipt: amount must be greater than 0");
         receiptCount = receiptCount + 1;
         charityOf[receiptCount] = charityId;
         amountOf[receiptCount] = amountCents;

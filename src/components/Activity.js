@@ -26,11 +26,11 @@ export default function Activity() {
 
     (donated.data || []).forEach((tx, idx) => {
       combinedActivities.push({
-        id: `donation-${tx.id || idx}`,
+        id: `donation-${tx._id || tx.id || idx}`,
         type: 'donation',
         charity: tx.charity?.name || 'Unknown Charity',
         amount: `$${parseFloat(tx.amount || 0).toFixed(2)}`,
-        date: tx.date || new Date().toISOString(),
+        date: tx.date || tx.createdAt || null,
         category: tx.charity?.type || 'General',
         status: 'completed'
       });
@@ -38,11 +38,11 @@ export default function Activity() {
 
     (collected.data || []).forEach((ru, idx) => {
       combinedActivities.push({
-        id: `roundup-${ru.id || idx}`,
+        id: `roundup-${ru._id || ru.id || idx}`,
         type: 'roundup',
         charity: 'Round-Up Collection',
         amount: `$${parseFloat(ru.roundUpAmount || 0).toFixed(2)}`,
-        date: ru.date || new Date().toISOString(),
+        date: ru.date || ru.createdAt || null,
         category: 'Collection',
         status: ru.isPaid ? 'completed' : 'pending',
         purchaseAmount: ru.purchaseAmount
@@ -61,7 +61,8 @@ export default function Activity() {
   useEffect(() => {
     const handleWalletUpdate = (event) => {
       // Validate origin 
-      if (event.origin !== window.location.origin && !event.origin.includes('chrome-extension://')) return;
+      const extId = process.env.REACT_APP_CHROME_EXTENSION_ID || 'hglbfejfbippoeenobopobjbpbcddjjo';
+      if (event.origin !== window.location.origin && event.origin !== `chrome-extension://${extId}`) return;
 
       if (event.data && event.data.type === 'CHARITAP_WALLET_UPDATE') {
         console.log('[Activity] Wallet update received, refreshing...');
@@ -159,6 +160,7 @@ export default function Activity() {
         <div className="mb-6">
           <div className="inline-flex rounded-full border border-gray-200 bg-white p-1">
             <button
+              type="button"
               className={`px-4 py-2 rounded-full text-sm font-semibold ${tab==='donated' ? 'bg-yellow-400 text-black' : 'text-gray-700 hover:bg-gray-100'}`}
               onClick={() => setTab('donated')}
               aria-pressed={tab==='donated'}
@@ -166,6 +168,7 @@ export default function Activity() {
               Donated
             </button>
             <button
+              type="button"
               className={`px-4 py-2 rounded-full text-sm font-semibold ${tab==='collected' ? 'bg-yellow-400 text-black' : 'text-gray-700 hover:bg-gray-100'}`}
               onClick={() => setTab('collected')}
               aria-pressed={tab==='collected'}

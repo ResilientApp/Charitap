@@ -95,7 +95,7 @@ async function addMockData() {
     // Add some pending roundups for wallet balance
     const pendingRoundUps = [
       {
-        user: userEmail,
+        user: userId,
         purchaseAmount: 12.45,
         roundUpAmount: 0.55,
         merchantName: 'Amazon',
@@ -103,7 +103,7 @@ async function addMockData() {
         isPaid: false
       },
       {
-        user: userEmail,
+        user: userId,
         purchaseAmount: 25.67,
         roundUpAmount: 0.33,
         merchantName: 'Walmart',
@@ -111,7 +111,7 @@ async function addMockData() {
         isPaid: false
       },
       {
-        user: userEmail,
+        user: userId,
         purchaseAmount: 8.33,
         roundUpAmount: 0.67,
         merchantName: 'Target',

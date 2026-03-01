@@ -69,7 +69,7 @@ class ResilientDBClient {
             signerPrivateKey: this.systemKeypair.privateKey,
             recipientPublicKey: this.systemKeypair.publicKey,
             asset: {
-              data: JSON.parse(assetData) // Parse to object for GraphQL
+              data: typeof value === 'object' && value !== null ? value : JSON.parse(assetData) // Use object directly
             }
           }
         }
@@ -86,7 +86,7 @@ class ResilientDBClient {
 
       // Check for GraphQL errors
       if (response.data.errors) {
-        throw new Error(`GraphQL errors: ${JSON.stringify(response.data.errors)}`);
+        throw new Error(`GraphQL errors occurred for key ${key}`); // Scrubbed PII
       }
 
       if (response.data.data && response.data.data.postTransaction) {
@@ -99,9 +99,7 @@ class ResilientDBClient {
 
     } catch (error) {
       console.error('[ResilientDB] ERROR GraphQL set failed:', error.message);
-      if (error.response && error.response.data) {
-        console.error('[ResilientDB] GraphQL response:', JSON.stringify(error.response.data, null, 2));
-      }
+      // Removed noisy logging of error.response.data to scrub PII
 
       if (!this.failSilently) {
         throw error;
@@ -154,7 +152,7 @@ class ResilientDBClient {
 
       // Check for GraphQL errors
       if (response.data.errors) {
-        console.error('[ResilientDB] GraphQL errors:', JSON.stringify(response.data.errors));
+        console.error('[ResilientDB] GraphQL errors handling response');
         return null;
       }
 
@@ -176,9 +174,7 @@ class ResilientDBClient {
 
     } catch (error) {
       console.error('[ResilientDB] ERROR GraphQL get failed:', error.message);
-      if (error.response && error.response.data) {
-        console.error('[ResilientDB] GraphQL response:', JSON.stringify(error.response.data, null, 2));
-      }
+      // Removed noisy logging of error.response.data to scrub PII
 
       if (!this.failSilently) {
         throw error;
@@ -239,7 +235,7 @@ class ResilientDBClient {
       .createHash('sha256')
       .update(data)
       .digest('hex')
-      .substring(0, 16);
+      .substring(0, 64); // Expand to 64 bytes (app-wide)
   }
 
   /**

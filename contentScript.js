@@ -230,11 +230,11 @@ function getCartTotal() {
     const elements = document.querySelectorAll(selector);
     for (const element of elements) {
       const text = element.textContent;
-      const match = text.match(/[\$£€]?\s*(\d{1,3}(?:[.,]\d{3})*[.,]\d{2}|\d+[\.,]\d{2})/);
+      const match = text.match(/[\$£€]?\s*(\d{1,3}(?:,\d{3})*\.\d{2}|\d+\.\d{2})/);
       if (match) {
-        // Strip everything but digits to handle 1,000.50 or 1.000,50 safely, then divide by 100
-        const numericOnly = match[1].replace(/[^\d]/g, '');
-        const value = parseInt(numericOnly, 10) / 100;
+        // Strip commas and use pure float parsing
+        const numericStr = match[1].replace(/,/g, '');
+        const value = parseFloat(numericStr);
         if (value > 0 && value < 10000) {
           return value;
         }

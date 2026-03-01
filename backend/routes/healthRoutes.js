@@ -7,6 +7,12 @@ const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
 const cacheService = require('../services/cache-service');
+let resilientdb = null;
+try {
+    resilientdb = require('../services/resilientdb-client');
+} catch (e) {
+    // Ignore early require failure and rely on resilientdb = null
+}
 
 /**
  * GET /
@@ -37,7 +43,7 @@ router.get('/', async (req, res) => {
         };
 
         // Ping database for response time with 2-second timeout
-        if (mongoState === 1) {
+        if (mongoState === 1 && mongoose.connection.db) {
             const startTime = Date.now();
             await Promise.race([
                 mongoose.connection.db.admin().ping(),
@@ -75,10 +81,9 @@ router.get('/', async (req, res) => {
 
     // Check ResilientDB
     try {
-        const resilientdb = require('../services/resilientdb-client');
         health.services.resilientdb = {
             status: 'info',
-            enabled: resilientdb.enabled || false
+            enabled: resilientdb ? (resilientdb.enabled || false) : false
         };
     } catch (error) {
         health.services.resilientdb = {

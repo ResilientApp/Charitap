@@ -253,11 +253,22 @@ router.patch('/me', authenticateToken, async (req, res) => {
   try {
     const { firstName, lastName, displayName, paymentPreference, selectedCharities } = req.body;
 
-    if (firstName !== undefined) req.user.firstName = firstName;
-    if (lastName !== undefined) req.user.lastName = lastName;
-    if (displayName !== undefined) req.user.displayName = displayName;
-    if (paymentPreference) req.user.paymentPreference = paymentPreference;
-    if (selectedCharities) req.user.selectedCharities = selectedCharities;
+    if (firstName !== undefined) req.user.firstName = String(firstName).trim();
+    if (lastName !== undefined) req.user.lastName = String(lastName).trim();
+    if (displayName !== undefined) req.user.displayName = String(displayName).trim();
+    if (paymentPreference) req.user.paymentPreference = String(paymentPreference);
+    
+    if (selectedCharities !== undefined) {
+      if (!Array.isArray(selectedCharities)) {
+        return res.status(400).json({ error: 'selectedCharities must be an array' });
+      }
+      const mongoose = require('mongoose');
+      const validCharities = [];
+      for (const id of selectedCharities) {
+        if (mongoose.Types.ObjectId.isValid(id)) validCharities.push(id);
+      }
+      req.user.selectedCharities = validCharities;
+    }
 
     await req.user.save();
 

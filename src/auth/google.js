@@ -14,7 +14,7 @@ export async function signInWithGoogleGSI() {
     // Generate secure state
     const array = new Uint32Array(4);
     window.crypto.getRandomValues(array);
-    const stateVal = Array.from(array, dec => ('0' + dec.toString(16)).substr(-2)).join('');
+    const stateVal = Array.from(array, dec => dec.toString(16).padStart(8, '0')).join('');
     sessionStorage.setItem('google_oauth_state', stateVal);
 
     // Create a popup window for Google OAuth
@@ -66,7 +66,8 @@ export async function signInWithGoogleGSI() {
       if (event.origin !== window.location.origin) return;
       
       const storedState = sessionStorage.getItem('google_oauth_state');
-      if (event.data && event.data.state && event.data.state !== storedState) {
+      // Discard missing CSRF / mismatched states
+      if (!event.data || !event.data.state || event.data.state !== storedState) {
         sessionStorage.removeItem('google_oauth_state');
         cleanup();
         reject(new Error('Invalid State / CSRF mismatch'));

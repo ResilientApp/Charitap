@@ -7,18 +7,21 @@ const resilientDB = require('./services/resilientdb-client');
 const rescontractClient = require('./services/rescontract-client');
 
 // Read user email from env or CLI to avoid hardcoding PII
-const USER_EMAIL = process.env.USER_EMAIL || process.argv[2];
+const rawEmail = process.env.USER_EMAIL || process.argv[2];
 
-if (!USER_EMAIL || !USER_EMAIL.includes('@')) {
+if (!rawEmail || !rawEmail.includes('@')) {
   console.error('Usage: USER_EMAIL=email@example.com node syncBlockchain.js');
   console.error('   or: node syncBlockchain.js email@example.com');
   process.exit(1);
 }
 
+const USER_EMAIL = rawEmail.toLowerCase();
+const maskEmail = (email) => email.replace(/^(.{2})[^@]+@(.*)$/, '$1***@$2');
+
 async function syncToBlockchain() {
   console.log('\n🔗 Syncing Charitap Data to Blockchain');
   console.log('=' + '='.repeat(59));
-  console.log(`User: ${USER_EMAIL}`);
+  console.log(`User: ${maskEmail(USER_EMAIL)}`);
   console.log('=' + '='.repeat(59));
 
   try {
@@ -36,9 +39,9 @@ async function syncToBlockchain() {
       return;
     }
 
-    const userDoc = await mongoose.model('User').findOne({ email: USER_EMAIL.toLowerCase() });
+    const userDoc = await mongoose.model('User').findOne({ email: USER_EMAIL });
     if (!userDoc) {
-      console.log(`User ${USER_EMAIL} not found, cannot sync.`);
+      console.log(`User ${maskEmail(USER_EMAIL)} not found, cannot sync.`);
       await mongoose.disconnect();
       return;
     }
@@ -100,12 +103,12 @@ async function syncToBlockchain() {
             console.error(`  ⚠️  Contract receipt failed (non-blocking): ${contractError.message}`);
           }
 
-          // Save with error handling
+          // Save with error handling (compensation: if db fails, log warning, but do not crash sync loop)
           try {
             await transaction.save();
             console.log(`  ✅ Synced: TX ID ${txId}`);
           } catch (saveError) {
-            console.error(`  ❌ Failed to save to MongoDB: ${saveError.message}`);
+            console.error(`  ❌ Failed to save to MongoDB (compensation required later via recover script): ${saveError.message}`);
           }
         } else {
           console.log(`  ⚠️  Blockchain returned null (may be silently failing)`);

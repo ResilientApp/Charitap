@@ -10,6 +10,9 @@ const stripe = stripeLib(process.env.STRIPE_SECRET_KEY);
 // API to create a connected account (protected - for charities)
 router.post('/create-account', authenticateToken, async (req, res) => {
   try {
+    if (req.user.stripeAccountId) {
+      return res.json({ accountId: req.user.stripeAccountId });
+    }
     const account = await stripe.accounts.create({ type: 'express' });
     
     // Store the Stripe account ID with the user (if this user represents a charity)
@@ -125,6 +128,7 @@ router.post('/save-payment-method', authenticateToken, async (req, res) => {
 
     // Create customer if doesn't exist
     if (!req.user.stripeCustomerId) {
+      const idempotencyKey = `create_cust_${req.user._id.toString()}`;
       const customer = await stripe.customers.create({
         email: req.user.email,
         name: req.user.displayName || req.user.email,
@@ -135,19 +139,21 @@ router.post('/save-payment-method', authenticateToken, async (req, res) => {
         metadata: {
           userId: req.user._id.toString()
         }
-      });
+      }, { idempotencyKey });
       req.user.stripeCustomerId = customer.id;
     } else {
       // Ownership check: if attaching an existing method, ensure it's not already on another customer
       const pm = await stripe.paymentMethods.retrieve(paymentMethodId);
-      if (pm.customer && pm.customer !== req.user.stripeCustomerId) {
-        return res.status(403).json({ error: 'Payment method is attached to another customer' });
+      if (pm.customer) {
+        if (pm.customer !== req.user.stripeCustomerId) {
+          return res.status(403).json({ error: 'Payment method is attached to another customer' });
+        }
+      } else {
+        // Attach payment method to existing customer
+        await stripe.paymentMethods.attach(paymentMethodId, {
+          customer: req.user.stripeCustomerId,
+        });
       }
-
-      // Attach payment method to existing customer
-      await stripe.paymentMethods.attach(paymentMethodId, {
-        customer: req.user.stripeCustomerId,
-      });
       
       // Set as default payment method
       await stripe.customers.update(req.user.stripeCustomerId, {

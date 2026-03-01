@@ -5,6 +5,7 @@ import RippleButton from './RippleButton';
 import useScrollAnimation from '../hooks/useScrollAnimation';
 import { motion } from 'framer-motion';
 import { loadStripe } from '@stripe/stripe-js';
+import { toast } from 'react-toastify';
 
 const stripePromise = loadStripe(process.env.REACT_APP_STRIPE_PUBLIC_KEY);
 
@@ -71,11 +72,11 @@ const Home = () => {
           if (data.success) {
             ev.complete('success');
             const pmType = data.paymentMethod?.type === 'apple_pay' ? 'Apple Pay' : data.paymentMethod?.type === 'google_pay' ? 'Google Pay' : 'Payment Method';
-            alert(`✅ ${pmType} saved!\n\nAutomatic donations enabled:\n• Monthly on the 1st\n• OR when roundups reach $25\n\nManage in Settings.`);
+            toast.success(`✅ ${pmType} saved! Automatic donations enabled.`);
             window.location.reload();
           } else {
             ev.complete('fail');
-            alert('Payment failed. Please try again.');
+            toast.error('Payment failed. Please try again.');
           }
         } catch (error) {
           console.error('Payment error:', error);

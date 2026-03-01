@@ -117,8 +117,8 @@ jobs:
       - name: Deploy Frontend to Vercel
         id: deploy
         run: |
-          set -euo pipefail
-          DEPLOY_URL=$(vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }} | grep -Eo 'https://[a-zA-Z0-9-]+\.vercel\.app')
+          FULL_OUTPUT=$(vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }} 2>&1 || true)
+          DEPLOY_URL=$(echo "$FULL_OUTPUT" | grep -Eo 'https://[a-zA-Z0-9.-]+\.vercel\.app' | head -n 1 || true)
           if [ -z "$DEPLOY_URL" ]; then
             echo "❌ Vercel frontend deployment failed!"
             exit 1

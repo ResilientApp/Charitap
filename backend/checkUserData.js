@@ -18,6 +18,9 @@ const RoundUp = require('./models/RoundUp');
 
     const User = require('./models/User');
     const user = await User.findOne({ email });
+    if (!user) {
+      console.log(`User ${email} not found in DB. Showing only disconnected roundups.`);
+    }
     const transactions = user ? await Transaction.find({ userId: user._id }) : [];
     const roundups = await RoundUp.find({ user: email });
 

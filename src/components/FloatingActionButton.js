@@ -26,13 +26,14 @@ const FloatingActionButton = ({
   };
 
   return (
-    <div className="relative">
+    <div className={`fixed bottom-6 right-6 z-50 ${className}`}>
       <RippleButton
         className={`
-          fixed bottom-6 right-6 z-50 rounded-full shadow-lg 
+          rounded-full shadow-lg 
           transition-all duration-300 transform hover:scale-110 
-          ${sizeClasses[size]} ${colorClasses[color]} ${className}
+          ${sizeClasses[size]} ${colorClasses[color]}
         `}
+        aria-label={props['aria-label'] || tooltip || 'Action button'}
         onClick={onClick}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}

@@ -4,6 +4,7 @@ const CharityApplication = require('../models/CharityApplication');
 const Charity = require('../models/Charity');
 const { authenticateToken } = require('../middleware/auth');
 const emailService = require('../services/email-service');
+const crypto = require('crypto');
 
 /**
  * User nominates a charity to join Charitap
@@ -73,10 +74,16 @@ router.post('/nominate', authenticateToken, async (req, res) => {
       }
 
       // If more than 24 hours have passed, we allow re-nomination/resending the email regardless of current status.
-      // Update the existing application
-      existingApplication.charityName = charityName;
-      existingApplication.category = category || existingApplication.category;
-      existingApplication.nominatedBy = req.user.email;
+      // Maintain history instead of destructively overriding the original submission
+      if (!existingApplication.nominationHistory) {
+         existingApplication.nominationHistory = [];
+      }
+      existingApplication.nominationHistory.push({
+         charityName,
+         category: category || existingApplication.category,
+         nominatedBy: req.user.email,
+         date: new Date()
+      });
 
       if (existingApplication.status === 'rejected') {
         existingApplication.status = 'pending';
@@ -125,7 +132,7 @@ router.post('/nominate', authenticateToken, async (req, res) => {
 
     await newApplication.save();
 
-    console.log(`[Nomination] New charity nominated: ${charityName} by ${req.user.email}`);
+    console.log(`[Nomination] New charity nominated: ${charityName} by user hash ${crypto.createHash('sha256').update(String(req.user.email)).digest('hex').substring(0, 8)}`);
 
     // Send email notifications (non-blocking)
     try {
@@ -144,7 +151,7 @@ router.post('/nominate', authenticateToken, async (req, res) => {
         nominatedBy: req.user.email
       });
 
-      console.log(`[Nomination] Emails sent successfully`);
+      console.log(`[Nomination] Emails sent successfully for hash ${crypto.createHash('sha256').update(String(req.user.email)).digest('hex').substring(0, 8)}`);
     } catch (emailError) {
       console.error('[Nomination] Email error:', emailError.message);
       // Don't fail the request if email fails - nomination is still saved

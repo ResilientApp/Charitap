@@ -19,8 +19,4 @@ const transactionSchema = new mongoose.Schema({
   contractReceiptId: { type: String } // Receipt ID returned by the on-chain contract
 });
 
-// Explicit sparse unique indexes for Stripe IDs
-transactionSchema.index({ stripeTransactionId: 1 }, { unique: true, sparse: true });
-transactionSchema.index({ stripePaymentIntentId: 1 }, { unique: true, sparse: true });
-
 module.exports = mongoose.model('Transaction', transactionSchema);

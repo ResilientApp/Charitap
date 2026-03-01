@@ -20,7 +20,7 @@ if (!process.env.STRIPE_SECRET_KEY || !process.env.STRIPE_SECRET_KEY.startsWith(
 }
 
 // MongoDB Connection (using MongoDB URI from .env)
-mongoose.connect(process.env.MONGODB_URI)
+const dbPromise = mongoose.connect(process.env.MONGODB_URI)
   .then(() => {
     console.log('MongoDB connected');
     // Start the server (local dev only — Vercel uses the exported app)
@@ -36,6 +36,16 @@ mongoose.connect(process.env.MONGODB_URI)
       process.exit(1);
     }
   });
+
+// Await DB connection safely on Vercel Serverless before pushing handlers
+app.use(async (req, res, next) => {
+  try {
+    await dbPromise;
+    next();
+  } catch (err) {
+    res.status(503).json({ error: 'Database connection failed' });
+  }
+});
 
 // CORS - only allow explicitly whitelisted origins
 const allowedOrigins = [
@@ -84,11 +94,11 @@ const sanitizeObject = (data) => {
 app.use((req, res, next) => {
   if (req.body) sanitizeObject(req.body);
   if (req.params) sanitizeObject(req.params);
-  // Express 5 makes req.query immutable via a getter, so we just iterate its keys 
-  // directly without re-assigning the base wrapper object.
+  // Express 5 makes req.query immutable via a getter. Create sanitizedQuery for internal use.
   if (req.query) {
+    req.sanitizedQuery = {};
     Object.keys(req.query).forEach(key => {
-      req.query[key] = sanitizeObject(req.query[key]);
+      req.sanitizedQuery[key] = sanitizeObject(req.query[key]);
     });
   }
   next();

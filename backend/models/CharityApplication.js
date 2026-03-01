@@ -41,10 +41,12 @@ const charityApplicationSchema = new mongoose.Schema({
   
   // Legal
   ein: { 
-    type: String // Tax ID / EIN
+    type: String, // Tax ID / EIN
+    select: false
   },
   registrationNumber: { 
-    type: String 
+    type: String,
+    select: false
   },
   
   // Status tracking

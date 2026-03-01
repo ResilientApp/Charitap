@@ -33,7 +33,10 @@ export default function CompleteProfile() {
       if (!isGoogle && (!first.trim() || !last.trim())) {
         e.preventDefault();
         window.history.pushState(null, '', window.location.pathname);
+        // Instead of pushing state repeatedly, just alert and prevent navigation
         alert('Please complete your profile before navigating away.');
+        // Re-push the current state to effectively "cancel" the back navigation
+        window.history.pushState(null, '', window.location.pathname);
       }
     };
 
@@ -41,7 +44,7 @@ export default function CompleteProfile() {
     window.addEventListener('beforeunload', handleBeforeUnload);
     window.addEventListener('popstate', handlePopState);
 
-    // Push current state to prevent back button
+    // Push state once on mount if names are empty to trap back button
     if (!isGoogle && (!first.trim() || !last.trim())) {
       window.history.pushState(null, '', window.location.pathname);
     }
@@ -63,6 +66,7 @@ export default function CompleteProfile() {
       await saveName(first.trim(), last.trim());
       // finalize signup after email verified code screen
       if (sessionStorage.getItem('charitap_email_verified') === '1') {
+        sessionStorage.removeItem('charitap_email_verified');
         await finalizeEmailSignup();
       }
       nav('/settings', { replace: true });

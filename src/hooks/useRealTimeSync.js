@@ -21,6 +21,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 const useRealTimeSync = (fetchFn, interval = 30000, enabled = true) => {
   const [data, setData] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
 
   // Refs to avoid stale closures in event listeners

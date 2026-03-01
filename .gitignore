@@ -155,10 +155,10 @@ Thumbs.db
 
 # Temporary/scratch test files (NOT files in test/ or __tests__/)
 # These patterns scope to scratch files in the project root only
-tmp-test-*.js
-tmp-fix-*.js
-tmp-final-*.js
-tmp-*.js
+/tmp-test-*.js
+/tmp-fix-*.js
+/tmp-final-*.js
+/tmp-*.js
 
 # Deployed contract artifacts (contain real blockchain addresses - keep out of repo)
 backend/cloud_deployed.json

@@ -123,8 +123,12 @@ export default function SignIn() {
             </div>
           ) : (
             <button
-              onClick={() => googleLogin()}
-              className="w-full flex items-center justify-center gap-3 px-6 py-3 border border-gray-300 rounded-full hover:bg-gray-50 transition-all duration-200 group"
+              onClick={() => !(isLoading || loading) && googleLogin()}
+              disabled={isLoading || loading}
+              aria-disabled={isLoading || loading}
+              className={`w-full flex items-center justify-center gap-3 px-6 py-3 border border-gray-300 rounded-full transition-all duration-200 group ${
+                (isLoading || loading) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50'
+              }`}
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24">
                 <path

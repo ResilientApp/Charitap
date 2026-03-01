@@ -119,14 +119,11 @@ async function processUserRoundups(user) {
 
     allTransfersSucceeded = true;
     const failedTransfers = [];
-    const blockchainPromises = [];
-
-    // All Transactions created inside a session for atomicity
-    await session.withTransaction(async () => {
+      // Extract network calls out of MongoDB transaction so retries don't double-charge APIs
       for (let i = 0; i < charities.length; i++) {
         const charity = charities[i];
-        // First N charities get +1 cent to distribute remainder exactly
         const transferCents = baseShare + (i < remainder ? 1 : 0);
+        if (transferCents <= 0) continue; // Reject 0 cent transfers
 
         try {
           const transfer = await stripe.transfers.create({
@@ -136,11 +133,29 @@ async function processUserRoundups(user) {
             transfer_group: `payment_${paymentIntent.id}`,
             description: 'Charitap donation',
           }, { idempotencyKey: `transfer-${paymentIntent.id}-${charity.stripeAccountId}` });
+          
+          successfulTransfers.push({
+            transferCents,
+            transfer,
+            charity
+          });
+        } catch (err) {
+          console.error(`Error transferring to ${charity.name}:`, err.message);
+          allTransfersSucceeded = false;
+          failedTransfers.push({ charityName: charity.name, error: err.message, amountCents: transferCents });
+        }
+      }
+
+    // All DB Transaction creations inside a session for atomicity
+    if (successfulTransfers.length > 0) {
+      await session.withTransaction(async () => {
+        for (const st of successfulTransfers) {
+          const { transferCents, transfer, charity } = st;
 
           const [transaction] = await Transaction.create([{
             stripeTransactionId: transfer.id,
             stripePaymentIntentId: paymentIntent.id,
-            userEmail: user.email,
+            userId: user.id || user.email, // Using non-PII ID
             amount: transferCents / 100,
             charity: charity._id,
           }], { session });
@@ -195,16 +210,7 @@ async function processUserRoundups(user) {
             await transaction.save();
           })();
           blockchainPromises.push(blockchainPromise);
-
-        } catch (err) {
-          console.error(`Error transferring to ${charity.name}:`, err.message);
-          allTransfersSucceeded = false;
-          failedTransfers.push({ charityName: charity.name, error: err.message, amountCents: transferCents });
-          // Abort session — Stripe transfer succeeded but DB write failed?
-          // We surface this as an error and do NOT mark roundups paid.
-          throw err; // This causes withTransaction to abort & retry/rollback
         }
-      }
 
       // STEP 3: Mark roundups as paid — all inside same session for atomicity
       if (allTransfersSucceeded) {
@@ -223,6 +229,7 @@ async function processUserRoundups(user) {
         );
       }
     });
+   }
 
     // Await blockchain writes after session commits (non-transactional, best-effort)
     await Promise.allSettled(blockchainPromises);

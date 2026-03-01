@@ -6,13 +6,14 @@
  * Usage: TEST_EMAIL=user@example.com TEST_NAME="Full Name" node testSystem.js
  */
 
+require('dotenv').config();
+
 const mongoose = require('mongoose');
 const User = require('./models/User');
 const Transaction = require('./models/Transaction');
 const RoundUp = require('./models/RoundUp');
 const Charity = require('./models/Charity');
 const resilientDB = require('./services/resilientdb-client');
-require('dotenv').config();
 
 process.on('unhandledRejection', (err) => {
   console.error('\n❌ Unhandled Rejection:', err);
@@ -175,6 +176,7 @@ async function runTests() {
   } finally {
     await mongoose.disconnect();
     console.log('📊 MongoDB disconnected\n');
+    process.exit(0);
   }
 }
 

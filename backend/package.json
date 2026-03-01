@@ -30,8 +30,7 @@
     "response-time": "^2.3.4",
     "stripe": "^18.0.0",
     "tweetnacl": "^1.0.3",
-    "xss": "^1.0.15",
-    "xss-clean": "^0.1.4"
+    "xss": "^1.0.15"
   },
   "devDependencies": {
     "nodemon": "^3.1.9",

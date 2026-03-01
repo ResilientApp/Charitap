@@ -109,6 +109,13 @@ router.patch('/charity-applications/:id', authenticateToken, isAdmin, async (req
       if (status === 'approved') {
         return res.status(400).json({ error: 'Use the /approve endpoint to approve applications' });
       }
+      const ALLOWED_STATUSES = ['pending', 'under_review', 'rejected'];
+      if (!ALLOWED_STATUSES.includes(status)) {
+        return res.status(400).json({ error: 'Invalid status provided' });
+      }
+      if (application.status === 'approved' && status === 'rejected') {
+        return res.status(400).json({ error: 'Cannot reject an already approved application' });
+      }
       application.status = status;
     }
     if (stripeAccountId) {
@@ -231,6 +238,10 @@ router.post('/charity-applications/:id/reject', authenticateToken, isAdmin, asyn
     
     if (!application) {
       return res.status(404).json({ error: 'Application not found' });
+    }
+    
+    if (application.status === 'approved') {
+      return res.status(400).json({ error: 'Cannot reject an already approved application' });
     }
     
     application.status = 'rejected';

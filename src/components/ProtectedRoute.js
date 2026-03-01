@@ -35,8 +35,8 @@ export default function ProtectedRoute({ component: Component }) {
     }
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-black/40 z-50">
-        <div className="bg-white bg-opacity-90 p-8 rounded-2xl shadow-xl max-w-sm text-center border border-yellow-100 animate-fade-in">
-          <p className="text-xl font-bold text-yellow-700 mb-2">Login Required</p>
+        <div className="bg-white bg-opacity-90 p-8 rounded-2xl shadow-xl max-w-sm text-center border border-yellow-100 animate-fade-in" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+          <p id="modal-title" className="text-xl font-bold text-yellow-700 mb-2">Login Required</p>
           <p className="text-gray-700 mb-2 text-base">Please log in to access this page.</p>
           <p className="text-gray-500 italic text-sm">Redirecting...</p>
         </div>

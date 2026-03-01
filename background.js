@@ -86,7 +86,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
     
     // Call backend API to create roundup
-    const API_BASE_URL = 'http://localhost:3001/api';
+    const API_BASE_URL = 'https://charitap-wheat.vercel.app/api';
     
     fetch(`${API_BASE_URL}/roundup/create-roundup`, {
       method: 'POST',

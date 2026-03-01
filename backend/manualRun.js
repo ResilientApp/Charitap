@@ -112,6 +112,12 @@ async function processUserRoundups(user) {
 
     console.log(`Successfully charged ${user.email}: $${totalAmount.toFixed(2)}`);
 
+    // Persist PaymentIntent ID immediately before transfers
+    await RoundUp.updateMany(
+      { _id: { $in: unpaidIds } },
+      { $set: { stripePaymentIntentId: paymentIntent.id } }
+    );
+
     // STEP 2: Transfer to charities — integer-cent math to avoid rounding loss
     const totalCents = Math.round(totalAmount * 100);
     const baseShare = Math.floor(totalCents / charities.length);
@@ -213,30 +219,28 @@ async function processUserRoundups(user) {
         }
 
       // STEP 3: Mark roundups as paid — all inside same session for atomicity
-      if (allTransfersSucceeded) {
-        const now = new Date();
-        await RoundUp.updateMany(
-          { _id: { $in: unpaidIds }, user: user.email },
-          {
-            $set: {
-              isPaid: true,
-              stripePaymentIntentId: paymentIntent.id,
-              chargedAt: now,
-              processedAt: now,
-            },
+      const now = new Date();
+      await RoundUp.updateMany(
+        { _id: { $in: unpaidIds }, user: user.email },
+        {
+          $set: {
+            isPaid: true,
+            stripePaymentIntentId: paymentIntent.id,
+            chargedAt: now,
+            processedAt: now,
           },
-          { session }
-        );
-      }
+        },
+        { session }
+      );
     });
    }
 
     // Await blockchain writes after session commits (non-transactional, best-effort)
     await Promise.allSettled(blockchainPromises);
 
-    if (allTransfersSucceeded) {
-      console.log(`✅ Completed processing for ${user.email}`);
-    } else {
+    console.log(`✅ Completed processing for ${user.email}`);
+
+    if (!allTransfersSucceeded) {
       // Some transfers failed — issue refund for undelivered amount
       console.error(`Some transfers failed for ${user.email}:`, failedTransfers);
       const failedCents = failedTransfers.reduce((sum, f) => sum + f.amountCents, 0);
@@ -261,9 +265,6 @@ async function processUserRoundups(user) {
       console.log(`Card declined for ${user.email} - will retry next cycle`);
     }
   } finally {
-    if (!allTransfersSucceeded) {
-      await RoundUp.updateMany({ _id: { $in: unpaidIds }, stripePaymentIntentId: 'processing' }, { $unset: { stripePaymentIntentId: 1 } });
-    }
     await session.endSession();
   }
 }

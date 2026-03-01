@@ -75,7 +75,7 @@ flowchart TB
 ### 2. Server Layer (Backend)
 
 - **Node.js / Express API**: A robust microservices-inspired API that handles user authentication, data fetching, and direct interactions with Stripe and ResilientDB.
-- **Cron Job Processor (`node-cron`)**: A background schedule worker that evaluates users' accumulated "unpaid" round-ups every midnight (UTC). It checks if the threshold ($5.00) or monthly criteria are met, charging cards and initiating the blockchain verification sequences.
+- **Cron Job Processor (`node-cron`)**: A background schedule worker that evaluates users' accumulated "unpaid" round-ups every midnight in UTC (configured via system timezone / explicit TZ configuration). It checks if the threshold ($5.00) or monthly criteria are met, charging cards and initiating the blockchain verification sequences.
 
 ### 3. Traditional Data & Payments
 
@@ -90,15 +90,15 @@ A critical focus of Charitap is resolving donor trust issues using **blockchain 
 
 ### A. The Public Ledger (Immutable Key-Value Store)
 
-- **How it Works**: After a successful Stripe transfer, the backend (`resilientdb-client.js`) uses a deterministic hash (HMAC-SHA256 with a salt stored securely in environment variables) to map the donor's email to a `userId`. It then posts only the non-PII transaction receipt (Amount, Charity ID, Timestamp, userId) onto the ResilientDB KV mainnet via GraphQL. Raw or un-salted email values are never written to the public ledger.
+- **How it Works**: After a successful Stripe transfer, the backend (`resilientdb-client.js`) uses a deterministic hash (HMAC-SHA256 with a salt securely managed in a key vault/secrets manager, cached at runtime with a TTL instead of relying on environment variables) to map the donor's email to a `userId`. It then posts only the non-PII transaction receipt (Amount, Charity ID, Timestamp, userId) onto the ResilientDB KV mainnet via GraphQL. Raw or un-salted email values are never written to the public ledger.
 - **Why it Matters**: It prevents tampered records. The blockchain guarantees that a donation made to a charity is publicly verifiable on-chain. The backend stores the ResilientDB on-chain transaction hash as `transactionId` in MongoDB, linking the two systems. Users can use this `transactionId` to query the public ledger directly and verify their donation independently. _Privacy Caveat: Even with an obfuscated `userId`, the combination of public fields (Amount, Timestamp, Charity ID) could allow for pattern analysis. Future mitigations under consideration include amount padding, transaction batching, or intentional timestamp delays._
 
 ### B. Smart Contracts (`DonationReceipt.sol`)
 
 - **How it Works**: Handled by `rescontract-client.js`. Alongside the base ledger log, Charitap leverages a Solidity smart contract (`DonationReceipt.sol`) deployed directly on the ResilientDB network. The backend invokes contract functions via the `contract_service_tools` CLI wrapper.
-  - `mintReceipt(uint256 charityId, uint256 amountCents)`: Creates a formalized cryptographic receipt. Access is restricted via the `onlyOwner` modifier to the deployment address corresponding to the Charitap backend identity. Input validation requires `amountCents > 0` and ensures `charityId` is a registered valid ID. The backend handles anti-replay by validating unique transaction IDs prior to minting.
-  - `getTotalByCharity(uint256 charityId)`: Aggregates on-chain metrics directly from the smart contract layer, independent from MongoDB.
-- **Security & Governance**: The contract is designed as an immutable singleton (no upgrade proxy pattern used) to guarantee the finality of operations. There is no emergency pause switch to prevent centralization risks. Source code verification instructions and the compiled JSON interface are provided in the repository, though full third-party formal auditing has not yet been conducted.
+  - `mintReceipt(uint256 charityId, uint256 amountCents)`: Creates a formalized cryptographic receipt. Access is restricted by the `onlyOwner` key held securely by the backend, meaning receipts can be fabricated if that key is compromised. Input validation requires `amountCents > 0` and ensures `charityId` is a registered valid ID. The backend handles anti-replay by validating unique transaction IDs prior to minting.
+  - `getTotalByCharity(uint256 charityId)`: Aggregates on-chain state directly from the smart contract layer, independent from MongoDB.
+- **Trust Assumptions**: Only the backend private key can call `mintReceipt(uint256 charityId, uint256 amountCents)`. The contract does not independently verify off-chain payments (e.g., Stripe/MongoDB) when minting. There is a risk of key compromise or insider abuse. Future mitigation options include multisig or decentralized governance for the owner role. The contract is designed as an immutable singleton to guarantee the finality of operations, but its integrity relies heavily on the backend protecting the private key.
 - **Why it Matters**: Smart contracts enforce programmable trust. The `DonationReceipt` acts as a trustless smart-escrow log, meaning neither Charitap nor the charities can inflate or deny donation histories—it is mathematically bound to the source code execution.
 
 ### C. Off-Chain Security Flaws & Trust Boundaries

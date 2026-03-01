@@ -244,4 +244,7 @@ async function processUserRoundups(user) {
   });
 }
 
-startCron();
+startCron().catch((err) => {
+  console.error("Fatal error starting cron loop:", err);
+  process.exit(1);
+});

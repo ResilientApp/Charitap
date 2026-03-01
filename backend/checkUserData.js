@@ -16,19 +16,19 @@ const RoundUp = require('./models/RoundUp');
   try {
     await mongoose.connect(process.env.MONGODB_URI);
 
-    const User = require('./models/User');
     const user = await User.findOne({ email });
     if (!user) {
-      console.log(`User ${email} not found in DB. Showing only disconnected roundups.`);
+      console.log(`User ${email} not found in DB. Exiting.`);
+      return;
     }
-    const transactions = user ? await Transaction.find({ userId: user._id }) : [];
+    const transactions = await Transaction.find({ userId: user._id });
     const roundups = await RoundUp.find({ user: email });
 
     console.log(`Transactions for ${email}:`, transactions.length);
     console.log(`RoundUps for ${email}:`, roundups.length);
 
     if (transactions.length > 0) {
-      const total = transactions.reduce((sum, t) => sum + t.amount, 0);
+      const total = transactions.reduce((sum, t) => sum + (t.amount ?? 0), 0);
       console.log('Total donated: $' + total.toFixed(2));
 
       const onBlockchain = transactions.filter(t => t.blockchainTxKey || t.blockchainTxId).length;
@@ -44,7 +44,7 @@ const RoundUp = require('./models/RoundUp');
 
     if (roundups.length > 0) {
       const pending = roundups.filter(r => !r.isPaid);
-      const pendingAmount = pending.reduce((sum, r) => sum + r.roundUpAmount, 0);
+      const pendingAmount = pending.reduce((sum, r) => sum + (r.roundUpAmount ?? 0), 0);
       console.log('\nPending roundups: ' + pending.length + ' ($' + pendingAmount.toFixed(2) + ')');
     }
 

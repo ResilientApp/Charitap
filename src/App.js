@@ -13,6 +13,7 @@ const Home = lazy(() => import('./components/Home'));
 const Dashboard = lazy(() => import('./components/Dashboard'));
 const Activity = lazy(() => import('./components/Activity'));
 const Settings = lazy(() => import('./components/Settings'));
+const CharitiesPage = lazy(() => import('./components/CharitiesPage'));
 const SignIn = lazy(() => import('./components/auth/SignIn'));
 const SignUp = lazy(() => import('./components/auth/SignUp'));
 const CompleteProfile = lazy(() => import('./components/auth/CompleteProfile'));
@@ -31,7 +32,7 @@ const LoadingSpinner = () => (
 function App() {
   const { isLoading } = useAuth();
   const location = useLocation();
-  const hideChrome = ['/signin','/signup','/complete-profile'].includes(location.pathname);
+  const hideChrome = ['/signin', '/signup', '/complete-profile'].includes(location.pathname);
 
   if (isLoading) {
     return <LoadingSpinner />;
@@ -56,6 +57,7 @@ function App() {
                 <Route path="/complete-profile" element={<CompleteProfile />} />
                 <Route path="/dashboard" element={<ProtectedRoute component={Dashboard} />} />
                 <Route path="/activity" element={<ProtectedRoute component={Activity} />} />
+                <Route path="/charities" element={<ProtectedRoute component={CharitiesPage} />} />
                 <Route path="/settings" element={<ProtectedRoute component={Settings} />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>

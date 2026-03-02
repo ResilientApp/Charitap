@@ -128,7 +128,7 @@ export const dashboardAPI = {
   getCharityBreakdown: async () => {
     return apiCall('/api/roundup/dashboard/charity-breakdown');
   },
-  
+
   // Get blockchain security stats
   getBlockchainStats: async () => {
     return apiCall('/api/roundup/dashboard/blockchain-stats');
@@ -203,6 +203,14 @@ export const settingsAPI = {
   // Get user's nominations
   getMyNominations: async () => {
     return apiCall('/api/charity-nominations/my-nominations');
+  },
+
+  // Rate a charity (likes/dislikes)
+  rateCharity: async (charityId, action, previousAction) => {
+    return apiCall(`/api/charities/${charityId}/rate`, {
+      method: 'POST',
+      body: JSON.stringify({ action, previousAction }),
+    });
   },
 };
 

@@ -139,7 +139,7 @@ const Home = () => {
               </p>
               <div className="flex flex-col sm:flex-row gap-3 md:gap-4 justify-center lg:justify-start items-stretch sm:items-center relative z-30">
                 <RippleButton
-                  onClick={() => window.open('https://chromewebstore.google.com/detail/round%E2%80%91up-charity/nmehghbeffbafflokkmfpcfbmichkhnk?authuser=0&hl=en&pli=1', '_blank')}
+                  onClick={() => window.open('https://chromewebstore.google.com/detail/round%E2%80%91up-charity/nmehghbeffbafflokkmfpcfbmichkhnk', '_blank')}
                   className="bg-yellow-400 hover:bg-yellow-500 text-black px-8 py-4 rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl transition-all duration-300 relative z-30"
                 >
                   Add to Chrome
